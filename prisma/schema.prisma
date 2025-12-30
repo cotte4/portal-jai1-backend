@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,7 +8,146 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ============= ENUMS =============
+model User {
+  id                  String          @id @default(uuid())
+  email               String          @unique
+  passwordHash        String          @map("password_hash")
+  role                UserRole        @default(client)
+  firstName           String          @map("first_name")
+  lastName            String          @map("last_name")
+  phone               String?
+  isActive            Boolean         @default(true) @map("is_active")
+  lastLoginAt         DateTime?       @map("last_login_at")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  resetToken          String?         @map("reset_token")
+  resetTokenExpiresAt DateTime?       @map("reset_token_expires_at")
+  clientProfile       ClientProfile?
+  notifications       Notification[]
+  statusChanges       StatusHistory[] @relation("ChangedBy")
+  ticketMessages      TicketMessage[]
+  tickets             Ticket[]
+
+  @@map("users")
+}
+
+model ClientProfile {
+  id                String    @id @default(uuid())
+  userId            String    @unique @map("user_id")
+  ssn               String?
+  dateOfBirth       DateTime? @map("date_of_birth")
+  addressStreet     String?   @map("address_street")
+  addressCity       String?   @map("address_city")
+  addressState      String?   @map("address_state")
+  addressZip        String?   @map("address_zip")
+  bankName          String?   @map("bank_name")
+  bankRoutingNumber String?   @map("bank_routing_number")
+  bankAccountNumber String?   @map("bank_account_number")
+  workState         String?   @map("work_state")
+  employerName      String?   @map("employer_name")
+  turbotaxEmail     String?   @map("turbotax_email")
+  turbotaxPassword  String?   @map("turbotax_password")
+  profileComplete   Boolean   @default(false) @map("profile_complete")
+  isDraft           Boolean   @default(true) @map("is_draft")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taxCases          TaxCase[]
+
+  @@map("client_profiles")
+}
+
+model TaxCase {
+  id                String          @id @default(uuid())
+  clientProfileId   String          @map("client_profile_id")
+  taxYear           Int             @map("tax_year")
+  internalStatus    InternalStatus  @default(revision_de_registro) @map("internal_status")
+  clientStatus      ClientStatus    @default(esperando_datos) @map("client_status")
+  federalStatus     TaxStatus?      @map("federal_status")
+  stateStatus       TaxStatus?      @map("state_status")
+  estimatedRefund   Decimal?        @map("estimated_refund") @db.Decimal(10, 2)
+  actualRefund      Decimal?        @map("actual_refund") @db.Decimal(10, 2)
+  refundDepositDate DateTime?       @map("refund_deposit_date")
+  paymentReceived   Boolean         @default(false) @map("payment_received")
+  commissionPaid    Boolean         @default(false) @map("commission_paid")
+  statusUpdatedAt   DateTime        @default(now()) @map("status_updated_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  documents         Document[]
+  statusHistory     StatusHistory[]
+  clientProfile     ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([clientProfileId, taxYear])
+  @@map("tax_cases")
+}
+
+model Document {
+  id          String       @id @default(uuid())
+  taxCaseId   String       @map("tax_case_id")
+  type        DocumentType
+  fileName    String       @map("file_name")
+  storagePath String       @map("storage_path")
+  mimeType    String       @map("mime_type")
+  fileSize    Int          @map("file_size")
+  taxYear     Int?         @map("tax_year")
+  isReviewed  Boolean      @default(false) @map("is_reviewed")
+  uploadedAt  DateTime     @default(now()) @map("uploaded_at")
+  taxCase     TaxCase      @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+model Ticket {
+  id        String          @id @default(uuid())
+  userId    String          @map("user_id")
+  subject   String
+  status    TicketStatus    @default(open)
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  messages  TicketMessage[]
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id        String   @id @default(uuid())
+  ticketId  String   @map("ticket_id")
+  senderId  String   @map("sender_id")
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+  sender    User     @relation(fields: [senderId], references: [id])
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_messages")
+}
+
+model StatusHistory {
+  id             String   @id @default(uuid())
+  taxCaseId      String   @map("tax_case_id")
+  previousStatus String?  @map("previous_status")
+  newStatus      String   @map("new_status")
+  changedById    String   @map("changed_by_id")
+  comment        String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  changedBy      User     @relation("ChangedBy", fields: [changedById], references: [id])
+  taxCase        TaxCase  @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+
+  @@map("status_history")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
 
 enum UserRole {
   client
@@ -66,181 +203,4 @@ enum NotificationType {
   docs_missing
   message
   system
-}
-
-// ============= MODELS =============
-
-model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String   @map("password_hash")
-  role          UserRole @default(client)
-  firstName     String   @map("first_name")
-  lastName      String   @map("last_name")
-  phone         String?
-  isActive      Boolean  @default(true) @map("is_active")
-  lastLoginAt   DateTime? @map("last_login_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  clientProfile   ClientProfile?
-  tickets         Ticket[]
-  ticketMessages  TicketMessage[]
-  notifications   Notification[]
-  statusChanges   StatusHistory[] @relation("ChangedBy")
-
-  @@map("users")
-}
-
-model ClientProfile {
-  id                  String   @id @default(uuid())
-  userId              String   @unique @map("user_id")
-
-  // Sensitive data (SSN and address should be encrypted at application level)
-  ssn                 String?  // Encrypted: Social Security Number
-  dateOfBirth         DateTime? @map("date_of_birth")
-
-  // Address (encrypted)
-  addressStreet       String?  @map("address_street")
-  addressCity         String?  @map("address_city")
-  addressState        String?  @map("address_state")
-  addressZip          String?  @map("address_zip")
-
-  // Banking info
-  bankName            String?  @map("bank_name")
-  bankRoutingNumber   String?  @map("bank_routing_number")
-  bankAccountNumber   String?  @map("bank_account_number")
-
-  // Work info
-  workState           String?  @map("work_state")
-  employerName        String?  @map("employer_name")
-
-  // TurboTax credentials (optional)
-  turbotaxEmail       String?  @map("turbotax_email")
-  turbotaxPassword    String?  @map("turbotax_password") // Encrypted
-
-  // Profile status
-  profileComplete     Boolean  @default(false) @map("profile_complete")
-  isDraft             Boolean  @default(true) @map("is_draft")
-
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  taxCases TaxCase[]
-
-  @@map("client_profiles")
-}
-
-model TaxCase {
-  id                String         @id @default(uuid())
-  clientProfileId   String         @map("client_profile_id")
-  taxYear           Int            @map("tax_year")
-
-  // Status tracking
-  internalStatus    InternalStatus @default(revision_de_registro) @map("internal_status")
-  clientStatus      ClientStatus   @default(esperando_datos) @map("client_status")
-  federalStatus     TaxStatus?     @map("federal_status")
-  stateStatus       TaxStatus?     @map("state_status")
-
-  // Financial info
-  estimatedRefund   Decimal?       @map("estimated_refund") @db.Decimal(10, 2)
-  actualRefund      Decimal?       @map("actual_refund") @db.Decimal(10, 2)
-  refundDepositDate DateTime?      @map("refund_deposit_date")
-
-  // Payment tracking
-  paymentReceived   Boolean        @default(false) @map("payment_received")
-  commissionPaid    Boolean        @default(false) @map("commission_paid")
-
-  statusUpdatedAt   DateTime       @default(now()) @map("status_updated_at")
-  createdAt         DateTime       @default(now()) @map("created_at")
-  updatedAt         DateTime       @updatedAt @map("updated_at")
-
-  // Relations
-  clientProfile  ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  documents      Document[]
-  statusHistory  StatusHistory[]
-
-  @@unique([clientProfileId, taxYear])
-  @@map("tax_cases")
-}
-
-model Document {
-  id          String       @id @default(uuid())
-  taxCaseId   String       @map("tax_case_id")
-  type        DocumentType
-  fileName    String       @map("file_name")
-  storagePath String       @map("storage_path")
-  mimeType    String       @map("mime_type")
-  fileSize    Int          @map("file_size")
-  taxYear     Int?         @map("tax_year")
-  isReviewed  Boolean      @default(false) @map("is_reviewed")
-  uploadedAt  DateTime     @default(now()) @map("uploaded_at")
-
-  // Relations
-  taxCase TaxCase @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
-
-  @@map("documents")
-}
-
-model Ticket {
-  id        String       @id @default(uuid())
-  userId    String       @map("user_id")
-  subject   String
-  status    TicketStatus @default(open)
-  createdAt DateTime     @default(now()) @map("created_at")
-  updatedAt DateTime     @updatedAt @map("updated_at")
-
-  // Relations
-  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages TicketMessage[]
-
-  @@map("tickets")
-}
-
-model TicketMessage {
-  id        String   @id @default(uuid())
-  ticketId  String   @map("ticket_id")
-  senderId  String   @map("sender_id")
-  message   String
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  sender User   @relation(fields: [senderId], references: [id])
-
-  @@map("ticket_messages")
-}
-
-model StatusHistory {
-  id             String   @id @default(uuid())
-  taxCaseId      String   @map("tax_case_id")
-  previousStatus String?  @map("previous_status")
-  newStatus      String   @map("new_status")
-  changedById    String   @map("changed_by_id")
-  comment        String?
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  // Relations
-  taxCase   TaxCase @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
-  changedBy User    @relation("ChangedBy", fields: [changedById], references: [id])
-
-  @@map("status_history")
-}
-
-model Notification {
-  id        String           @id @default(uuid())
-  userId    String           @map("user_id")
-  type      NotificationType
-  title     String
-  message   String
-  isRead    Boolean          @default(false) @map("is_read")
-  createdAt DateTime         @default(now()) @map("created_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("notifications")
 }

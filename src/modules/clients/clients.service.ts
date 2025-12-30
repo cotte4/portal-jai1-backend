@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
-import { EncryptionService } from '../../common/services';
+import { EncryptionService, EmailService } from '../../common/services';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import * as ExcelJS from 'exceljs';
 
@@ -9,6 +10,8 @@ export class ClientsService {
   constructor(
     private prisma: PrismaService,
     private encryption: EncryptionService,
+    private emailService: EmailService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async getProfile(userId: string) {
@@ -267,7 +270,10 @@ export class ClientsService {
   async updateStatus(id: string, statusData: any, changedById: string) {
     const client = await this.prisma.clientProfile.findUnique({
       where: { id },
-      include: { taxCases: { orderBy: { taxYear: 'desc' }, take: 1 } },
+      include: {
+        user: true,
+        taxCases: { orderBy: { taxYear: 'desc' }, take: 1 },
+      },
     });
 
     if (!client || !client.taxCases[0]) {
@@ -275,6 +281,7 @@ export class ClientsService {
     }
 
     const taxCase = client.taxCases[0];
+    const previousClientStatus = taxCase.clientStatus;
 
     await this.prisma.$transaction([
       this.prisma.taxCase.update({
@@ -295,6 +302,37 @@ export class ClientsService {
         },
       }),
     ]);
+
+    // Status labels for notifications
+    const statusLabels: Record<string, string> = {
+      esperando_datos: 'Necesitamos tus datos y documentos',
+      cuenta_en_revision: 'Estamos revisando tu información',
+      taxes_en_proceso: '¡Estamos trabajando en tu declaración!',
+      taxes_en_camino: 'Tu reembolso está en camino',
+      taxes_depositados: '¡Reembolso depositado en tu cuenta!',
+      pago_realizado: 'Gracias por tu pago',
+      en_verificacion: 'El IRS está verificando tu caso',
+      taxes_finalizados: '¡Proceso completado!',
+    };
+
+    const newStatusLabel = statusLabels[statusData.client_status] || statusData.client_status;
+
+    // Create in-app notification
+    await this.notificationsService.create(
+      client.user.id,
+      'status_change',
+      'Tu trámite ha sido actualizado',
+      newStatusLabel,
+    );
+
+    // Send email notification (don't await to avoid blocking response)
+    this.emailService.sendStatusChangeEmail(
+      client.user.email,
+      client.user.firstName,
+      previousClientStatus,
+      statusData.client_status,
+      statusData.comment || '',
+    );
 
     return { message: 'Status updated successfully' };
   }

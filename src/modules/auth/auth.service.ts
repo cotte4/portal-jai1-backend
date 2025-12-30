@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../../common/services';
 import { RegisterDto } from './dto/register.dto';
@@ -47,6 +48,18 @@ export class AuthService {
       .sendWelcomeEmail(user.email, user.firstName)
       .catch((err) => this.logger.error('Failed to send welcome email', err));
 
+    // Notify admin of new registration (async, don't wait)
+    const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
+    if (adminEmail) {
+      this.emailService
+        .sendNewClientNotification(
+          adminEmail,
+          `${user.firstName} ${user.lastName}`,
+          user.email,
+        )
+        .catch((err) => this.logger.error('Failed to send admin notification', err));
+    }
+
     return {
       user: {
         id: user.id,
@@ -60,8 +73,17 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
+    // #region agent log
+    require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:75',message:'login service called',data:{email:loginDto.email,hasPassword:!!loginDto.password},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
+    // #endregion
     const user = await this.usersService.findByEmail(loginDto.email);
+    // #region agent log
+    require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:78',message:'user lookup result',data:{userFound:!!user,userEmail:user?.email,userRole:user?.role,isActive:user?.isActive},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
+    // #endregion
     if (!user) {
+      // #region agent log
+      require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:81',message:'user not found',data:{email:loginDto.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
+      // #endregion
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -69,16 +91,29 @@ export class AuthService {
       loginDto.password,
       user.passwordHash,
     );
+    // #region agent log
+    require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:87',message:'password validation result',data:{isPasswordValid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
+    // #endregion
     if (!isPasswordValid) {
+      // #region agent log
+      require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:90',message:'password invalid',data:{email:loginDto.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
+      // #endregion
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (!user.isActive) {
+      // #region agent log
+      require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:95',message:'user inactive',data:{email:loginDto.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
+      // #endregion
       throw new UnauthorizedException('Account is deactivated');
     }
 
     await this.usersService.updateLastLogin(user.id);
     const tokens = await this.generateTokens(user.id, user.email, user.role);
+
+    // #region agent log
+    require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:99',message:'login success',data:{userId:user.id,userRole:user.role,hasAccessToken:!!tokens.access_token},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');
+    // #endregion
 
     return {
       user: {
@@ -117,18 +152,54 @@ export class AuthService {
   async forgotPassword(email: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      // Don't reveal if email exists
+      // Don't reveal if email exists - return same message
+      this.logger.log(`Password reset requested for non-existent email: ${email}`);
       return { message: 'If the email exists, a reset link has been sent' };
     }
 
-    // TODO: Generate reset token and send email
-    // For now, just return success message
+    // Generate secure random token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+
+    // Save token to database
+    await this.usersService.setResetToken(user.id, resetToken, expiresAt);
+
+    // Send password reset email
+    this.emailService
+      .sendPasswordResetEmail(user.email, user.firstName, resetToken)
+      .then((success) => {
+        if (success) {
+          this.logger.log(`Password reset email sent to: ${user.email}`);
+        } else {
+          this.logger.error(`Failed to send password reset email to: ${user.email}`);
+        }
+      })
+      .catch((err) => this.logger.error('Failed to send password reset email', err));
+
     return { message: 'If the email exists, a reset link has been sent' };
   }
 
   async resetPassword(token: string, newPassword: string) {
-    // TODO: Validate token and reset password
-    throw new BadRequestException('Password reset not implemented yet');
+    // Find user by reset token
+    const user = await this.usersService.findByResetToken(token);
+    if (!user) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    // Validate password length
+    if (newPassword.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear token
+    await this.usersService.updatePassword(user.id, hashedPassword);
+
+    this.logger.log(`Password reset successful for user: ${user.email}`);
+
+    return { message: 'Password has been reset successfully' };
   }
 
   private async generateTokens(userId: string, email: string, role: string) {

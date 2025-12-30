@@ -4,15 +4,22 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import { EmailService } from '../../common/services';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 
 @Injectable()
 export class TicketsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private emailService: EmailService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async create(userId: string, createTicketDto: CreateTicketDto) {
+    // Create ticket
     const ticket = await this.prisma.ticket.create({
       data: {
         userId,
@@ -20,13 +27,33 @@ export class TicketsService {
       },
     });
 
+    // If message is provided, create initial message
+    let messages: any[] = [];
+    if (createTicketDto.message) {
+      const initialMessage = await this.prisma.ticketMessage.create({
+        data: {
+          ticketId: ticket.id,
+          senderId: userId,
+          message: createTicketDto.message,
+        },
+      });
+      messages = [
+        {
+          id: initialMessage.id,
+          message: initialMessage.message,
+          senderId: userId,
+          createdAt: initialMessage.createdAt,
+        },
+      ];
+    }
+
     return {
-      ticket: {
-        id: ticket.id,
-        subject: ticket.subject,
-        status: ticket.status,
-        created_at: ticket.createdAt,
-      },
+      id: ticket.id,
+      subject: ticket.subject,
+      status: ticket.status,
+      messages,
+      createdAt: ticket.createdAt,
+      updatedAt: ticket.updatedAt,
     };
   }
 
@@ -146,6 +173,16 @@ export class TicketsService {
   ) {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            role: true,
+          },
+        },
+      },
     });
 
     if (!ticket) {
@@ -180,6 +217,25 @@ export class TicketsService {
       where: { id: ticketId },
       data: { updatedAt: new Date() },
     });
+
+    // Send email and notification if admin is replying to a client's ticket
+    if (userRole === 'admin' && ticket.user.role === 'client') {
+      // Create in-app notification
+      await this.notificationsService.create(
+        ticket.userId,
+        'message',
+        'Respuesta a tu ticket',
+        `Nuevo mensaje en: ${ticket.subject}`,
+      );
+
+      // Send email notification (don't await to avoid blocking)
+      this.emailService.sendTicketResponseEmail(
+        ticket.user.email,
+        ticket.user.firstName,
+        ticket.subject,
+        createMessageDto.message,
+      );
+    }
 
     return {
       id: message.id,
