@@ -20,12 +20,8 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: [
-      configService.get<string>('FRONTEND_URL'),
-      'https://portal-jai1-frontend.vercel.app',
-      'http://localhost:4200',
-    ].filter(Boolean),
-    credentials: true,
+    origin: '*',
+    credentials: false, // Cambiá a false cuando usás '*'
   });
 
   // Global prefix for all routes
