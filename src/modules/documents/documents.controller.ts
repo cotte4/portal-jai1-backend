@@ -32,13 +32,16 @@ export class DocumentsController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 25 * 1024 * 1024 }), // 25MB
-          new FileTypeValidator({ fileType: /(pdf|jpg|jpeg|png)$/i }),
         ],
       }),
     )
     file: Express.Multer.File,
     @Body() uploadDto: UploadDocumentDto,
   ) {
+    console.log('=== UPLOAD REQUEST RECEIVED ===');
+    console.log('User:', user?.id, user?.email);
+    console.log('File:', file?.originalname, file?.mimetype, file?.size);
+    console.log('DTO:', uploadDto);
     return this.documentsService.upload(user.id, file, uploadDto);
   }
 

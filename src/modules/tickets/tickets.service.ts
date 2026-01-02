@@ -49,6 +49,7 @@ export class TicketsService {
 
     return {
       id: ticket.id,
+      userId,
       subject: ticket.subject,
       status: ticket.status,
       messages,
@@ -93,12 +94,12 @@ export class TicketsService {
       user: {
         id: ticket.user.id,
         email: ticket.user.email,
-        first_name: ticket.user.firstName,
-        last_name: ticket.user.lastName,
+        firstName: ticket.user.firstName,
+        lastName: ticket.user.lastName,
       },
-      message_count: ticket._count.messages,
-      created_at: ticket.createdAt,
-      updated_at: ticket.updatedAt,
+      messageCount: ticket._count.messages,
+      createdAt: ticket.createdAt,
+      updatedAt: ticket.updatedAt,
     }));
   }
 
@@ -141,27 +142,30 @@ export class TicketsService {
 
     return {
       id: ticket.id,
+      userId: ticket.userId,
       subject: ticket.subject,
       status: ticket.status,
       user: {
         id: ticket.user.id,
         email: ticket.user.email,
-        first_name: ticket.user.firstName,
-        last_name: ticket.user.lastName,
+        firstName: ticket.user.firstName,
+        lastName: ticket.user.lastName,
       },
       messages: ticket.messages.map((msg) => ({
         id: msg.id,
+        ticketId: ticket.id,
         message: msg.message,
+        senderId: msg.senderId,
         sender: {
           id: msg.sender.id,
-          first_name: msg.sender.firstName,
-          last_name: msg.sender.lastName,
+          firstName: msg.sender.firstName,
+          lastName: msg.sender.lastName,
           role: msg.sender.role,
         },
-        created_at: msg.createdAt,
+        createdAt: msg.createdAt,
       })),
-      created_at: ticket.createdAt,
-      updated_at: ticket.updatedAt,
+      createdAt: ticket.createdAt,
+      updatedAt: ticket.updatedAt,
     };
   }
 
@@ -237,17 +241,8 @@ export class TicketsService {
       );
     }
 
-    return {
-      id: message.id,
-      message: message.message,
-      sender: {
-        id: message.sender.id,
-        first_name: message.sender.firstName,
-        last_name: message.sender.lastName,
-        role: message.sender.role,
-      },
-      created_at: message.createdAt,
-    };
+    // Return the full ticket with all messages (frontend expects this)
+    return this.findOne(ticketId, userId, userRole);
   }
 
   async updateStatus(ticketId: string, updateStatusDto: UpdateStatusDto) {

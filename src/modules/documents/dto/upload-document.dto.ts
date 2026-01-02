@@ -15,6 +15,6 @@ export class UploadDocumentDto {
   @IsInt()
   @Min(2000)
   @Max(2100)
-  @Transform(({ value }) => parseInt(value, 10))
+  @Transform(({ value }) => (value ? parseInt(value, 10) : undefined))
   tax_year?: number;
 }

@@ -23,6 +23,14 @@ export class DocumentsService {
     file: Express.Multer.File,
     uploadDto: UploadDocumentDto,
   ) {
+    // Validate file type
+    const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException(
+        `Invalid file type. Allowed types: PDF, JPEG, PNG`,
+      );
+    }
+
     // Get user's client profile and tax case
     const clientProfile = await this.prisma.clientProfile.findUnique({
       where: { userId },
@@ -49,15 +57,39 @@ export class DocumentsService {
     const fileExtension = file.originalname.split('.').pop();
     const storagePath = `${clientProfile.id}/${uuidv4()}.${fileExtension}`;
 
+    console.log('About to upload to Supabase Storage...');
+    console.log('File details:', {
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      bufferLength: file.buffer?.length,
+    });
+
     // Upload to Supabase Storage
-    await this.supabase.uploadFile(
-      this.BUCKET_NAME,
-      storagePath,
-      file.buffer,
-      file.mimetype,
-    );
+    try {
+      await this.supabase.uploadFile(
+        this.BUCKET_NAME,
+        storagePath,
+        file.buffer,
+        file.mimetype,
+      );
+      console.log('Supabase upload completed successfully');
+    } catch (uploadError) {
+      console.error('Supabase upload failed:', uploadError);
+      throw uploadError;
+    }
 
     // Save document metadata
+    console.log('Creating document with data:', {
+      taxCaseId: taxCase.id,
+      type: uploadDto.type,
+      fileName: file.originalname,
+      storagePath,
+      mimeType: file.mimetype,
+      fileSize: file.size,
+      taxYear: uploadDto.tax_year,
+    });
+
     const document = await this.prisma.document.create({
       data: {
         taxCaseId: taxCase.id,
@@ -70,12 +102,20 @@ export class DocumentsService {
       },
     });
 
+    console.log('Document created with ID:', document.id);
+
     return {
       document: {
         id: document.id,
-        file_name: document.fileName,
+        taxCaseId: taxCase.id,
         type: document.type,
-        uploaded_at: document.uploadedAt,
+        fileName: document.fileName,
+        storagePath: document.storagePath,
+        mimeType: document.mimeType,
+        fileSize: document.fileSize,
+        taxYear: document.taxYear,
+        isReviewed: document.isReviewed,
+        uploadedAt: document.uploadedAt,
       },
     };
   }
@@ -102,10 +142,15 @@ export class DocumentsService {
 
     return documents.map((doc) => ({
       id: doc.id,
-      file_name: doc.fileName,
+      taxCaseId: doc.taxCaseId,
+      fileName: doc.fileName,
       type: doc.type,
-      is_reviewed: doc.isReviewed,
-      uploaded_at: doc.uploadedAt,
+      isReviewed: doc.isReviewed,
+      uploadedAt: doc.uploadedAt,
+      storagePath: doc.storagePath,
+      mimeType: doc.mimeType,
+      fileSize: doc.fileSize,
+      taxYear: doc.taxYear,
     }));
   }
 
@@ -145,6 +190,7 @@ export class DocumentsService {
   }
 
   async remove(documentId: string, userId: string, userRole: string) {
+    console.log('Delete request for documentId:', documentId, 'userId:', userId);
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
       include: {

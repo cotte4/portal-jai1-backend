@@ -199,6 +199,7 @@ export class ClientsService {
       clients: results.map((client) => ({
         id: client.id,
         user: {
+          id: client.user.id,
           email: client.user.email,
           first_name: client.user.firstName,
           last_name: client.user.lastName,
@@ -226,6 +227,7 @@ export class ClientsService {
               orderBy: { createdAt: 'desc' },
             },
           },
+          orderBy: { taxYear: 'desc' },
         },
       },
     });
@@ -234,16 +236,86 @@ export class ClientsService {
       throw new NotFoundException('Client not found');
     }
 
-    // Admin sees full SSN decrypted
+    // Collect all documents from all tax cases
+    const allDocuments = client.taxCases.flatMap((tc) => tc.documents);
+
+    // Collect all status history from all tax cases
+    const allStatusHistory = client.taxCases.flatMap((tc) =>
+      tc.statusHistory.map((sh) => ({
+        id: sh.id,
+        taxCaseId: sh.taxCaseId,
+        previousStatus: sh.previousStatus,
+        newStatus: sh.newStatus,
+        changedById: sh.changedById,
+        comment: sh.comment,
+        createdAt: sh.createdAt,
+        changedBy: sh.changedBy,
+      })),
+    );
+
+    // Return structure matching frontend AdminClientDetail interface
     return {
-      ...client,
-      ssn: client.ssn ? this.encryption.decrypt(client.ssn) : null,
-      addressStreet: client.addressStreet
-        ? this.encryption.decrypt(client.addressStreet)
-        : null,
-      turbotaxPassword: client.turbotaxPassword
-        ? this.encryption.decrypt(client.turbotaxPassword)
-        : null,
+      id: client.id,
+      user: {
+        id: client.user.id,
+        email: client.user.email,
+        role: client.user.role,
+        firstName: client.user.firstName,
+        lastName: client.user.lastName,
+        phone: client.user.phone,
+        isActive: client.user.isActive,
+        lastLoginAt: client.user.lastLoginAt,
+        createdAt: client.user.createdAt,
+        updatedAt: client.user.updatedAt,
+      },
+      profile: {
+        id: client.id,
+        userId: client.userId,
+        ssn: client.ssn ? this.encryption.decrypt(client.ssn) : null,
+        dateOfBirth: client.dateOfBirth,
+        address: {
+          street: client.addressStreet
+            ? this.encryption.decrypt(client.addressStreet)
+            : null,
+          city: client.addressCity,
+          state: client.addressState,
+          zip: client.addressZip,
+        },
+        bank: {
+          name: client.bankName,
+          routingNumber: client.bankRoutingNumber,
+          accountNumber: client.bankAccountNumber,
+        },
+        workState: client.workState,
+        employerName: client.employerName,
+        turbotaxEmail: client.turbotaxEmail,
+        turbotaxPassword: client.turbotaxPassword
+          ? this.encryption.decrypt(client.turbotaxPassword)
+          : null,
+        profileComplete: client.profileComplete,
+        isDraft: client.isDraft,
+        createdAt: client.createdAt,
+        updatedAt: client.updatedAt,
+      },
+      taxCases: client.taxCases.map((tc) => ({
+        id: tc.id,
+        clientProfileId: tc.clientProfileId,
+        taxYear: tc.taxYear,
+        internalStatus: tc.internalStatus,
+        clientStatus: tc.clientStatus,
+        federalStatus: tc.federalStatus,
+        stateStatus: tc.stateStatus,
+        estimatedRefund: tc.estimatedRefund,
+        actualRefund: tc.actualRefund,
+        refundDepositDate: tc.refundDepositDate,
+        paymentReceived: tc.paymentReceived,
+        commissionPaid: tc.commissionPaid,
+        statusUpdatedAt: tc.statusUpdatedAt,
+        createdAt: tc.createdAt,
+        updatedAt: tc.updatedAt,
+      })),
+      documents: allDocuments,
+      statusHistory: allStatusHistory,
     };
   }
 
@@ -283,12 +355,16 @@ export class ClientsService {
     const taxCase = client.taxCases[0];
     const previousClientStatus = taxCase.clientStatus;
 
+    // Support both camelCase (from frontend) and snake_case
+    const internalStatus = statusData.internalStatus || statusData.internal_status;
+    const clientStatus = statusData.clientStatus || statusData.client_status;
+
     await this.prisma.$transaction([
       this.prisma.taxCase.update({
         where: { id: taxCase.id },
         data: {
-          internalStatus: statusData.internal_status,
-          clientStatus: statusData.client_status,
+          internalStatus: internalStatus,
+          clientStatus: clientStatus,
           statusUpdatedAt: new Date(),
         },
       }),
@@ -296,7 +372,7 @@ export class ClientsService {
         data: {
           taxCaseId: taxCase.id,
           previousStatus: taxCase.internalStatus,
-          newStatus: statusData.internal_status,
+          newStatus: internalStatus,
           changedById,
           comment: statusData.comment,
         },
@@ -315,7 +391,7 @@ export class ClientsService {
       taxes_finalizados: '¡Proceso completado!',
     };
 
-    const newStatusLabel = statusLabels[statusData.client_status] || statusData.client_status;
+    const newStatusLabel = statusLabels[clientStatus] || clientStatus;
 
     // Create in-app notification
     await this.notificationsService.create(
@@ -330,7 +406,7 @@ export class ClientsService {
       client.user.email,
       client.user.firstName,
       previousClientStatus,
-      statusData.client_status,
+      clientStatus,
       statusData.comment || '',
     );
 

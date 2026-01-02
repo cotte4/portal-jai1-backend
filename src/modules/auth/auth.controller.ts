@@ -27,21 +27,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto) {
-    // #region agent log
-    require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.controller.ts:29',message:'login endpoint called',data:{email:loginDto.email,hasPassword:!!loginDto.password},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');
-    // #endregion
-    try {
-      const result = await this.authService.login(loginDto);
-      // #region agent log
-      require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.controller.ts:33',message:'login endpoint success',data:{hasUser:!!result.user,userRole:result.user?.role},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');
-      // #endregion
-      return result;
-    } catch (error) {
-      // #region agent log
-      require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.controller.ts:37',message:'login endpoint error',data:{errorType:error.constructor.name,errorMessage:error.message,statusCode:error.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
-      // #endregion
-      throw error;
-    }
+    return this.authService.login(loginDto);
   }
 
   @Post('logout')

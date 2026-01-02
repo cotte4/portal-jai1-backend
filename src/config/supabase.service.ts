@@ -27,15 +27,27 @@ export class SupabaseService {
     file: Buffer,
     contentType: string,
   ) {
-    const { data, error } = await this.supabase.storage
-      .from(bucket)
-      .upload(path, file, {
-        contentType,
-        upsert: false,
-      });
+    console.log(`Uploading file to bucket: ${bucket}, path: ${path}, size: ${file.length}, type: ${contentType}`);
 
-    if (error) throw error;
-    return data;
+    try {
+      const { data, error } = await this.supabase.storage
+        .from(bucket)
+        .upload(path, file, {
+          contentType,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('Supabase upload error:', error);
+        throw error;
+      }
+
+      console.log('Supabase upload successful:', data);
+      return data;
+    } catch (err) {
+      console.error('Supabase upload exception:', err);
+      throw err;
+    }
   }
 
   async getSignedUrl(bucket: string, path: string, expiresIn = 3600) {

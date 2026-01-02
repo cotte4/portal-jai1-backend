@@ -73,17 +73,8 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    // #region agent log
-    require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:75',message:'login service called',data:{email:loginDto.email,hasPassword:!!loginDto.password},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
-    // #endregion
     const user = await this.usersService.findByEmail(loginDto.email);
-    // #region agent log
-    require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:78',message:'user lookup result',data:{userFound:!!user,userEmail:user?.email,userRole:user?.role,isActive:user?.isActive},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
-    // #endregion
     if (!user) {
-      // #region agent log
-      require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:81',message:'user not found',data:{email:loginDto.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
-      // #endregion
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -91,29 +82,16 @@ export class AuthService {
       loginDto.password,
       user.passwordHash,
     );
-    // #region agent log
-    require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:87',message:'password validation result',data:{isPasswordValid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
-    // #endregion
     if (!isPasswordValid) {
-      // #region agent log
-      require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:90',message:'password invalid',data:{email:loginDto.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
-      // #endregion
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (!user.isActive) {
-      // #region agent log
-      require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:95',message:'user inactive',data:{email:loginDto.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
-      // #endregion
       throw new UnauthorizedException('Account is deactivated');
     }
 
     await this.usersService.updateLastLogin(user.id);
     const tokens = await this.generateTokens(user.id, user.email, user.role);
-
-    // #region agent log
-    require('fs').appendFileSync('c:\\Users\\fran-\\OneDrive\\Escritorio\\portal-jai1\\.cursor\\debug.log', JSON.stringify({location:'auth.service.ts:99',message:'login success',data:{userId:user.id,userRole:user.role,hasAccessToken:!!tokens.access_token},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');
-    // #endregion
 
     return {
       user: {
