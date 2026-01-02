@@ -19,6 +19,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { CalculatorModule } from './modules/calculator/calculator.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
     TicketsModule,
     NotificationsModule,
     WebhooksModule,
+    CalculatorModule,
   ],
   controllers: [],
   providers: [

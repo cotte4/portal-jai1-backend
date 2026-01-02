@@ -27,6 +27,7 @@ model User {
   statusChanges       StatusHistory[] @relation("ChangedBy")
   ticketMessages      TicketMessage[]
   tickets             Ticket[]
+  w2Estimates         W2Estimate[]
 
   @@map("users")
 }
@@ -58,24 +59,32 @@ model ClientProfile {
 }
 
 model TaxCase {
-  id                String          @id @default(uuid())
-  clientProfileId   String          @map("client_profile_id")
-  taxYear           Int             @map("tax_year")
-  internalStatus    InternalStatus  @default(revision_de_registro) @map("internal_status")
-  clientStatus      ClientStatus    @default(esperando_datos) @map("client_status")
-  federalStatus     TaxStatus?      @map("federal_status")
-  stateStatus       TaxStatus?      @map("state_status")
-  estimatedRefund   Decimal?        @map("estimated_refund") @db.Decimal(10, 2)
-  actualRefund      Decimal?        @map("actual_refund") @db.Decimal(10, 2)
-  refundDepositDate DateTime?       @map("refund_deposit_date")
-  paymentReceived   Boolean         @default(false) @map("payment_received")
-  commissionPaid    Boolean         @default(false) @map("commission_paid")
-  statusUpdatedAt   DateTime        @default(now()) @map("status_updated_at")
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
-  documents         Document[]
-  statusHistory     StatusHistory[]
-  clientProfile     ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  id                 String          @id @default(uuid())
+  clientProfileId    String          @map("client_profile_id")
+  taxYear            Int             @map("tax_year")
+  internalStatus     InternalStatus  @default(revision_de_registro) @map("internal_status")
+  clientStatus       ClientStatus    @default(esperando_datos) @map("client_status")
+  federalStatus      TaxStatus?      @map("federal_status")
+  stateStatus        TaxStatus?      @map("state_status")
+  estimatedRefund    Decimal?        @map("estimated_refund") @db.Decimal(10, 2)
+  actualRefund       Decimal?        @map("actual_refund") @db.Decimal(10, 2)
+  refundDepositDate  DateTime?       @map("refund_deposit_date")
+  paymentReceived    Boolean         @default(false) @map("payment_received")
+  commissionPaid     Boolean         @default(false) @map("commission_paid")
+  statusUpdatedAt    DateTime        @default(now()) @map("status_updated_at")
+  // Admin step control (1-5)
+  adminStep          Int?            @map("admin_step")
+  // Problem tracking (hidden from client)
+  hasProblem         Boolean         @default(false) @map("has_problem")
+  problemStep        Int?            @map("problem_step")
+  problemType        ProblemType?    @map("problem_type")
+  problemDescription String?         @map("problem_description")
+  problemResolvedAt  DateTime?       @map("problem_resolved_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  documents          Document[]
+  statusHistory      StatusHistory[]
+  clientProfile      ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
 
   @@unique([clientProfileId, taxYear])
   @@map("tax_cases")
@@ -203,4 +212,39 @@ enum NotificationType {
   docs_missing
   message
   system
+  problem_alert
+}
+
+enum ProblemType {
+  missing_documents
+  incorrect_information
+  irs_verification
+  bank_issue
+  state_issue
+  federal_issue
+  client_unresponsive
+  other
+}
+
+model W2Estimate {
+  id              String         @id @default(uuid())
+  userId          String         @map("user_id")
+  taxCaseId       String?        @map("tax_case_id")
+  box2Federal     Decimal        @map("box_2_federal") @db.Decimal(10, 2)
+  box17State      Decimal        @map("box_17_state") @db.Decimal(10, 2)
+  estimatedRefund Decimal        @map("estimated_refund") @db.Decimal(10, 2)
+  w2FileName      String         @map("w2_file_name")
+  w2StoragePath   String?        @map("w2_storage_path")
+  ocrConfidence   OcrConfidence  @map("ocr_confidence")
+  ocrRawResponse  Json?          @map("ocr_raw_response")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("w2_estimates")
+}
+
+enum OcrConfidence {
+  high
+  medium
+  low
 }
