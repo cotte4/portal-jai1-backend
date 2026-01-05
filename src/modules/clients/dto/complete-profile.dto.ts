@@ -37,7 +37,9 @@ class BankDto {
 
 export class CompleteProfileDto {
   @IsString()
-  @Matches(/^\d{3}-\d{2}-\d{4}$/, { message: 'SSN must be in format XXX-XX-XXXX' })
+  @Matches(/^(\d{9}|\d{3}-\d{2}-\d{4})$/, {
+    message: 'SSN must be 9 digits (with or without dashes)'
+  })
   ssn: string;
 
   @IsDateString()
@@ -68,4 +70,8 @@ export class CompleteProfileDto {
   @IsOptional()
   @IsBoolean()
   is_draft?: boolean;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }

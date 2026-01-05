@@ -48,4 +48,23 @@ export class CalculatorController {
   async getHistory(@CurrentUser() user: any) {
     return this.calculatorService.getEstimateHistory(user.id);
   }
+
+  /**
+   * Get the latest estimate for the current user
+   * Frontend should call this to check if estimate already exists
+   * before triggering a new calculation
+   */
+  @Get('latest')
+  async getLatestEstimate(@CurrentUser() user: any) {
+    return this.calculatorService.getLatestEstimate(user.id);
+  }
+
+  /**
+   * Quick check if user has any existing estimate
+   */
+  @Get('has-estimate')
+  async hasEstimate(@CurrentUser() user: any) {
+    const hasEstimate = await this.calculatorService.hasExistingEstimate(user.id);
+    return { hasEstimate };
+  }
 }

@@ -1,11 +1,17 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   HttpCode,
   HttpStatus,
   UseGuards,
+  Req,
+  Res,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -17,7 +23,10 @@ import { CurrentUser } from '../../common/decorators';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
@@ -56,5 +65,29 @@ export class AuthController {
       resetPasswordDto.token,
       resetPasswordDto.new_password,
     );
+  }
+
+  // Google OAuth routes
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  async googleAuth() {
+    // This route initiates Google OAuth - guard handles the redirect
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleAuthCallback(@Req() req: any, @Res() res: Response) {
+    try {
+      const result = await this.authService.googleLogin(req.user);
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
+
+      // Redirect to frontend with tokens in URL params
+      const redirectUrl = `${frontendUrl}/auth/google/callback?access_token=${result.access_token}&refresh_token=${result.refresh_token}&user=${encodeURIComponent(JSON.stringify(result.user))}`;
+
+      res.redirect(redirectUrl);
+    } catch (error) {
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
+      res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
+    }
   }
 }

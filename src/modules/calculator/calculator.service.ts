@@ -181,4 +181,48 @@ EXAMPLE OF A GOOD OUTPUT:
       },
     });
   }
+
+  /**
+   * Get the latest estimate for a user (prevents recalculation issues)
+   * Frontend should call this first to check if estimate already exists
+   */
+  async getLatestEstimate(userId: string) {
+    const estimate = await this.prisma.w2Estimate.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        box2Federal: true,
+        box17State: true,
+        estimatedRefund: true,
+        w2FileName: true,
+        ocrConfidence: true,
+        createdAt: true,
+      },
+    });
+
+    if (!estimate) {
+      return { hasEstimate: false, estimate: null };
+    }
+
+    return {
+      hasEstimate: true,
+      estimate: {
+        ...estimate,
+        box2Federal: Number(estimate.box2Federal),
+        box17State: Number(estimate.box17State),
+        estimatedRefund: Number(estimate.estimatedRefund),
+      },
+    };
+  }
+
+  /**
+   * Check if user already has an estimate (quick check without full data)
+   */
+  async hasExistingEstimate(userId: string): Promise<boolean> {
+    const count = await this.prisma.w2Estimate.count({
+      where: { userId },
+    });
+    return count > 0;
+  }
 }

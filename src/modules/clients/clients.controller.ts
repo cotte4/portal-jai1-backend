@@ -43,6 +43,26 @@ export class ClientsController {
     return this.clientsService.getDraft(user.id);
   }
 
+  @Patch('profile/user-info')
+  @UseGuards(JwtAuthGuard)
+  async updateUserInfo(
+    @CurrentUser() user: any,
+    @Body() updateData: {
+      phone?: string;
+      firstName?: string;
+      lastName?: string;
+      dateOfBirth?: string;
+      address?: {
+        street?: string;
+        city?: string;
+        state?: string;
+        zip?: string;
+      };
+    },
+  ) {
+    return this.clientsService.updateUserInfo(user.id, updateData);
+  }
+
   // Admin endpoints
   @Get('admin/clients')
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -9,6 +9,7 @@ interface CreateUserData {
   lastName: string;
   phone?: string;
   role?: UserRole;
+  googleId?: string;
 }
 
 @Injectable()
@@ -24,6 +25,7 @@ export class UsersService {
         lastName: data.lastName,
         phone: data.phone,
         role: data.role || 'client',
+        googleId: data.googleId,
       },
     });
   }
@@ -45,9 +47,17 @@ export class UsersService {
         phone: true,
         role: true,
         isActive: true,
+        googleId: true,
         createdAt: true,
         updatedAt: true,
       },
+    });
+  }
+
+  async updateGoogleId(userId: string, googleId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { googleId },
     });
   }
 

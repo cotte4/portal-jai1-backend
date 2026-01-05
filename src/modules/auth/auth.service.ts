@@ -91,7 +91,12 @@ export class AuthService {
     }
 
     await this.usersService.updateLastLogin(user.id);
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    const tokens = await this.generateTokens(
+      user.id,
+      user.email,
+      user.role,
+      loginDto.rememberMe || false,
+    );
 
     return {
       user: {
@@ -180,17 +185,97 @@ export class AuthService {
     return { message: 'Password has been reset successfully' };
   }
 
-  private async generateTokens(userId: string, email: string, role: string) {
+  /**
+   * Handle Google OAuth login/registration
+   */
+  async googleLogin(googleUser: {
+    googleId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    picture?: string;
+  }) {
+    if (!googleUser.email) {
+      throw new BadRequestException('Google account must have an email');
+    }
+
+    // Check if user already exists
+    let user = await this.usersService.findByEmail(googleUser.email);
+
+    if (!user) {
+      // Create new user from Google data (no password needed)
+      const randomPassword = crypto.randomBytes(32).toString('hex');
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+      user = await this.usersService.create({
+        email: googleUser.email,
+        passwordHash: hashedPassword,
+        firstName: googleUser.firstName || 'Usuario',
+        lastName: googleUser.lastName || 'Google',
+        googleId: googleUser.googleId,
+      });
+
+      this.logger.log(`New user created via Google OAuth: ${user.email}`);
+
+      // Send welcome email
+      this.emailService
+        .sendWelcomeEmail(user.email, user.firstName)
+        .catch((err) => this.logger.error('Failed to send welcome email', err));
+    } else {
+      // Update googleId if not set
+      if (!user.googleId) {
+        await this.usersService.updateGoogleId(user.id, googleUser.googleId);
+      }
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Account is deactivated');
+    }
+
+    await this.usersService.updateLastLogin(user.id);
+    const tokens = await this.generateTokens(user.id, user.email, user.role);
+
+    this.logger.log(`Google OAuth login successful for: ${user.email}`);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        first_name: user.firstName,
+        last_name: user.lastName,
+        role: user.role,
+      },
+      ...tokens,
+    };
+  }
+
+  private async generateTokens(
+    userId: string,
+    email: string,
+    role: string,
+    rememberMe: boolean = false,
+  ) {
     const payload = { sub: userId, email, role };
 
-    const accessToken = this.jwtService.sign(payload);
-    const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: '7d',
+    // Extended expiration for "Remember Me" option
+    const accessTokenExpiry = rememberMe ? '7d' : '15m';
+    const refreshTokenExpiry = rememberMe ? '30d' : '7d';
+
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: accessTokenExpiry,
     });
+    const refreshToken = this.jwtService.sign(payload, {
+      expiresIn: refreshTokenExpiry,
+    });
+
+    this.logger.log(
+      `Generated tokens for ${email} (rememberMe: ${rememberMe}, accessExpiry: ${accessTokenExpiry})`,
+    );
 
     return {
       access_token: accessToken,
       refresh_token: refreshToken,
+      expires_in: rememberMe ? 604800 : 900, // seconds (7 days or 15 min)
     };
   }
 }

@@ -30,23 +30,29 @@ export class EmailService {
 
   private async send(options: EmailOptions): Promise<boolean> {
     if (!this.isConfigured) {
-      this.logger.log(`[EMAIL MOCK] To: ${options.to}`);
-      this.logger.log(`[EMAIL MOCK] Subject: ${options.subject}`);
-      this.logger.log(`[EMAIL MOCK] Body: ${options.html.substring(0, 200)}...`);
-      return true;
+      this.logger.warn(`[EMAIL NOT CONFIGURED] Would send to: ${options.to}`);
+      this.logger.warn(`[EMAIL NOT CONFIGURED] Subject: ${options.subject}`);
+      this.logger.warn(`[EMAIL NOT CONFIGURED] Set RESEND_API_KEY in .env to enable emails`);
+      return false; // Return false so callers know email wasn't actually sent
     }
 
     try {
-      await this.resend.emails.send({
+      this.logger.log(`Attempting to send email to ${options.to}...`);
+      const result = await this.resend.emails.send({
         from: this.fromEmail,
         to: options.to,
         subject: options.subject,
         html: options.html,
       });
-      this.logger.log(`Email sent to ${options.to}: ${options.subject}`);
+      this.logger.log(`Email sent successfully to ${options.to}: ${options.subject}`);
+      this.logger.debug(`Resend response: ${JSON.stringify(result)}`);
       return true;
-    } catch (error) {
-      this.logger.error(`Failed to send email to ${options.to}:`, error);
+    } catch (error: any) {
+      this.logger.error(`Failed to send email to ${options.to}`);
+      this.logger.error(`Error details: ${error?.message || JSON.stringify(error)}`);
+      if (error?.statusCode) {
+        this.logger.error(`Resend status code: ${error.statusCode}`);
+      }
       return false;
     }
   }
