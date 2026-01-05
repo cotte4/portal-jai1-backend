@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { EncryptionService, EmailService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -66,11 +66,22 @@ export class ClientsService {
             is_draft: user.clientProfile.isDraft,
           }
         : null,
-      tax_case: user.clientProfile?.taxCases[0] || null,
+      taxCase: user.clientProfile?.taxCases[0] || null,
     };
   }
 
   async completeProfile(userId: string, data: CompleteProfileDto) {
+    // Check if profile is already completed (not a draft)
+    const existingProfile = await this.prisma.clientProfile.findUnique({
+      where: { userId },
+    });
+
+    if (existingProfile?.profileComplete && !existingProfile?.isDraft) {
+      throw new BadRequestException(
+        'Profile already submitted. Contact support to make changes.',
+      );
+    }
+
     // Encrypt sensitive data before saving
     const encryptedSSN = data.ssn ? this.encryption.encrypt(data.ssn) : null;
     const encryptedStreet = data.address?.street
@@ -311,6 +322,12 @@ export class ClientsService {
         paymentReceived: tc.paymentReceived,
         commissionPaid: tc.commissionPaid,
         statusUpdatedAt: tc.statusUpdatedAt,
+        adminStep: tc.adminStep,
+        hasProblem: tc.hasProblem,
+        problemStep: tc.problemStep,
+        problemType: tc.problemType,
+        problemDescription: tc.problemDescription,
+        problemResolvedAt: tc.problemResolvedAt,
         createdAt: tc.createdAt,
         updatedAt: tc.updatedAt,
       })),
@@ -436,6 +453,133 @@ export class ClientsService {
     });
 
     return { message: 'Payment marked as received' };
+  }
+
+  async updateAdminStep(id: string, step: number, changedById: string) {
+    if (step < 1 || step > 5) {
+      throw new NotFoundException('Step must be between 1 and 5');
+    }
+
+    const client = await this.prisma.clientProfile.findUnique({
+      where: { id },
+      include: {
+        taxCases: { orderBy: { taxYear: 'desc' }, take: 1 },
+      },
+    });
+
+    if (!client || !client.taxCases[0]) {
+      throw new NotFoundException('Client or tax case not found');
+    }
+
+    const taxCase = client.taxCases[0];
+
+    await this.prisma.$transaction([
+      this.prisma.taxCase.update({
+        where: { id: taxCase.id },
+        data: { adminStep: step },
+      }),
+      this.prisma.statusHistory.create({
+        data: {
+          taxCaseId: taxCase.id,
+          previousStatus: `step:${taxCase.adminStep || 1}`,
+          newStatus: `step:${step}`,
+          changedById,
+          comment: `Admin step changed to ${step}`,
+        },
+      }),
+    ]);
+
+    return { message: 'Admin step updated successfully', step };
+  }
+
+  async setProblem(
+    id: string,
+    problemData: {
+      hasProblem: boolean;
+      problemType?: string;
+      problemDescription?: string;
+    },
+  ) {
+    const client = await this.prisma.clientProfile.findUnique({
+      where: { id },
+      include: {
+        taxCases: { orderBy: { taxYear: 'desc' }, take: 1 },
+      },
+    });
+
+    if (!client || !client.taxCases[0]) {
+      throw new NotFoundException('Client or tax case not found');
+    }
+
+    const taxCase = client.taxCases[0];
+
+    const updateData: any = {
+      hasProblem: problemData.hasProblem,
+    };
+
+    if (problemData.hasProblem) {
+      updateData.problemStep = taxCase.adminStep || 1;
+      updateData.problemType = problemData.problemType || null;
+      updateData.problemDescription = problemData.problemDescription || null;
+      updateData.problemResolvedAt = null;
+    } else {
+      updateData.problemResolvedAt = new Date();
+      updateData.problemType = null;
+      updateData.problemDescription = null;
+    }
+
+    await this.prisma.taxCase.update({
+      where: { id: taxCase.id },
+      data: updateData,
+    });
+
+    return {
+      message: problemData.hasProblem
+        ? 'Problem marked on case'
+        : 'Problem resolved',
+      hasProblem: problemData.hasProblem,
+    };
+  }
+
+  async sendClientNotification(
+    id: string,
+    notifyData: {
+      title: string;
+      message: string;
+      sendEmail?: boolean;
+    },
+  ) {
+    const client = await this.prisma.clientProfile.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    if (!client) {
+      throw new NotFoundException('Client not found');
+    }
+
+    // Create in-app notification
+    await this.notificationsService.create(
+      client.user.id,
+      'system',
+      notifyData.title,
+      notifyData.message,
+    );
+
+    // Send email if requested
+    if (notifyData.sendEmail) {
+      await this.emailService.sendNotificationEmail(
+        client.user.email,
+        client.user.firstName,
+        notifyData.title,
+        notifyData.message,
+      );
+    }
+
+    return {
+      message: 'Notification sent successfully',
+      emailSent: notifyData.sendEmail || false,
+    };
   }
 
   async exportToExcel(): Promise<Buffer> {

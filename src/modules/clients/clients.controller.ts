@@ -115,4 +115,45 @@ export class ClientsController {
   async markPaid(@Param('id') id: string) {
     return this.clientsService.markPaid(id);
   }
+
+  @Patch('admin/clients/:id/step')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin' as any)
+  async updateAdminStep(
+    @Param('id') id: string,
+    @Body() stepData: { step: number },
+    @CurrentUser() user: any,
+  ) {
+    return this.clientsService.updateAdminStep(id, stepData.step, user.id);
+  }
+
+  @Patch('admin/clients/:id/problem')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin' as any)
+  async setProblem(
+    @Param('id') id: string,
+    @Body()
+    problemData: {
+      hasProblem: boolean;
+      problemType?: string;
+      problemDescription?: string;
+    },
+  ) {
+    return this.clientsService.setProblem(id, problemData);
+  }
+
+  @Post('admin/clients/:id/notify')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin' as any)
+  async sendClientNotification(
+    @Param('id') id: string,
+    @Body()
+    notifyData: {
+      title: string;
+      message: string;
+      sendEmail?: boolean;
+    },
+  ) {
+    return this.clientsService.sendClientNotification(id, notifyData);
+  }
 }

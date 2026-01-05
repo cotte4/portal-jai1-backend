@@ -284,6 +284,58 @@ export class EmailService {
   }
 
   /**
+   * Send custom notification email
+   */
+  async sendNotificationEmail(
+    to: string,
+    firstName: string,
+    title: string,
+    message: string,
+  ): Promise<boolean> {
+    const portalUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #B21B43; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background-color: #f9f9f9; }
+          .message-box { background-color: white; border-left: 4px solid #1D345D; padding: 15px; margin: 15px 0; }
+          .button { display: inline-block; background-color: #1D345D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }
+          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>${title}</h1>
+          </div>
+          <div class="content">
+            <p>Hola <strong>${firstName}</strong>,</p>
+            <div class="message-box">
+              <p>${message}</p>
+            </div>
+            <a href="${portalUrl}" class="button">Ir al Portal</a>
+          </div>
+          <div class="footer">
+            <p>El equipo JAI1</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.send({
+      to,
+      subject: title,
+      html,
+    });
+  }
+
+  /**
    * Send notification to admin about new client
    */
   async sendNewClientNotification(
