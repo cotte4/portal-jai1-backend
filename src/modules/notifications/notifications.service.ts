@@ -39,8 +39,8 @@ export class NotificationsService {
       type: notification.type,
       title: notification.title,
       message: notification.message,
-      is_read: notification.isRead,
-      created_at: notification.createdAt,
+      isRead: notification.isRead,
+      createdAt: notification.createdAt,
     }));
   }
 

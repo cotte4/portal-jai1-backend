@@ -20,6 +20,7 @@ import { TicketsModule } from './modules/tickets/tickets.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { CalculatorModule } from './modules/calculator/calculator.module';
+import { ProgressModule } from './modules/progress/progress.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { CalculatorModule } from './modules/calculator/calculator.module';
     NotificationsModule,
     WebhooksModule,
     CalculatorModule,
+    ProgressModule,
   ],
   controllers: [],
   providers: [

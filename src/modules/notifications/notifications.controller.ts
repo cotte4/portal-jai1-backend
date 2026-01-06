@@ -18,7 +18,7 @@ export class NotificationsController {
   @Get()
   async findAll(
     @CurrentUser() user: any,
-    @Query('unread_only') unreadOnly?: string,
+    @Query('unreadOnly') unreadOnly?: string,
   ) {
     return this.notificationsService.findAll(
       user.id,

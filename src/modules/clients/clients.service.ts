@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { PrismaService } from '../../config/prisma.service';
 import { EncryptionService, EmailService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ProgressAutomationService } from '../progress/progress-automation.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import * as ExcelJS from 'exceljs';
 
@@ -14,6 +15,7 @@ export class ClientsService {
     private encryption: EncryptionService,
     private emailService: EmailService,
     private notificationsService: NotificationsService,
+    private progressAutomation: ProgressAutomationService,
   ) {}
 
   async getProfile(userId: string) {
@@ -149,6 +151,46 @@ export class ClientsService {
     });
 
     this.logger.log(`Profile saved successfully for user ${userId}, id: ${result.id}`);
+
+    // === PROGRESS AUTOMATION: Emit event when profile is completed (not draft) ===
+    if (!data.is_draft) {
+      try {
+        // Get or create tax case for this profile
+        let taxCase = await this.prisma.taxCase.findFirst({
+          where: { clientProfileId: result.id },
+          orderBy: { taxYear: 'desc' },
+        });
+
+        if (!taxCase) {
+          taxCase = await this.prisma.taxCase.create({
+            data: {
+              clientProfileId: result.id,
+              taxYear: new Date().getFullYear(),
+            },
+          });
+          this.logger.log(`Created new TaxCase ${taxCase.id} for profile ${result.id}`);
+        }
+
+        // Get client name for notification
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { firstName: true, lastName: true },
+        });
+        const clientName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown';
+
+        // Emit profile completed event
+        await this.progressAutomation.processEvent({
+          type: 'PROFILE_COMPLETED',
+          userId,
+          taxCaseId: taxCase.id,
+          metadata: { clientName },
+        });
+        this.logger.log(`Emitted PROFILE_COMPLETED event for user ${userId}`);
+      } catch (error) {
+        // Don't fail profile save if automation fails
+        this.logger.error('Progress automation error (non-fatal):', error);
+      }
+    }
 
     return {
       profile: {

@@ -3,19 +3,23 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
+import { ProgressAutomationService } from '../progress/progress-automation.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name);
   private readonly BUCKET_NAME = 'documents';
 
   constructor(
     private prisma: PrismaService,
     private supabase: SupabaseService,
+    private progressAutomation: ProgressAutomationService,
   ) {}
 
   async upload(
@@ -103,6 +107,46 @@ export class DocumentsService {
     });
 
     console.log('Document created with ID:', document.id);
+
+    // === PROGRESS AUTOMATION: Emit events based on document type ===
+    try {
+      const clientName = await this.progressAutomation.getClientName(userId);
+
+      if (uploadDto.type === 'w2') {
+        // W2 document uploaded - notify admins and check status
+        await this.progressAutomation.processEvent({
+          type: 'W2_UPLOADED',
+          userId,
+          taxCaseId: taxCase.id,
+          metadata: { clientName, fileName: file.originalname },
+        });
+        this.logger.log(`Emitted W2_UPLOADED event for user ${userId}`);
+      } else if (uploadDto.type === 'payment_proof') {
+        // Payment proof uploaded - set flag and notify admins
+        await this.progressAutomation.processEvent({
+          type: 'PAYMENT_PROOF_UPLOADED',
+          userId,
+          taxCaseId: taxCase.id,
+          metadata: { clientName, fileName: file.originalname },
+        });
+        this.logger.log(`Emitted PAYMENT_PROOF_UPLOADED event for user ${userId}`);
+      } else {
+        // Other document - just notify admins
+        await this.progressAutomation.processEvent({
+          type: 'DOCUMENT_UPLOADED',
+          userId,
+          taxCaseId: taxCase.id,
+          metadata: { clientName, fileName: file.originalname, documentType: uploadDto.type },
+        });
+        this.logger.log(`Emitted DOCUMENT_UPLOADED event for user ${userId}`);
+      }
+
+      // Check if all required documents are now complete
+      await this.progressAutomation.checkAllDocsComplete(taxCase.id, userId);
+    } catch (error) {
+      // Don't fail the upload if progress automation fails
+      this.logger.error('Progress automation error (non-fatal):', error);
+    }
 
     return {
       document: {
