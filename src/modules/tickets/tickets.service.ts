@@ -59,48 +59,53 @@ export class TicketsService {
   }
 
   async findAll(options: { status?: string; userId?: string }) {
-    const where: any = {};
+    try {
+      const where: any = {};
 
-    if (options.status) {
-      where.status = options.status;
-    }
+      if (options.status) {
+        where.status = options.status;
+      }
 
-    if (options.userId) {
-      where.userId = options.userId;
-    }
+      if (options.userId) {
+        where.userId = options.userId;
+      }
 
-    const tickets = await this.prisma.ticket.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+      const tickets = await this.prisma.ticket.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          _count: {
+            select: { messages: true },
           },
         },
-        _count: {
-          select: { messages: true },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        orderBy: { updatedAt: 'desc' },
+      });
 
-    return tickets.map((ticket) => ({
-      id: ticket.id,
-      subject: ticket.subject,
-      status: ticket.status,
-      user: {
-        id: ticket.user.id,
-        email: ticket.user.email,
-        firstName: ticket.user.firstName,
-        lastName: ticket.user.lastName,
-      },
-      messageCount: ticket._count.messages,
-      createdAt: ticket.createdAt,
-      updatedAt: ticket.updatedAt,
-    }));
+      return tickets.map((ticket) => ({
+        id: ticket.id,
+        subject: ticket.subject,
+        status: ticket.status,
+        user: ticket.user ? {
+          id: ticket.user.id,
+          email: ticket.user.email,
+          firstName: ticket.user.firstName,
+          lastName: ticket.user.lastName,
+        } : null,
+        messageCount: ticket._count.messages,
+        createdAt: ticket.createdAt,
+        updatedAt: ticket.updatedAt,
+      }));
+    } catch (error) {
+      console.error('Error in findAll tickets:', error);
+      throw error;
+    }
   }
 
   async findOne(ticketId: string, userId: string, userRole: string) {
