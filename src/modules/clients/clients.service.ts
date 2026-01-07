@@ -598,6 +598,13 @@ export class ClientsService {
         estimatedRefund: tc.estimatedRefund,
         actualRefund: tc.actualRefund,
         refundDepositDate: tc.refundDepositDate,
+        // Separate federal/state fields
+        federalEstimatedDate: tc.federalEstimatedDate,
+        stateEstimatedDate: tc.stateEstimatedDate,
+        federalActualRefund: tc.federalActualRefund,
+        stateActualRefund: tc.stateActualRefund,
+        federalDepositDate: tc.federalDepositDate,
+        stateDepositDate: tc.stateDepositDate,
         paymentReceived: tc.paymentReceived,
         commissionPaid: tc.commissionPaid,
         statusUpdatedAt: tc.statusUpdatedAt,
@@ -708,32 +715,64 @@ export class ClientsService {
 
     const taxCase = client.taxCases[0];
     const previousClientStatus = taxCase.clientStatus;
+    const previousFederalStatus = taxCase.federalStatus;
+    const previousStateStatus = taxCase.stateStatus;
 
     // Support both camelCase (from frontend) and snake_case
     const internalStatus = statusData.internalStatus || statusData.internal_status;
     const clientStatus = statusData.clientStatus || statusData.client_status;
+    const federalStatus = statusData.federalStatus || statusData.federal_status;
+    const stateStatus = statusData.stateStatus || statusData.state_status;
+
+    // Build update data dynamically
+    const updateData: any = {
+      statusUpdatedAt: new Date(),
+    };
+
+    if (internalStatus) updateData.internalStatus = internalStatus;
+    if (clientStatus) updateData.clientStatus = clientStatus;
+    if (federalStatus) updateData.federalStatus = federalStatus;
+    if (stateStatus) updateData.stateStatus = stateStatus;
+
+    // Handle federal-specific fields
+    if (statusData.federalEstimatedDate) {
+      updateData.federalEstimatedDate = new Date(statusData.federalEstimatedDate);
+    }
+    if (statusData.federalActualRefund !== undefined) {
+      updateData.federalActualRefund = statusData.federalActualRefund;
+    }
+    if (statusData.federalDepositDate) {
+      updateData.federalDepositDate = new Date(statusData.federalDepositDate);
+    }
+
+    // Handle state-specific fields
+    if (statusData.stateEstimatedDate) {
+      updateData.stateEstimatedDate = new Date(statusData.stateEstimatedDate);
+    }
+    if (statusData.stateActualRefund !== undefined) {
+      updateData.stateActualRefund = statusData.stateActualRefund;
+    }
+    if (statusData.stateDepositDate) {
+      updateData.stateDepositDate = new Date(statusData.stateDepositDate);
+    }
 
     await this.prisma.$transaction([
       this.prisma.taxCase.update({
         where: { id: taxCase.id },
-        data: {
-          internalStatus: internalStatus,
-          clientStatus: clientStatus,
-          statusUpdatedAt: new Date(),
-        },
+        data: updateData,
       }),
       this.prisma.statusHistory.create({
         data: {
           taxCaseId: taxCase.id,
           previousStatus: taxCase.internalStatus,
-          newStatus: internalStatus,
+          newStatus: internalStatus || taxCase.internalStatus,
           changedById,
           comment: statusData.comment,
         },
       }),
     ]);
 
-    // Status labels for notifications
+    // Status labels for client status notifications
     const statusLabels: Record<string, string> = {
       esperando_datos: 'Necesitamos tus datos y documentos',
       cuenta_en_revision: 'Estamos revisando tu información',
@@ -745,26 +784,104 @@ export class ClientsService {
       taxes_finalizados: '¡Proceso completado!',
     };
 
-    const newStatusLabel = statusLabels[clientStatus] || clientStatus;
+    // Notify for client status change
+    if (clientStatus && clientStatus !== previousClientStatus) {
+      const newStatusLabel = statusLabels[clientStatus] || clientStatus;
 
-    // Create in-app notification
-    await this.notificationsService.create(
-      client.user.id,
-      'status_change',
-      'Tu trámite ha sido actualizado',
-      newStatusLabel,
-    );
+      await this.notificationsService.create(
+        client.user.id,
+        'status_change',
+        'Tu trámite ha sido actualizado',
+        newStatusLabel,
+      );
 
-    // Send email notification (don't await to avoid blocking response)
-    this.emailService.sendStatusChangeEmail(
-      client.user.email,
-      client.user.firstName,
-      previousClientStatus,
-      clientStatus,
-      statusData.comment || '',
-    );
+      // Send email notification (don't await to avoid blocking response)
+      this.emailService.sendStatusChangeEmail(
+        client.user.email,
+        client.user.firstName,
+        previousClientStatus,
+        clientStatus,
+        statusData.comment || '',
+      );
+    }
+
+    // Notify for federal status change
+    if (federalStatus && federalStatus !== previousFederalStatus) {
+      await this.notifyFederalStatusChange(client.user.id, client.user.email, client.user.firstName, federalStatus, statusData.federalActualRefund);
+    }
+
+    // Notify for state status change
+    if (stateStatus && stateStatus !== previousStateStatus) {
+      await this.notifyStateStatusChange(client.user.id, client.user.email, client.user.firstName, stateStatus, statusData.stateActualRefund);
+    }
 
     return { message: 'Status updated successfully' };
+  }
+
+  private async notifyFederalStatusChange(userId: string, email: string, firstName: string, status: string, refundAmount?: number) {
+    const notifications: Record<string, { title: string; message: string }> = {
+      processing: {
+        title: 'Declaración Federal en Proceso',
+        message: 'El IRS está procesando tu declaración federal.',
+      },
+      approved: {
+        title: '¡Declaración Federal Aprobada!',
+        message: 'Tu declaración federal ha sido aprobada por el IRS. Pronto recibirás tu reembolso.',
+      },
+      rejected: {
+        title: 'Declaración Federal Rechazada',
+        message: 'Tu declaración federal fue rechazada por el IRS. Contacta a soporte para más información.',
+      },
+      deposited: {
+        title: '¡Reembolso Federal Depositado!',
+        message: refundAmount
+          ? `Tu reembolso federal de $${refundAmount.toLocaleString()} ha sido depositado en tu cuenta.`
+          : 'Tu reembolso federal ha sido depositado en tu cuenta.',
+      },
+    };
+
+    const notification = notifications[status];
+    if (notification) {
+      await this.notificationsService.create(
+        userId,
+        'status_change',
+        notification.title,
+        notification.message,
+      );
+    }
+  }
+
+  private async notifyStateStatusChange(userId: string, email: string, firstName: string, status: string, refundAmount?: number) {
+    const notifications: Record<string, { title: string; message: string }> = {
+      processing: {
+        title: 'Declaración Estatal en Proceso',
+        message: 'El estado está procesando tu declaración estatal.',
+      },
+      approved: {
+        title: '¡Declaración Estatal Aprobada!',
+        message: 'Tu declaración estatal ha sido aprobada. Pronto recibirás tu reembolso.',
+      },
+      rejected: {
+        title: 'Declaración Estatal Rechazada',
+        message: 'Tu declaración estatal fue rechazada. Contacta a soporte para más información.',
+      },
+      deposited: {
+        title: '¡Reembolso Estatal Depositado!',
+        message: refundAmount
+          ? `Tu reembolso estatal de $${refundAmount.toLocaleString()} ha sido depositado en tu cuenta.`
+          : 'Tu reembolso estatal ha sido depositado en tu cuenta.',
+      },
+    };
+
+    const notification = notifications[status];
+    if (notification) {
+      await this.notificationsService.create(
+        userId,
+        'status_change',
+        notification.title,
+        notification.message,
+      );
+    }
   }
 
   async remove(id: string) {

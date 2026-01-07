@@ -70,6 +70,13 @@ model TaxCase {
   estimatedRefund    Decimal?        @map("estimated_refund") @db.Decimal(10, 2)
   actualRefund       Decimal?        @map("actual_refund") @db.Decimal(10, 2)
   refundDepositDate  DateTime?       @map("refund_deposit_date")
+  // Separate federal/state tracking
+  federalEstimatedDate  DateTime?    @map("federal_estimated_date")
+  stateEstimatedDate    DateTime?    @map("state_estimated_date")
+  federalActualRefund   Decimal?     @map("federal_actual_refund") @db.Decimal(10, 2)
+  stateActualRefund     Decimal?     @map("state_actual_refund") @db.Decimal(10, 2)
+  federalDepositDate    DateTime?    @map("federal_deposit_date")
+  stateDepositDate      DateTime?    @map("state_deposit_date")
   paymentReceived    Boolean         @default(false) @map("payment_received")
   commissionPaid     Boolean         @default(false) @map("commission_paid")
   // Year-specific employment and banking info
