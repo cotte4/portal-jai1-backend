@@ -129,7 +129,19 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      return this.generateTokens(user.id, user.email, user.role);
+      const tokens = await this.generateTokens(user.id, user.email, user.role);
+
+      // Return user object along with tokens (frontend expects this)
+      return {
+        user: {
+          id: user.id,
+          email: user.email,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          role: user.role,
+        },
+        ...tokens,
+      };
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
