@@ -41,6 +41,9 @@ export class AuthService {
       phone: registerDto.phone,
     });
 
+    // Set lastLoginAt since registration counts as first login
+    await this.usersService.updateLastLogin(user.id);
+
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
     // Send welcome email (async, don't wait)

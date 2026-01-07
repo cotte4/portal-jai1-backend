@@ -9,7 +9,7 @@ datasource db {
 }
 
 model User {
-  id                  String          @id @default(uuid())
+  id                  String          @id @default(uuid()) @db.Uuid
   email               String          @unique
   passwordHash        String          @map("password_hash")
   role                UserRole        @default(client)
@@ -34,8 +34,8 @@ model User {
 }
 
 model ClientProfile {
-  id                String    @id @default(uuid())
-  userId            String    @unique @map("user_id")
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @unique @map("user_id") @db.Uuid
   ssn               String?
   dateOfBirth       DateTime? @map("date_of_birth")
   addressStreet     String?   @map("address_street")
@@ -60,8 +60,8 @@ model ClientProfile {
 }
 
 model TaxCase {
-  id                 String          @id @default(uuid())
-  clientProfileId    String          @map("client_profile_id")
+  id                 String          @id @default(uuid()) @db.Uuid
+  clientProfileId    String          @map("client_profile_id") @db.Uuid
   taxYear            Int             @map("tax_year")
   internalStatus     InternalStatus  @default(revision_de_registro) @map("internal_status")
   clientStatus       ClientStatus    @default(esperando_datos) @map("client_status")
@@ -72,6 +72,12 @@ model TaxCase {
   refundDepositDate  DateTime?       @map("refund_deposit_date")
   paymentReceived    Boolean         @default(false) @map("payment_received")
   commissionPaid     Boolean         @default(false) @map("commission_paid")
+  // Year-specific employment and banking info
+  workState          String?         @map("work_state")
+  employerName       String?         @map("employer_name")
+  bankName           String?         @map("bank_name")
+  bankRoutingNumber  String?         @map("bank_routing_number")
+  bankAccountNumber  String?         @map("bank_account_number")
   statusUpdatedAt    DateTime        @default(now()) @map("status_updated_at")
   // Admin step control (1-5)
   adminStep          Int?            @map("admin_step")
@@ -92,8 +98,8 @@ model TaxCase {
 }
 
 model Document {
-  id          String       @id @default(uuid())
-  taxCaseId   String       @map("tax_case_id")
+  id          String       @id @default(uuid()) @db.Uuid
+  taxCaseId   String       @map("tax_case_id") @db.Uuid
   type        DocumentType
   fileName    String       @map("file_name")
   storagePath String       @map("storage_path")
@@ -108,8 +114,8 @@ model Document {
 }
 
 model Ticket {
-  id        String          @id @default(uuid())
-  userId    String          @map("user_id")
+  id        String          @id @default(uuid()) @db.Uuid
+  userId    String          @map("user_id") @db.Uuid
   subject   String
   status    TicketStatus    @default(open)
   createdAt DateTime        @default(now()) @map("created_at")
@@ -121,34 +127,34 @@ model Ticket {
 }
 
 model TicketMessage {
-  id        String   @id @default(uuid())
-  ticketId  String   @map("ticket_id")
-  senderId  String   @map("sender_id")
+  id        String   @id @default(uuid()) @db.Uuid
+  ticketId  String   @map("ticket_id") @db.Uuid
+  senderId  String?  @map("sender_id") @db.Uuid
   message   String
   createdAt DateTime @default(now()) @map("created_at")
-  sender    User     @relation(fields: [senderId], references: [id])
+  sender    User?    @relation(fields: [senderId], references: [id], onDelete: SetNull)
   ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@map("ticket_messages")
 }
 
 model StatusHistory {
-  id             String   @id @default(uuid())
-  taxCaseId      String   @map("tax_case_id")
+  id             String   @id @default(uuid()) @db.Uuid
+  taxCaseId      String   @map("tax_case_id") @db.Uuid
   previousStatus String?  @map("previous_status")
   newStatus      String   @map("new_status")
-  changedById    String   @map("changed_by_id")
+  changedById    String?  @map("changed_by_id") @db.Uuid
   comment        String?
   createdAt      DateTime @default(now()) @map("created_at")
-  changedBy      User     @relation("ChangedBy", fields: [changedById], references: [id])
+  changedBy      User?    @relation("ChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
   taxCase        TaxCase  @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
 
   @@map("status_history")
 }
 
 model Notification {
-  id        String           @id @default(uuid())
-  userId    String           @map("user_id")
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
   type      NotificationType
   title     String
   message   String
@@ -228,9 +234,9 @@ enum ProblemType {
 }
 
 model W2Estimate {
-  id              String         @id @default(uuid())
-  userId          String         @map("user_id")
-  taxCaseId       String?        @map("tax_case_id")
+  id              String         @id @default(uuid()) @db.Uuid
+  userId          String         @map("user_id") @db.Uuid
+  taxCaseId       String?        @map("tax_case_id") @db.Uuid
   box2Federal     Decimal        @map("box_2_federal") @db.Decimal(10, 2)
   box17State      Decimal        @map("box_17_state") @db.Decimal(10, 2)
   estimatedRefund Decimal        @map("estimated_refund") @db.Decimal(10, 2)

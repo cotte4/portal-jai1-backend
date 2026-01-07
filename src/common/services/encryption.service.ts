@@ -79,39 +79,83 @@ export class EncryptionService {
 
   /**
    * Encrypts sensitive profile fields
+   * Includes: SSN, address, bank numbers, TurboTax credentials
    */
   encryptProfileData(data: {
     ssn?: string;
     addressStreet?: string;
+    turbotaxEmail?: string;
     turbotaxPassword?: string;
+    bankRoutingNumber?: string;
+    bankAccountNumber?: string;
   }): {
     ssn?: string;
     addressStreet?: string;
+    turbotaxEmail?: string;
     turbotaxPassword?: string;
+    bankRoutingNumber?: string;
+    bankAccountNumber?: string;
   } {
     return {
       ssn: data.ssn ? this.encrypt(data.ssn) : undefined,
       addressStreet: data.addressStreet ? this.encrypt(data.addressStreet) : undefined,
+      turbotaxEmail: data.turbotaxEmail ? this.encrypt(data.turbotaxEmail) : undefined,
       turbotaxPassword: data.turbotaxPassword ? this.encrypt(data.turbotaxPassword) : undefined,
+      bankRoutingNumber: data.bankRoutingNumber ? this.encrypt(data.bankRoutingNumber) : undefined,
+      bankAccountNumber: data.bankAccountNumber ? this.encrypt(data.bankAccountNumber) : undefined,
     };
   }
 
   /**
    * Decrypts sensitive profile fields
+   * Includes: SSN, address, bank numbers, TurboTax credentials
    */
   decryptProfileData(data: {
     ssn?: string;
     addressStreet?: string;
+    turbotaxEmail?: string;
     turbotaxPassword?: string;
+    bankRoutingNumber?: string;
+    bankAccountNumber?: string;
   }): {
     ssn?: string;
     addressStreet?: string;
+    turbotaxEmail?: string;
     turbotaxPassword?: string;
+    bankRoutingNumber?: string;
+    bankAccountNumber?: string;
   } {
     return {
       ssn: data.ssn ? this.decrypt(data.ssn) : undefined,
       addressStreet: data.addressStreet ? this.decrypt(data.addressStreet) : undefined,
+      turbotaxEmail: data.turbotaxEmail ? this.decrypt(data.turbotaxEmail) : undefined,
       turbotaxPassword: data.turbotaxPassword ? this.decrypt(data.turbotaxPassword) : undefined,
+      bankRoutingNumber: data.bankRoutingNumber ? this.decrypt(data.bankRoutingNumber) : undefined,
+      bankAccountNumber: data.bankAccountNumber ? this.decrypt(data.bankAccountNumber) : undefined,
     };
+  }
+
+  /**
+   * Masks bank account number for display: 123456789 -> ****6789
+   */
+  maskBankAccount(accountNumber: string): string | null {
+    if (!accountNumber) return null;
+    const decrypted = this.decrypt(accountNumber);
+    if (decrypted.length >= 4) {
+      return `****${decrypted.slice(-4)}`;
+    }
+    return '****';
+  }
+
+  /**
+   * Masks routing number for display: 123456789 -> ****6789
+   */
+  maskRoutingNumber(routingNumber: string): string | null {
+    if (!routingNumber) return null;
+    const decrypted = this.decrypt(routingNumber);
+    if (decrypted.length >= 4) {
+      return `****${decrypted.slice(-4)}`;
+    }
+    return '****';
   }
 }

@@ -61,11 +61,20 @@ export class ClientsService {
               state: user.clientProfile.addressState,
               zip: user.clientProfile.addressZip,
             },
-            bank: {
-              name: user.clientProfile.bankName,
-              routingNumber: user.clientProfile.bankRoutingNumber,
-              accountNumber: user.clientProfile.bankAccountNumber,
-            },
+            // Bank data is now stored per TaxCase (year-specific)
+            bank: user.clientProfile.taxCases[0]
+              ? {
+                  name: user.clientProfile.taxCases[0].bankName,
+                  routingNumber: user.clientProfile.taxCases[0].bankRoutingNumber
+                    ? this.encryption.maskRoutingNumber(user.clientProfile.taxCases[0].bankRoutingNumber)
+                    : null,
+                  accountNumber: user.clientProfile.taxCases[0].bankAccountNumber
+                    ? this.encryption.maskBankAccount(user.clientProfile.taxCases[0].bankAccountNumber)
+                    : null,
+                }
+              : { name: null, routingNumber: null, accountNumber: null },
+            workState: user.clientProfile.taxCases[0]?.workState || null,
+            employerName: user.clientProfile.taxCases[0]?.employerName || null,
             profileComplete: user.clientProfile.profileComplete,
             isDraft: user.clientProfile.isDraft,
           }
@@ -93,8 +102,17 @@ export class ClientsService {
     const encryptedStreet = data.address?.street
       ? this.encryption.encrypt(data.address.street)
       : null;
+    const encryptedTurbotaxEmail = data.turbotax_email
+      ? this.encryption.encrypt(data.turbotax_email)
+      : null;
     const encryptedTurbotaxPassword = data.turbotax_password
       ? this.encryption.encrypt(data.turbotax_password)
+      : null;
+    const encryptedBankRouting = data.bank?.routing_number
+      ? this.encryption.encrypt(data.bank.routing_number)
+      : null;
+    const encryptedBankAccount = data.bank?.account_number
+      ? this.encryption.encrypt(data.bank.account_number)
       : null;
 
     // Use transaction to ensure both user and profile are updated
@@ -117,12 +135,7 @@ export class ClientsService {
           addressCity: data.address?.city,
           addressState: data.address?.state,
           addressZip: data.address?.zip,
-          bankName: data.bank?.name,
-          bankRoutingNumber: data.bank?.routing_number,
-          bankAccountNumber: data.bank?.account_number,
-          workState: data.work_state,
-          employerName: data.employer_name,
-          turbotaxEmail: data.turbotax_email,
+          turbotaxEmail: encryptedTurbotaxEmail,
           turbotaxPassword: encryptedTurbotaxPassword,
           isDraft: data.is_draft ?? false,
           profileComplete: !data.is_draft,
@@ -135,42 +148,48 @@ export class ClientsService {
           addressCity: data.address?.city,
           addressState: data.address?.state,
           addressZip: data.address?.zip,
-          bankName: data.bank?.name,
-          bankRoutingNumber: data.bank?.routing_number,
-          bankAccountNumber: data.bank?.account_number,
-          workState: data.work_state,
-          employerName: data.employer_name,
-          turbotaxEmail: data.turbotax_email,
+          turbotaxEmail: encryptedTurbotaxEmail,
           turbotaxPassword: encryptedTurbotaxPassword,
           isDraft: data.is_draft ?? false,
           profileComplete: !data.is_draft,
         },
       });
 
-      return profile;
+      // Get or create TaxCase for this year to store bank/employer data
+      let taxCase = await tx.taxCase.findFirst({
+        where: { clientProfileId: profile.id },
+        orderBy: { taxYear: 'desc' },
+      });
+
+      if (!taxCase) {
+        taxCase = await tx.taxCase.create({
+          data: {
+            clientProfileId: profile.id,
+            taxYear: new Date().getFullYear(),
+          },
+        });
+      }
+
+      // Update TaxCase with bank/employer data (year-specific)
+      await tx.taxCase.update({
+        where: { id: taxCase.id },
+        data: {
+          bankName: data.bank?.name,
+          bankRoutingNumber: encryptedBankRouting,
+          bankAccountNumber: encryptedBankAccount,
+          workState: data.work_state,
+          employerName: data.employer_name,
+        },
+      });
+
+      return { profile, taxCase };
     });
 
-    this.logger.log(`Profile saved successfully for user ${userId}, id: ${result.id}`);
+    this.logger.log(`Profile saved successfully for user ${userId}, id: ${result.profile.id}`);
 
     // === PROGRESS AUTOMATION: Emit event when profile is completed (not draft) ===
     if (!data.is_draft) {
       try {
-        // Get or create tax case for this profile
-        let taxCase = await this.prisma.taxCase.findFirst({
-          where: { clientProfileId: result.id },
-          orderBy: { taxYear: 'desc' },
-        });
-
-        if (!taxCase) {
-          taxCase = await this.prisma.taxCase.create({
-            data: {
-              clientProfileId: result.id,
-              taxYear: new Date().getFullYear(),
-            },
-          });
-          this.logger.log(`Created new TaxCase ${taxCase.id} for profile ${result.id}`);
-        }
-
         // Get client name for notification
         const user = await this.prisma.user.findUnique({
           where: { id: userId },
@@ -178,11 +197,11 @@ export class ClientsService {
         });
         const clientName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown';
 
-        // Emit profile completed event
+        // Emit profile completed event (taxCase already created in transaction)
         await this.progressAutomation.processEvent({
           type: 'PROFILE_COMPLETED',
           userId,
-          taxCaseId: taxCase.id,
+          taxCaseId: result.taxCase.id,
           metadata: { clientName },
         });
         this.logger.log(`Emitted PROFILE_COMPLETED event for user ${userId}`);
@@ -194,8 +213,8 @@ export class ClientsService {
 
     return {
       profile: {
-        ...result,
-        ssn: result.ssn ? this.encryption.maskSSN(result.ssn) : null,
+        ...result.profile,
+        ssn: result.profile.ssn ? this.encryption.maskSSN(result.profile.ssn) : null,
       },
       message: 'Profile saved successfully',
     };
@@ -306,9 +325,17 @@ export class ClientsService {
   async getDraft(userId: string) {
     const profile = await this.prisma.clientProfile.findUnique({
       where: { userId },
+      include: {
+        taxCases: {
+          orderBy: { taxYear: 'desc' },
+          take: 1,
+        },
+      },
     });
 
     if (!profile) return null;
+
+    const taxCase = profile.taxCases[0];
 
     // Return formatted response with decrypted data for editing
     return {
@@ -324,14 +351,21 @@ export class ClientsService {
         state: profile.addressState,
         zip: profile.addressZip,
       },
+      // Bank data is now stored per TaxCase (year-specific)
       bank: {
-        name: profile.bankName,
-        routingNumber: profile.bankRoutingNumber,
-        accountNumber: profile.bankAccountNumber,
+        name: taxCase?.bankName || null,
+        routingNumber: taxCase?.bankRoutingNumber
+          ? this.encryption.decrypt(taxCase.bankRoutingNumber)
+          : null,
+        accountNumber: taxCase?.bankAccountNumber
+          ? this.encryption.decrypt(taxCase.bankAccountNumber)
+          : null,
       },
-      workState: profile.workState,
-      employerName: profile.employerName,
-      turbotaxEmail: profile.turbotaxEmail,
+      workState: taxCase?.workState || null,
+      employerName: taxCase?.employerName || null,
+      turbotaxEmail: profile.turbotaxEmail
+        ? this.encryption.decrypt(profile.turbotaxEmail)
+        : null,
       turbotaxPassword: profile.turbotaxPassword ? '********' : null,
       profileComplete: profile.profileComplete,
       isDraft: profile.isDraft,
@@ -397,6 +431,9 @@ export class ClientsService {
 
     return {
       clients: results.map((client) => {
+        // Get the most recent tax case
+        const taxCase = client.taxCases[0];
+
         // Calculate missing items
         const missingItems: string[] = [];
 
@@ -415,13 +452,12 @@ export class ClientsService {
           missingItems.push('Dirección');
         }
 
-        // Check for missing bank info
-        if (!client.bankName || !client.bankRoutingNumber || !client.bankAccountNumber) {
+        // Check for missing bank info (now stored in TaxCase)
+        if (!taxCase?.bankName || !taxCase?.bankRoutingNumber || !taxCase?.bankAccountNumber) {
           missingItems.push('Banco');
         }
 
         // Check for missing W2 document
-        const taxCase = client.taxCases[0];
         const hasW2 = taxCase?.documents?.some(d => d.type === 'w2') || false;
         if (!hasW2) {
           missingItems.push('W2');
@@ -526,14 +562,23 @@ export class ClientsService {
           state: client.addressState,
           zip: client.addressZip,
         },
-        bank: {
-          name: client.bankName,
-          routingNumber: client.bankRoutingNumber,
-          accountNumber: client.bankAccountNumber,
-        },
-        workState: client.workState,
-        employerName: client.employerName,
-        turbotaxEmail: client.turbotaxEmail,
+        // Bank/employer data is now stored per TaxCase (year-specific)
+        bank: client.taxCases[0]
+          ? {
+              name: client.taxCases[0].bankName,
+              routingNumber: client.taxCases[0].bankRoutingNumber
+                ? this.encryption.decrypt(client.taxCases[0].bankRoutingNumber)
+                : null,
+              accountNumber: client.taxCases[0].bankAccountNumber
+                ? this.encryption.decrypt(client.taxCases[0].bankAccountNumber)
+                : null,
+            }
+          : { name: null, routingNumber: null, accountNumber: null },
+        workState: client.taxCases[0]?.workState || null,
+        employerName: client.taxCases[0]?.employerName || null,
+        turbotaxEmail: client.turbotaxEmail
+          ? this.encryption.decrypt(client.turbotaxEmail)
+          : null,
         turbotaxPassword: client.turbotaxPassword
           ? this.encryption.decrypt(client.turbotaxPassword)
           : null,
@@ -571,22 +616,80 @@ export class ClientsService {
   }
 
   async update(id: string, data: any) {
-    // Encrypt sensitive fields if they're being updated
-    const updateData = { ...data };
+    // Separate ClientProfile data from TaxCase data (bank/employer)
+    const profileData = { ...data };
+    const taxCaseData: any = {};
 
+    // Remove bank/employer fields from profile data (they go to TaxCase)
+    delete profileData.bankName;
+    delete profileData.bankRoutingNumber;
+    delete profileData.bankAccountNumber;
+    delete profileData.workState;
+    delete profileData.employerName;
+
+    // Encrypt profile sensitive fields
     if (data.ssn) {
-      updateData.ssn = this.encryption.encrypt(data.ssn);
+      profileData.ssn = this.encryption.encrypt(data.ssn);
     }
     if (data.addressStreet) {
-      updateData.addressStreet = this.encryption.encrypt(data.addressStreet);
+      profileData.addressStreet = this.encryption.encrypt(data.addressStreet);
+    }
+    if (data.turbotaxEmail) {
+      profileData.turbotaxEmail = this.encryption.encrypt(data.turbotaxEmail);
     }
     if (data.turbotaxPassword) {
-      updateData.turbotaxPassword = this.encryption.encrypt(data.turbotaxPassword);
+      profileData.turbotaxPassword = this.encryption.encrypt(data.turbotaxPassword);
+    }
+
+    // Prepare TaxCase bank/employer data
+    if (data.bankName !== undefined) taxCaseData.bankName = data.bankName;
+    if (data.bankRoutingNumber) {
+      taxCaseData.bankRoutingNumber = this.encryption.encrypt(data.bankRoutingNumber);
+    }
+    if (data.bankAccountNumber) {
+      taxCaseData.bankAccountNumber = this.encryption.encrypt(data.bankAccountNumber);
+    }
+    if (data.workState !== undefined) taxCaseData.workState = data.workState;
+    if (data.employerName !== undefined) taxCaseData.employerName = data.employerName;
+
+    // Update in transaction if we have both profile and taxCase updates
+    const hasTaxCaseUpdates = Object.keys(taxCaseData).length > 0;
+
+    if (hasTaxCaseUpdates) {
+      return this.prisma.$transaction(async (tx) => {
+        const profile = await tx.clientProfile.update({
+          where: { id },
+          data: profileData,
+        });
+
+        // Get or create TaxCase for this profile
+        let taxCase = await tx.taxCase.findFirst({
+          where: { clientProfileId: id },
+          orderBy: { taxYear: 'desc' },
+        });
+
+        if (!taxCase) {
+          taxCase = await tx.taxCase.create({
+            data: {
+              clientProfileId: id,
+              taxYear: new Date().getFullYear(),
+              ...taxCaseData,
+            },
+          });
+        } else {
+          taxCase = await tx.taxCase.update({
+            where: { id: taxCase.id },
+            data: taxCaseData,
+          });
+        }
+
+        return { ...profile, taxCase };
+      });
     }
 
     return this.prisma.clientProfile.update({
       where: { id },
-      data: updateData,
+      data: profileData,
     });
   }
 
@@ -878,6 +981,13 @@ export class ClientsService {
       const decryptedStreet = client.addressStreet
         ? this.encryption.decrypt(client.addressStreet)
         : '';
+      // Bank data is now stored per TaxCase (year-specific)
+      const decryptedRouting = taxCase?.bankRoutingNumber
+        ? this.encryption.decrypt(taxCase.bankRoutingNumber)
+        : '';
+      const decryptedAccount = taxCase?.bankAccountNumber
+        ? this.encryption.decrypt(taxCase.bankAccountNumber)
+        : '';
 
       const fullAddress = [
         decryptedStreet,
@@ -897,11 +1007,11 @@ export class ClientsService {
           ? client.dateOfBirth.toISOString().split('T')[0]
           : '',
         address: fullAddress,
-        workState: client.workState || '',
-        employer: client.employerName || '',
-        bank: client.bankName || '',
-        routing: client.bankRoutingNumber || '',
-        account: client.bankAccountNumber || '',
+        workState: taxCase?.workState || '',
+        employer: taxCase?.employerName || '',
+        bank: taxCase?.bankName || '',
+        routing: decryptedRouting,
+        account: decryptedAccount,
         internalStatus: taxCase?.internalStatus || '',
         clientStatus: taxCase?.clientStatus || '',
         estimatedRefund: taxCase?.estimatedRefund?.toString() || '',

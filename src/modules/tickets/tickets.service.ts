@@ -161,12 +161,14 @@ export class TicketsService {
         ticketId: ticket.id,
         message: msg.message,
         senderId: msg.senderId,
-        sender: {
-          id: msg.sender.id,
-          firstName: msg.sender.firstName,
-          lastName: msg.sender.lastName,
-          role: msg.sender.role,
-        },
+        sender: msg.sender
+          ? {
+              id: msg.sender.id,
+              firstName: msg.sender.firstName,
+              lastName: msg.sender.lastName,
+              role: msg.sender.role,
+            }
+          : null,
         createdAt: msg.createdAt,
       })),
       createdAt: ticket.createdAt,
