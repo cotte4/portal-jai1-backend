@@ -301,6 +301,7 @@ export class ReferralsService {
 
   /**
    * Get user's referral code
+   * If user is eligible (adminStep >= 3) but doesn't have a code, generate one on-demand
    */
   async getMyCode(userId: string): Promise<{
     code: string | null;
@@ -309,17 +310,72 @@ export class ReferralsService {
   }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        referralCode: true,
-        referralCodeCreatedAt: true,
+      include: {
+        clientProfile: {
+          include: {
+            taxCases: {
+              orderBy: { taxYear: 'desc' },
+              take: 1,
+              select: { adminStep: true },
+            },
+          },
+        },
       },
     });
 
-    return {
-      code: user?.referralCode || null,
-      isEligible: !!user?.referralCode,
-      createdAt: user?.referralCodeCreatedAt || null,
-    };
+    if (!user) {
+      return {
+        code: null,
+        isEligible: false,
+        createdAt: null,
+      };
+    }
+
+    // User already has a code
+    if (user.referralCode) {
+      return {
+        code: user.referralCode,
+        isEligible: true,
+        createdAt: user.referralCodeCreatedAt,
+      };
+    }
+
+    // Check if user is eligible (adminStep >= 3 means tax form submitted)
+    // adminStep is on the TaxCase model, get the most recent one
+    const latestTaxCase = user.clientProfile?.taxCases?.[0];
+    const adminStep = latestTaxCase?.adminStep ?? 0;
+    const isEligible = adminStep >= 3;
+
+    if (!isEligible) {
+      return {
+        code: null,
+        isEligible: false,
+        createdAt: null,
+      };
+    }
+
+    // User is eligible but doesn't have a code - generate one on-demand
+    // This handles users who completed their tax form before the referral system was deployed
+    try {
+      const newCode = await this.generateCode(userId);
+      const updatedUser = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { referralCodeCreatedAt: true },
+      });
+
+      return {
+        code: newCode,
+        isEligible: true,
+        createdAt: updatedUser?.referralCodeCreatedAt || new Date(),
+      };
+    } catch (error) {
+      console.error('Error generating referral code on-demand:', error);
+      return {
+        code: null,
+        isEligible: true, // Still eligible, just code generation failed
+        createdAt: null,
+      };
+    }
   }
 
   /**
