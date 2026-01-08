@@ -21,7 +21,9 @@ async function bootstrap() {
   // Enable CORS
   app.enableCors({
     origin: '*',
-    credentials: false, // Cambiá a false cuando usás '*'
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: false,
   });
 
   // Global prefix for all routes
