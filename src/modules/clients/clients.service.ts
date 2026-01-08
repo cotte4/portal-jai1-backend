@@ -235,89 +235,103 @@ export class ClientsService {
       zip?: string;
     };
   }) {
-    this.logger.log(`Updating user info for ${userId}`);
+    this.logger.log(`Updating user info for ${userId}`, data);
 
-    // Update user fields (name, phone)
-    const userUpdateData: any = {};
-    if (data.phone !== undefined) userUpdateData.phone = data.phone;
-    if (data.firstName !== undefined) userUpdateData.firstName = data.firstName;
-    if (data.lastName !== undefined) userUpdateData.lastName = data.lastName;
+    // Use transaction to ensure atomicity
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Update user fields (name, phone)
+      const userUpdateData: any = {};
+      if (data.phone !== undefined) userUpdateData.phone = data.phone;
+      if (data.firstName !== undefined) userUpdateData.firstName = data.firstName;
+      if (data.lastName !== undefined) userUpdateData.lastName = data.lastName;
 
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: userUpdateData,
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-      },
-    });
-
-    // Update address and dateOfBirth in clientProfile if provided
-    let address: { street: string | null; city: string | null; state: string | null; zip: string | null } | null = null;
-    let dateOfBirth: Date | null = null;
-
-    if (data.address || data.dateOfBirth) {
-      const profileUpdateData: any = {};
-
-      // Handle address
-      if (data.address) {
-        const encryptedStreet = data.address.street
-          ? this.encryption.encrypt(data.address.street)
-          : undefined;
-
-        if (encryptedStreet !== undefined) profileUpdateData.addressStreet = encryptedStreet;
-        if (data.address.city !== undefined) profileUpdateData.addressCity = data.address.city;
-        if (data.address.state !== undefined) profileUpdateData.addressState = data.address.state;
-        if (data.address.zip !== undefined) profileUpdateData.addressZip = data.address.zip;
-      }
-
-      // Handle dateOfBirth
-      if (data.dateOfBirth) {
-        profileUpdateData.dateOfBirth = new Date(data.dateOfBirth);
-      }
-
-      // Upsert clientProfile to handle case where it doesn't exist
-      const profile = await this.prisma.clientProfile.upsert({
-        where: { userId },
-        update: profileUpdateData,
-        create: {
-          userId,
-          ...profileUpdateData,
-        },
+      const user = await tx.user.update({
+        where: { id: userId },
+        data: userUpdateData,
         select: {
-          addressStreet: true,
-          addressCity: true,
-          addressState: true,
-          addressZip: true,
-          dateOfBirth: true,
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
         },
       });
 
-      address = {
-        street: profile.addressStreet ? this.encryption.decrypt(profile.addressStreet) : null,
-        city: profile.addressCity,
-        state: profile.addressState,
-        zip: profile.addressZip,
-      };
+      // Update address and dateOfBirth in clientProfile if provided
+      let address: { street: string | null; city: string | null; state: string | null; zip: string | null } | null = null;
+      let dateOfBirth: Date | null = null;
 
-      dateOfBirth = profile.dateOfBirth;
-    }
+      if (data.address || data.dateOfBirth) {
+        const profileUpdateData: any = {};
+
+        // Handle address - treat empty strings as clearing the field
+        if (data.address) {
+          // For street: encrypt if non-empty, set to null if empty string, skip if undefined
+          if (data.address.street !== undefined) {
+            profileUpdateData.addressStreet = data.address.street
+              ? this.encryption.encrypt(data.address.street)
+              : null;
+          }
+          if (data.address.city !== undefined) {
+            profileUpdateData.addressCity = data.address.city || null;
+          }
+          if (data.address.state !== undefined) {
+            profileUpdateData.addressState = data.address.state || null;
+          }
+          if (data.address.zip !== undefined) {
+            profileUpdateData.addressZip = data.address.zip || null;
+          }
+        }
+
+        // Handle dateOfBirth
+        if (data.dateOfBirth) {
+          profileUpdateData.dateOfBirth = new Date(data.dateOfBirth);
+        }
+
+        // Only upsert if we have data to update
+        if (Object.keys(profileUpdateData).length > 0) {
+          const profile = await tx.clientProfile.upsert({
+            where: { userId },
+            update: profileUpdateData,
+            create: {
+              userId,
+              ...profileUpdateData,
+            },
+            select: {
+              addressStreet: true,
+              addressCity: true,
+              addressState: true,
+              addressZip: true,
+              dateOfBirth: true,
+            },
+          });
+
+          address = {
+            street: profile.addressStreet ? this.encryption.decrypt(profile.addressStreet) : null,
+            city: profile.addressCity,
+            state: profile.addressState,
+            zip: profile.addressZip,
+          };
+
+          dateOfBirth = profile.dateOfBirth;
+        }
+      }
+
+      return { user, address, dateOfBirth };
+    });
 
     this.logger.log(`User info updated for ${userId}`);
 
     return {
       user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        phone: user.phone,
+        id: result.user.id,
+        email: result.user.email,
+        firstName: result.user.firstName,
+        lastName: result.user.lastName,
+        phone: result.user.phone,
       },
-      address,
-      dateOfBirth,
+      address: result.address,
+      dateOfBirth: result.dateOfBirth,
       message: 'User info updated successfully',
     };
   }
