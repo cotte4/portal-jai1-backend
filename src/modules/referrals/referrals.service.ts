@@ -301,7 +301,7 @@ export class ReferralsService {
 
   /**
    * Get user's referral code
-   * If user is eligible (adminStep >= 3) but doesn't have a code, generate one on-demand
+   * If user is eligible (profileComplete = true) but doesn't have a code, generate one on-demand
    */
   async getMyCode(userId: string): Promise<{
     code: string | null;
@@ -312,12 +312,8 @@ export class ReferralsService {
       where: { id: userId },
       include: {
         clientProfile: {
-          include: {
-            taxCases: {
-              orderBy: { taxYear: 'desc' },
-              take: 1,
-              select: { adminStep: true },
-            },
+          select: {
+            profileComplete: true,
           },
         },
       },
@@ -340,11 +336,8 @@ export class ReferralsService {
       };
     }
 
-    // Check if user is eligible (adminStep >= 3 means tax form submitted)
-    // adminStep is on the TaxCase model, get the most recent one
-    const latestTaxCase = user.clientProfile?.taxCases?.[0];
-    const adminStep = latestTaxCase?.adminStep ?? 0;
-    const isEligible = adminStep >= 3;
+    // Check if user is eligible (profileComplete = true means tax form was submitted)
+    const isEligible = user.clientProfile?.profileComplete === true;
 
     if (!isEligible) {
       return {
