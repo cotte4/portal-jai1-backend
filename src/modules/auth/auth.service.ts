@@ -70,6 +70,7 @@ export class AuthService {
         first_name: user.firstName,
         last_name: user.lastName,
         role: user.role,
+        created_at: user.createdAt,
       },
       ...tokens,
     };
@@ -108,6 +109,7 @@ export class AuthService {
         first_name: user.firstName,
         last_name: user.lastName,
         role: user.role,
+        created_at: user.createdAt,
       },
       ...tokens,
     };
@@ -139,6 +141,7 @@ export class AuthService {
           first_name: user.firstName,
           last_name: user.lastName,
           role: user.role,
+          created_at: user.createdAt,
         },
         ...tokens,
       };
@@ -259,6 +262,7 @@ export class AuthService {
         first_name: user.firstName,
         last_name: user.lastName,
         role: user.role,
+        created_at: user.createdAt,
       },
       ...tokens,
     };
