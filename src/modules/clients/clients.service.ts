@@ -3,6 +3,7 @@ import { PrismaService } from '../../config/prisma.service';
 import { EncryptionService, EmailService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProgressAutomationService } from '../progress/progress-automation.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import * as ExcelJS from 'exceljs';
 
@@ -16,6 +17,7 @@ export class ClientsService {
     private emailService: EmailService,
     private notificationsService: NotificationsService,
     private progressAutomation: ProgressAutomationService,
+    private referralsService: ReferralsService,
   ) {}
 
   async getProfile(userId: string) {
@@ -770,6 +772,12 @@ export class ClientsService {
       updateData.stateDepositDate = new Date(statusData.stateDepositDate);
     }
 
+    // Check if this is the first deposit date being set (referral completion trigger)
+    const isFirstDepositDate =
+      !taxCase.federalDepositDate &&
+      !taxCase.stateDepositDate &&
+      (statusData.federalDepositDate || statusData.stateDepositDate);
+
     await this.prisma.$transaction([
       this.prisma.taxCase.update({
         where: { id: taxCase.id },
@@ -827,6 +835,17 @@ export class ClientsService {
     // Notify for state status change
     if (stateStatus && stateStatus !== previousStateStatus) {
       await this.notifyStateStatusChange(client.user.id, client.user.email, client.user.firstName, stateStatus, statusData.stateActualRefund);
+    }
+
+    // Mark referral as successful when first deposit date is set (referral completion trigger)
+    if (isFirstDepositDate) {
+      try {
+        await this.referralsService.markReferralSuccessful(client.user.id, taxCase.id);
+        this.logger.log(`Marked referral as successful for user ${client.user.id}`);
+      } catch (err) {
+        this.logger.error('Failed to mark referral as successful', err);
+        // Don't fail status update if referral marking fails
+      }
     }
 
     return { message: 'Status updated successfully' };
@@ -931,6 +950,9 @@ export class ClientsService {
     const client = await this.prisma.clientProfile.findUnique({
       where: { id },
       include: {
+        user: {
+          select: { id: true, referralCode: true },
+        },
         taxCases: { orderBy: { taxYear: 'desc' }, take: 1 },
       },
     });
@@ -956,6 +978,20 @@ export class ClientsService {
         },
       }),
     ]);
+
+    // Generate referral code when step >= 3 (tax form submitted) if user doesn't have one
+    if (step >= 3 && !client.user.referralCode) {
+      try {
+        const code = await this.referralsService.generateCode(client.user.id);
+        this.logger.log(`Generated referral code ${code} for user ${client.user.id}`);
+
+        // Also update referral status if this user was referred
+        await this.referralsService.updateReferralOnTaxFormSubmit(client.user.id);
+      } catch (err) {
+        this.logger.error('Failed to generate referral code', err);
+        // Don't fail the step update if referral code generation fails
+      }
+    }
 
     return { message: 'Admin step updated successfully', step };
   }

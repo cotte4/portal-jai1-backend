@@ -21,6 +21,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { CalculatorModule } from './modules/calculator/calculator.module';
 import { ProgressModule } from './modules/progress/progress.module';
+import { ReferralsModule } from './modules/referrals/referrals.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ProgressModule } from './modules/progress/progress.module';
     WebhooksModule,
     CalculatorModule,
     ProgressModule,
+    ReferralsModule,
   ],
   controllers: [],
   providers: [

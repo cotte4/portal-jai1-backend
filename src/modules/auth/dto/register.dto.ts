@@ -28,4 +28,9 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  referral_code?: string;
 }

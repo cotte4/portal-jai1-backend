@@ -9,26 +9,33 @@ datasource db {
 }
 
 model User {
-  id                  String          @id @default(uuid()) @db.Uuid
-  email               String          @unique
-  passwordHash        String          @map("password_hash")
-  role                UserRole        @default(client)
-  firstName           String          @map("first_name")
-  lastName            String          @map("last_name")
-  phone               String?
-  googleId            String?         @unique @map("google_id")
-  isActive            Boolean         @default(true) @map("is_active")
-  lastLoginAt         DateTime?       @map("last_login_at")
-  createdAt           DateTime        @default(now()) @map("created_at")
-  updatedAt           DateTime        @updatedAt @map("updated_at")
-  resetToken          String?         @map("reset_token")
-  resetTokenExpiresAt DateTime?       @map("reset_token_expires_at")
-  clientProfile       ClientProfile?
-  notifications       Notification[]
-  statusChanges       StatusHistory[] @relation("ChangedBy")
-  ticketMessages      TicketMessage[]
-  tickets             Ticket[]
-  w2Estimates         W2Estimate[]
+  id                    String          @id @default(uuid()) @db.Uuid
+  email                 String          @unique
+  passwordHash          String          @map("password_hash")
+  role                  UserRole        @default(client)
+  firstName             String          @map("first_name")
+  lastName              String          @map("last_name")
+  phone                 String?
+  googleId              String?         @unique @map("google_id")
+  isActive              Boolean         @default(true) @map("is_active")
+  lastLoginAt           DateTime?       @map("last_login_at")
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+  resetToken            String?         @map("reset_token")
+  resetTokenExpiresAt   DateTime?       @map("reset_token_expires_at")
+  // Referral program fields
+  referralCode          String?         @unique @map("referral_code")
+  referredByCode        String?         @map("referred_by_code")
+  referralCodeCreatedAt DateTime?       @map("referral_code_created_at")
+  // Relations
+  clientProfile         ClientProfile?
+  notifications         Notification[]
+  statusChanges         StatusHistory[] @relation("ChangedBy")
+  ticketMessages        TicketMessage[]
+  tickets               Ticket[]
+  w2Estimates           W2Estimate[]
+  referralsMade         Referral[]      @relation("ReferrerUser")
+  referralReceived      Referral?       @relation("ReferredUser")
 
   @@map("users")
 }
@@ -255,6 +262,63 @@ model W2Estimate {
   user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("w2_estimates")
+}
+
+// ============= REFERRAL PROGRAM =============
+
+model Referral {
+  id               String         @id @default(uuid()) @db.Uuid
+  referrerId       String         @map("referrer_id") @db.Uuid
+  referredUserId   String         @unique @map("referred_user_id") @db.Uuid
+  referralCode     String         @map("referral_code")
+  status           ReferralStatus @default(pending)
+  taxCaseId        String?        @map("tax_case_id") @db.Uuid
+  completedAt      DateTime?      @map("completed_at")
+  referredDiscount Decimal?       @map("referred_discount") @db.Decimal(10, 2)
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  referrer     User @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUser User @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@map("referrals")
+}
+
+model DiscountApplication {
+  id               String         @id @default(uuid()) @db.Uuid
+  userId           String         @map("user_id") @db.Uuid
+  taxCaseId        String?        @map("tax_case_id") @db.Uuid
+  discountType     DiscountType
+  discountAmount   Decimal        @map("discount_amount") @db.Decimal(10, 2)
+  discountPercent  Decimal?       @map("discount_percent") @db.Decimal(5, 2)
+  referralId       String?        @map("referral_id") @db.Uuid
+  appliedByAdminId String?        @map("applied_by_admin_id") @db.Uuid
+  seasonYear       Int            @map("season_year")
+  status           DiscountStatus @default(pending)
+  notes            String?
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  @@map("discount_applications")
+}
+
+enum ReferralStatus {
+  pending
+  tax_form_submitted
+  awaiting_refund
+  successful
+  expired
+}
+
+enum DiscountType {
+  referral_bonus
+  referrer_reward
+}
+
+enum DiscountStatus {
+  pending
+  applied
+  expired
 }
 
 enum OcrConfidence {

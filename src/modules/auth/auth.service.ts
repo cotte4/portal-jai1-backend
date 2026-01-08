@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { EmailService } from '../../common/services';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -20,6 +21,7 @@ export class AuthService {
 
   constructor(
     private usersService: UsersService,
+    private referralsService: ReferralsService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailService: EmailService,
@@ -31,6 +33,21 @@ export class AuthService {
       throw new ConflictException('Email already registered');
     }
 
+    // Validate referral code if provided
+    let referrerInfo: { referrerId: string; referrerName: string } | null = null;
+    if (registerDto.referral_code) {
+      const validation = await this.referralsService.validateCode(
+        registerDto.referral_code,
+      );
+      if (!validation.valid) {
+        throw new BadRequestException('Invalid referral code');
+      }
+      referrerInfo = {
+        referrerId: validation.referrerId!,
+        referrerName: validation.referrerName!,
+      };
+    }
+
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
     const user = await this.usersService.create({
@@ -39,7 +56,25 @@ export class AuthService {
       firstName: registerDto.first_name,
       lastName: registerDto.last_name,
       phone: registerDto.phone,
+      referredByCode: registerDto.referral_code?.toUpperCase(),
     });
+
+    // Create referral record if user was referred
+    if (referrerInfo) {
+      try {
+        await this.referralsService.createReferral(
+          referrerInfo.referrerId,
+          user.id,
+          registerDto.referral_code!,
+        );
+        this.logger.log(
+          `Referral created: ${referrerInfo.referrerName} referred ${user.email}`,
+        );
+      } catch (err) {
+        this.logger.error('Failed to create referral record', err);
+        // Don't fail registration if referral creation fails
+      }
+    }
 
     // Set lastLoginAt since registration counts as first login
     await this.usersService.updateLastLogin(user.id);

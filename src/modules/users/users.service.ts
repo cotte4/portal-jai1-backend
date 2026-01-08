@@ -10,6 +10,7 @@ interface CreateUserData {
   phone?: string;
   role?: UserRole;
   googleId?: string;
+  referredByCode?: string;
 }
 
 @Injectable()
@@ -26,6 +27,7 @@ export class UsersService {
         phone: data.phone,
         role: data.role || 'client',
         googleId: data.googleId,
+        referredByCode: data.referredByCode,
       },
     });
   }
