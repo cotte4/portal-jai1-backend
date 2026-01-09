@@ -22,6 +22,8 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { CalculatorModule } from './modules/calculator/calculator.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
+import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { ReferralsModule } from './modules/referrals/referrals.module';
     CalculatorModule,
     ProgressModule,
     ReferralsModule,
+    AuditLogsModule,
+    HealthModule,
   ],
   controllers: [],
   providers: [

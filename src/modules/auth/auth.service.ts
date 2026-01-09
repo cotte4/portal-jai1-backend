@@ -11,9 +11,11 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { EmailService } from '../../common/services';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { AuditAction } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -22,6 +24,7 @@ export class AuthService {
   constructor(
     private usersService: UsersService,
     private referralsService: ReferralsService,
+    private auditLogsService: AuditLogsService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailService: EmailService,
@@ -111,9 +114,16 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto, ipAddress?: string, userAgent?: string) {
     const user = await this.usersService.findByEmail(loginDto.email);
     if (!user) {
+      // Log failed login attempt (unknown email)
+      this.auditLogsService.log({
+        action: AuditAction.LOGIN_FAILED,
+        details: { email: loginDto.email, reason: 'Email not found' },
+        ipAddress,
+        userAgent,
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -122,10 +132,26 @@ export class AuthService {
       user.passwordHash,
     );
     if (!isPasswordValid) {
+      // Log failed login attempt (wrong password)
+      this.auditLogsService.log({
+        action: AuditAction.LOGIN_FAILED,
+        userId: user.id,
+        details: { reason: 'Invalid password' },
+        ipAddress,
+        userAgent,
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (!user.isActive) {
+      // Log failed login attempt (deactivated account)
+      this.auditLogsService.log({
+        action: AuditAction.LOGIN_FAILED,
+        userId: user.id,
+        details: { reason: 'Account deactivated' },
+        ipAddress,
+        userAgent,
+      });
       throw new UnauthorizedException('Account is deactivated');
     }
 
@@ -136,6 +162,15 @@ export class AuthService {
       user.role,
       loginDto.rememberMe || false,
     );
+
+    // Log successful login
+    this.auditLogsService.log({
+      action: AuditAction.LOGIN_SUCCESS,
+      userId: user.id,
+      details: { rememberMe: loginDto.rememberMe || false },
+      ipAddress,
+      userAgent,
+    });
 
     return {
       user: {
@@ -150,7 +185,14 @@ export class AuthService {
     };
   }
 
-  async logout(userId: string) {
+  async logout(userId: string, ipAddress?: string, userAgent?: string) {
+    // Log logout
+    this.auditLogsService.log({
+      action: AuditAction.LOGOUT,
+      userId,
+      ipAddress,
+      userAgent,
+    });
     // In a full implementation, you would invalidate the refresh token here
     return { message: 'Logged out successfully' };
   }
@@ -232,6 +274,13 @@ export class AuthService {
 
     // Update password and clear token
     await this.usersService.updatePassword(user.id, hashedPassword);
+
+    // Log password reset
+    this.auditLogsService.log({
+      action: AuditAction.PASSWORD_RESET,
+      userId: user.id,
+      details: { method: 'email_token' },
+    });
 
     this.logger.log(`Password reset successful for user: ${user.email}`);
 

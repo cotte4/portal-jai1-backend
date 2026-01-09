@@ -21,12 +21,42 @@ export class ClientsService {
   ) {}
 
   async getProfile(userId: string) {
+    // Optimized: Use select instead of include for better query performance
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
         clientProfile: {
-          include: {
+          select: {
+            ssn: true,
+            dateOfBirth: true,
+            addressStreet: true,
+            addressCity: true,
+            addressState: true,
+            addressZip: true,
+            profileComplete: true,
+            isDraft: true,
             taxCases: {
+              select: {
+                id: true,
+                taxYear: true,
+                bankName: true,
+                bankRoutingNumber: true,
+                bankAccountNumber: true,
+                workState: true,
+                employerName: true,
+                internalStatus: true,
+                clientStatus: true,
+                federalStatus: true,
+                stateStatus: true,
+                adminStep: true,
+                estimatedRefund: true,
+                actualRefund: true,
+              },
               orderBy: { taxYear: 'desc' },
               take: 1,
             },
@@ -339,10 +369,32 @@ export class ClientsService {
   }
 
   async getDraft(userId: string) {
+    // Optimized: Use select instead of include for better query performance
     const profile = await this.prisma.clientProfile.findUnique({
       where: { userId },
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        ssn: true,
+        dateOfBirth: true,
+        addressStreet: true,
+        addressCity: true,
+        addressState: true,
+        addressZip: true,
+        turbotaxEmail: true,
+        turbotaxPassword: true,
+        profileComplete: true,
+        isDraft: true,
+        createdAt: true,
+        updatedAt: true,
         taxCases: {
+          select: {
+            bankName: true,
+            bankRoutingNumber: true,
+            bankAccountNumber: true,
+            workState: true,
+            employerName: true,
+          },
           orderBy: { taxYear: 'desc' },
           take: 1,
         },

@@ -214,7 +214,7 @@ export class EmailService {
             <div class="message-box">
               <p>${responseMessage}</p>
             </div>
-            <a href="${portalUrl}/support" class="button">Ver Conversación Completa</a>
+            <a href="${portalUrl}/messages" class="button">Ver Conversación Completa</a>
           </div>
           <div class="footer">
             <p>El equipo JAI1</p>

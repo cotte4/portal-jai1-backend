@@ -9,7 +9,7 @@ datasource db {
 }
 
 model User {
-  id                    String          @id @default(uuid()) @db.Uuid
+  id                    String          @id @default(uuid())
   email                 String          @unique
   passwordHash          String          @map("password_hash")
   role                  UserRole        @default(client)
@@ -41,8 +41,8 @@ model User {
 }
 
 model ClientProfile {
-  id                String    @id @default(uuid()) @db.Uuid
-  userId            String    @unique @map("user_id") @db.Uuid
+  id                String    @id @default(uuid())
+  userId            String    @unique @map("user_id")
   ssn               String?
   dateOfBirth       DateTime? @map("date_of_birth")
   addressStreet     String?   @map("address_street")
@@ -63,12 +63,15 @@ model ClientProfile {
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   taxCases          TaxCase[]
 
+  @@index([profileComplete])
+  @@index([isDraft])
+  @@index([createdAt])
   @@map("client_profiles")
 }
 
 model TaxCase {
-  id                 String          @id @default(uuid()) @db.Uuid
-  clientProfileId    String          @map("client_profile_id") @db.Uuid
+  id                 String          @id @default(uuid())
+  clientProfileId    String          @map("client_profile_id")
   taxYear            Int             @map("tax_year")
   internalStatus     InternalStatus  @default(revision_de_registro) @map("internal_status")
   clientStatus       ClientStatus    @default(esperando_datos) @map("client_status")
@@ -108,12 +111,18 @@ model TaxCase {
   clientProfile      ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
 
   @@unique([clientProfileId, taxYear])
+  @@index([clientProfileId])
+  @@index([internalStatus])
+  @@index([clientStatus])
+  @@index([taxYear])
+  @@index([hasProblem])
+  @@index([createdAt])
   @@map("tax_cases")
 }
 
 model Document {
-  id          String       @id @default(uuid()) @db.Uuid
-  taxCaseId   String       @map("tax_case_id") @db.Uuid
+  id          String       @id @default(uuid())
+  taxCaseId   String       @map("tax_case_id")
   type        DocumentType
   fileName    String       @map("file_name")
   storagePath String       @map("storage_path")
@@ -124,40 +133,53 @@ model Document {
   uploadedAt  DateTime     @default(now()) @map("uploaded_at")
   taxCase     TaxCase      @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
 
+  @@index([taxCaseId])
+  @@index([type])
   @@map("documents")
 }
 
 model Ticket {
-  id        String          @id @default(uuid()) @db.Uuid
-  userId    String          @map("user_id") @db.Uuid
-  subject   String
-  status    TicketStatus    @default(open)
-  createdAt DateTime        @default(now()) @map("created_at")
-  updatedAt DateTime        @updatedAt @map("updated_at")
-  messages  TicketMessage[]
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String          @id @default(uuid())
+  userId      String          @map("user_id")
+  subject     String
+  status      TicketStatus    @default(open)
+  unreadCount Int             @default(0) @map("unread_count")
+  deletedAt   DateTime?       @map("deleted_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  messages    TicketMessage[]
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([status])
+  @@index([userId, status])
+  @@index([deletedAt])
   @@map("tickets")
 }
 
 model TicketMessage {
-  id        String   @id @default(uuid()) @db.Uuid
-  ticketId  String   @map("ticket_id") @db.Uuid
-  senderId  String?  @map("sender_id") @db.Uuid
+  id        String    @id @default(uuid())
+  ticketId  String    @map("ticket_id")
+  senderId  String?   @map("sender_id")
   message   String
-  createdAt DateTime @default(now()) @map("created_at")
-  sender    User?    @relation(fields: [senderId], references: [id], onDelete: SetNull)
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  isRead    Boolean   @default(false) @map("is_read")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  sender    User?     @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  ticket    Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
+  @@index([ticketId])
+  @@index([isRead])
+  @@index([deletedAt])
   @@map("ticket_messages")
 }
 
 model StatusHistory {
-  id             String   @id @default(uuid()) @db.Uuid
-  taxCaseId      String   @map("tax_case_id") @db.Uuid
+  id             String   @id @default(uuid())
+  taxCaseId      String   @map("tax_case_id")
   previousStatus String?  @map("previous_status")
   newStatus      String   @map("new_status")
-  changedById    String?  @map("changed_by_id") @db.Uuid
+  changedById    String?  @map("changed_by_id")
   comment        String?
   createdAt      DateTime @default(now()) @map("created_at")
   changedBy      User?    @relation("ChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
@@ -167,8 +189,8 @@ model StatusHistory {
 }
 
 model Notification {
-  id        String           @id @default(uuid()) @db.Uuid
-  userId    String           @map("user_id") @db.Uuid
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
   type      NotificationType
   title     String
   message   String
@@ -176,6 +198,10 @@ model Notification {
   createdAt DateTime         @default(now()) @map("created_at")
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([isRead])
+  @@index([userId, isRead])
+  @@index([createdAt])
   @@map("notifications")
 }
 
@@ -248,9 +274,9 @@ enum ProblemType {
 }
 
 model W2Estimate {
-  id              String         @id @default(uuid()) @db.Uuid
-  userId          String         @map("user_id") @db.Uuid
-  taxCaseId       String?        @map("tax_case_id") @db.Uuid
+  id              String         @id @default(uuid())
+  userId          String         @map("user_id")
+  taxCaseId       String?        @map("tax_case_id")
   box2Federal     Decimal        @map("box_2_federal") @db.Decimal(10, 2)
   box17State      Decimal        @map("box_17_state") @db.Decimal(10, 2)
   estimatedRefund Decimal        @map("estimated_refund") @db.Decimal(10, 2)
@@ -267,12 +293,12 @@ model W2Estimate {
 // ============= REFERRAL PROGRAM =============
 
 model Referral {
-  id               String         @id @default(uuid()) @db.Uuid
-  referrerId       String         @map("referrer_id") @db.Uuid
-  referredUserId   String         @unique @map("referred_user_id") @db.Uuid
+  id               String         @id @default(uuid())
+  referrerId       String         @map("referrer_id")
+  referredUserId   String         @unique @map("referred_user_id")
   referralCode     String         @map("referral_code")
   status           ReferralStatus @default(pending)
-  taxCaseId        String?        @map("tax_case_id") @db.Uuid
+  taxCaseId        String?        @map("tax_case_id")
   completedAt      DateTime?      @map("completed_at")
   referredDiscount Decimal?       @map("referred_discount") @db.Decimal(10, 2)
   createdAt        DateTime       @default(now()) @map("created_at")
@@ -281,18 +307,21 @@ model Referral {
   referrer     User @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
   referredUser User @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
 
+  @@index([referrerId])
+  @@index([status])
+  @@index([referrerId, status])
   @@map("referrals")
 }
 
 model DiscountApplication {
-  id               String         @id @default(uuid()) @db.Uuid
-  userId           String         @map("user_id") @db.Uuid
-  taxCaseId        String?        @map("tax_case_id") @db.Uuid
+  id               String         @id @default(uuid())
+  userId           String         @map("user_id")
+  taxCaseId        String?        @map("tax_case_id")
   discountType     DiscountType
   discountAmount   Decimal        @map("discount_amount") @db.Decimal(10, 2)
   discountPercent  Decimal?       @map("discount_percent") @db.Decimal(5, 2)
-  referralId       String?        @map("referral_id") @db.Uuid
-  appliedByAdminId String?        @map("applied_by_admin_id") @db.Uuid
+  referralId       String?        @map("referral_id")
+  appliedByAdminId String?        @map("applied_by_admin_id")
   seasonYear       Int            @map("season_year")
   status           DiscountStatus @default(pending)
   notes            String?
@@ -325,4 +354,55 @@ enum OcrConfidence {
   high
   medium
   low
+}
+
+// ============= AUDIT LOGS =============
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  userId       String?     @map("user_id")
+  targetUserId String?     @map("target_user_id")
+  action       AuditAction
+  details      Json?
+  ipAddress    String?     @map("ip_address")
+  userAgent    String?     @map("user_agent")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([targetUserId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  // Authentication
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  // Profile
+  PROFILE_VIEW
+  PROFILE_UPDATE
+  PROFILE_COMPLETE
+  // Documents
+  DOCUMENT_UPLOAD
+  DOCUMENT_DELETE
+  DOCUMENT_DOWNLOAD
+  // Tax Cases
+  TAX_CASE_CREATE
+  TAX_CASE_UPDATE
+  STATUS_CHANGE
+  // Financials
+  REFUND_UPDATE
+  DISCOUNT_APPLIED
+  // Admin actions
+  ADMIN_CLIENT_VIEW
+  ADMIN_STATUS_CHANGE
+  // Referrals
+  REFERRAL_CODE_GENERATED
+  REFERRAL_CREATED
+  REFERRAL_COMPLETED
+  // Security
+  PASSWORD_CHANGE
+  PASSWORD_RESET
 }

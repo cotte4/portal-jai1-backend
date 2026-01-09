@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -9,12 +10,23 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
+  // Enable gzip compression (30-50% smaller responses)
+  app.use(
+    compression({
+      level: 6, // Balance between compression ratio and CPU usage
+      threshold: 1024, // Only compress responses > 1KB
+    }),
+  );
+
   // Enable global validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true, // Reduce explicit conversions
+      },
     }),
   );
 
@@ -43,7 +55,13 @@ async function bootstrap() {
   const port = configService.get<number>('PORT') || 3000;
   await app.listen(port, '0.0.0.0');
 
+  // Configure HTTP keep-alive (reduces TCP overhead)
+  const server = app.getHttpServer();
+  server.keepAliveTimeout = 65000; // 65 seconds (longer than ALB/proxy timeout)
+  server.headersTimeout = 66000; // Slightly higher than keepAliveTimeout
+
   console.log(`🚀 Portal JAI1 Backend running on port ${port}`);
   console.log(`📚 Swagger docs: http://localhost:${port}/api`);
+  console.log(`⚡ Compression enabled, keep-alive: 65s`);
 }
 bootstrap();
