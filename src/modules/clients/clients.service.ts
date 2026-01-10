@@ -61,6 +61,14 @@ export class ClientsService {
                 adminStep: true,
                 estimatedRefund: true,
                 actualRefund: true,
+                // Federal/state tracking (source of truth)
+                federalActualRefund: true,
+                stateActualRefund: true,
+                federalDepositDate: true,
+                stateDepositDate: true,
+                federalEstimatedDate: true,
+                stateEstimatedDate: true,
+                statusUpdatedAt: true,
               },
               orderBy: { taxYear: 'desc' },
               take: 1,
@@ -684,9 +692,13 @@ export class ClientsService {
         federalStatus: tc.federalStatus,
         stateStatus: tc.stateStatus,
         estimatedRefund: tc.estimatedRefund,
-        actualRefund: tc.actualRefund,
-        refundDepositDate: tc.refundDepositDate,
-        // Separate federal/state fields
+        // DEPRECATED: Computed from federal + state for backward compatibility
+        actualRefund: tc.federalActualRefund || tc.stateActualRefund
+          ? (Number(tc.federalActualRefund || 0) + Number(tc.stateActualRefund || 0))
+          : tc.actualRefund,
+        // DEPRECATED: Use federalDepositDate or stateDepositDate
+        refundDepositDate: tc.federalDepositDate || tc.stateDepositDate || tc.refundDepositDate,
+        // Separate federal/state fields (SOURCE OF TRUTH)
         federalEstimatedDate: tc.federalEstimatedDate,
         stateEstimatedDate: tc.stateEstimatedDate,
         federalActualRefund: tc.federalActualRefund,

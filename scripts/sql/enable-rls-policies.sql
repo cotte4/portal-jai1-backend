@@ -31,6 +31,9 @@ ALTER TABLE ticket_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE status_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE w2_estimates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE discount_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- STEP 2: Force RLS for table owners (extra security)
@@ -47,6 +50,9 @@ ALTER TABLE ticket_messages FORCE ROW LEVEL SECURITY;
 ALTER TABLE notifications FORCE ROW LEVEL SECURITY;
 ALTER TABLE status_history FORCE ROW LEVEL SECURITY;
 ALTER TABLE w2_estimates FORCE ROW LEVEL SECURITY;
+ALTER TABLE referrals FORCE ROW LEVEL SECURITY;
+ALTER TABLE discount_applications FORCE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs FORCE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- STEP 3: Verify RLS is enabled
@@ -68,7 +74,10 @@ AND c.relname IN (
     'ticket_messages',
     'notifications',
     'status_history',
-    'w2_estimates'
+    'w2_estimates',
+    'referrals',
+    'discount_applications',
+    'audit_logs'
 )
 ORDER BY c.relname;
 
@@ -108,4 +117,7 @@ ORDER BY c.relname;
 -- ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;
 -- ALTER TABLE status_history DISABLE ROW LEVEL SECURITY;
 -- ALTER TABLE w2_estimates DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE referrals DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE discount_applications DISABLE ROW LEVEL SECURITY;
+-- ALTER TABLE audit_logs DISABLE ROW LEVEL SECURITY;
 --

@@ -232,6 +232,95 @@ ORDER BY table_name, column_name;
 -- Expected: all should show data_type = 'uuid'
 
 -- ============================================================
+-- EXTENSION: Add missing tables to UUID migration
+-- ============================================================
+-- Tables added: referrals, discount_applications, audit_logs
+
+-- STEP 1B: Drop FK constraints for NEW tables
+ALTER TABLE referrals DROP CONSTRAINT IF EXISTS referrals_referrer_id_fkey;
+ALTER TABLE referrals DROP CONSTRAINT IF EXISTS referrals_referred_user_id_fkey;
+ALTER TABLE discount_applications DROP CONSTRAINT IF EXISTS discount_applications_user_id_fkey;
+ALTER TABLE discount_applications DROP CONSTRAINT IF EXISTS discount_applications_applied_by_admin_id_fkey;
+-- Note: audit_logs has NO FK constraints by design (logs persist after user deletion)
+
+-- STEP 2B: Convert primary key columns for NEW tables
+ALTER TABLE referrals
+  ALTER COLUMN id TYPE uuid USING id::uuid;
+ALTER TABLE discount_applications
+  ALTER COLUMN id TYPE uuid USING id::uuid;
+ALTER TABLE audit_logs
+  ALTER COLUMN id TYPE uuid USING id::uuid;
+
+-- STEP 3B: Convert FK columns for NEW tables
+ALTER TABLE referrals
+  ALTER COLUMN referrer_id TYPE uuid USING referrer_id::uuid;
+ALTER TABLE referrals
+  ALTER COLUMN referred_user_id TYPE uuid USING referred_user_id::uuid;
+ALTER TABLE referrals
+  ALTER COLUMN tax_case_id TYPE uuid USING tax_case_id::uuid;
+
+ALTER TABLE discount_applications
+  ALTER COLUMN user_id TYPE uuid USING user_id::uuid;
+ALTER TABLE discount_applications
+  ALTER COLUMN tax_case_id TYPE uuid USING tax_case_id::uuid;
+ALTER TABLE discount_applications
+  ALTER COLUMN referral_id TYPE uuid USING referral_id::uuid;
+ALTER TABLE discount_applications
+  ALTER COLUMN applied_by_admin_id TYPE uuid USING applied_by_admin_id::uuid;
+
+ALTER TABLE audit_logs
+  ALTER COLUMN user_id TYPE uuid USING user_id::uuid;
+ALTER TABLE audit_logs
+  ALTER COLUMN target_user_id TYPE uuid USING target_user_id::uuid;
+
+-- STEP 4B: Set default value for NEW table primary keys
+ALTER TABLE referrals ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE discount_applications ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE audit_logs ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+-- STEP 5B: Re-create FK constraints for NEW tables
+ALTER TABLE referrals
+  ADD CONSTRAINT referrals_referrer_id_fkey
+  FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE referrals
+  ADD CONSTRAINT referrals_referred_user_id_fkey
+  FOREIGN KEY (referred_user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+-- Note: referrals.tax_case_id is optional, no FK needed per schema
+
+ALTER TABLE discount_applications
+  ADD CONSTRAINT discount_applications_user_id_fkey
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE discount_applications
+  ADD CONSTRAINT discount_applications_applied_by_admin_id_fkey
+  FOREIGN KEY (applied_by_admin_id) REFERENCES users(id) ON DELETE SET NULL;
+
+-- Note: discount_applications.tax_case_id and referral_id are optional, no FK per schema
+
+-- audit_logs: NO FK constraints (by design - logs persist after user deletion)
+
+-- ============================================================
+-- STEP 6: Verify the changes (UPDATED with new columns)
+-- ============================================================
+
+SELECT
+    table_name,
+    column_name,
+    data_type,
+    column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND column_name IN ('id', 'user_id', 'client_profile_id', 'tax_case_id',
+                       'ticket_id', 'sender_id', 'changed_by_id',
+                       'referrer_id', 'referred_user_id', 'applied_by_admin_id',
+                       'target_user_id', 'referral_id')
+ORDER BY table_name, column_name;
+
+-- Expected: all should show data_type = 'uuid'
+
+-- ============================================================
 -- DONE!
 -- ============================================================
 --
