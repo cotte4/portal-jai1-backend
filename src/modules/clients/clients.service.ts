@@ -374,23 +374,6 @@ export class ClientsService {
 
     this.logger.log(`User info updated for ${userId}`);
 
-    // Notify admins if address or dateOfBirth was updated (significant changes)
-    if (data.address || data.dateOfBirth) {
-      const clientName = `${result.user.firstName} ${result.user.lastName}`;
-      this.progressAutomation.processEvent(
-        'DOCUMENT_UPLOADED', // Using existing event type for admin notification
-        userId,
-        {
-          clientName,
-          fileName: 'Actualización de perfil',
-          title: 'Perfil Actualizado',
-          message: `El cliente ${clientName} ha actualizado su información personal.`,
-        },
-      ).catch((err) => {
-        this.logger.error('Failed to notify admins of profile update', err);
-      });
-    }
-
     return {
       user: {
         id: result.user.id,
