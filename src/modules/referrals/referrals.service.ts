@@ -160,6 +160,97 @@ export class ReferralsService {
   }
 
   /**
+   * Apply a referral code to a user post-registration
+   * Used for Google OAuth users or users who missed the referral field
+   */
+  async applyReferralCode(
+    userId: string,
+    code: string,
+  ): Promise<{
+    success: boolean;
+    referrerName: string;
+    discount: number;
+    message: string;
+  }> {
+    // Check if user already has a referral
+    const existingReferral = await this.prisma.referral.findUnique({
+      where: { referredUserId: userId },
+    });
+
+    if (existingReferral) {
+      throw new BadRequestException(
+        'Ya tienes un código de referido aplicado',
+      );
+    }
+
+    // Check if user already completed their profile (too late to apply)
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        clientProfile: {
+          select: { profileComplete: true, isDraft: true },
+        },
+      },
+    });
+
+    if (user?.clientProfile?.profileComplete && !user?.clientProfile?.isDraft) {
+      throw new BadRequestException(
+        'No puedes aplicar un código después de enviar tu formulario',
+      );
+    }
+
+    // Validate the code
+    const validation = await this.validateCode(code);
+    if (!validation.valid || !validation.referrerId) {
+      throw new BadRequestException('Código de referido inválido');
+    }
+
+    // Prevent self-referral
+    if (validation.referrerId === userId) {
+      throw new BadRequestException('No puedes usar tu propio código');
+    }
+
+    // Create the referral
+    await this.createReferral(validation.referrerId, userId, code);
+
+    return {
+      success: true,
+      referrerName: validation.referrerName || '',
+      discount: REFERRED_BONUS,
+      message: `Código aplicado. Obtendrás $${REFERRED_BONUS} de descuento.`,
+    };
+  }
+
+  /**
+   * Check if user was referred (has existing referral record)
+   * Returns referrer info if user was referred
+   */
+  async getMyReferrer(userId: string): Promise<{
+    wasReferred: boolean;
+    referrerName?: string;
+    discount: number;
+  }> {
+    const referral = await this.prisma.referral.findUnique({
+      where: { referredUserId: userId },
+      include: {
+        referrer: {
+          select: { firstName: true, lastName: true },
+        },
+      },
+    });
+
+    if (!referral) {
+      return { wasReferred: false, discount: 0 };
+    }
+
+    return {
+      wasReferred: true,
+      referrerName: `${referral.referrer.firstName} ${referral.referrer.lastName?.charAt(0) || ''}.`,
+      discount: REFERRED_BONUS,
+    };
+  }
+
+  /**
    * Create a referral record when a user registers with a referral code
    */
   async createReferral(

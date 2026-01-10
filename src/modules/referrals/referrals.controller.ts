@@ -12,6 +12,7 @@ import { ReferralsService } from './referrals.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
+import { ApplyReferralCodeDto } from './dto/apply-referral-code.dto';
 import { UpdateReferralStatusDto } from './dto/update-referral-status.dto';
 
 @Controller('referrals')
@@ -24,6 +25,28 @@ export class ReferralsController {
   @Get('validate/:code')
   async validateCode(@Param('code') code: string) {
     return this.referralsService.validateCode(code);
+  }
+
+  /**
+   * PROTECTED: Apply a referral code to current user (post-registration)
+   * Used when user registered with Google OAuth or missed the referral field
+   */
+  @Post('apply-code')
+  @UseGuards(JwtAuthGuard)
+  async applyCode(
+    @CurrentUser() user: any,
+    @Body() dto: ApplyReferralCodeDto,
+  ) {
+    return this.referralsService.applyReferralCode(user.id, dto.code);
+  }
+
+  /**
+   * PROTECTED: Check if current user was referred by someone
+   */
+  @Get('my-referrer')
+  @UseGuards(JwtAuthGuard)
+  async getMyReferrer(@CurrentUser() user: any) {
+    return this.referralsService.getMyReferrer(user.id);
   }
 
   /**
