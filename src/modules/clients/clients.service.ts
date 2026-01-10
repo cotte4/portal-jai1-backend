@@ -248,27 +248,31 @@ export class ClientsService {
     this.logger.log(`Profile saved successfully for user ${userId}, id: ${result.profile.id}`);
 
     // === PROGRESS AUTOMATION: Emit event when profile is completed (not draft) ===
+    // Run in background (fire-and-forget) to avoid blocking the response
     if (!data.is_draft) {
-      try {
-        // Get client name for notification
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: { firstName: true, lastName: true },
-        });
-        const clientName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown';
+      // Use setImmediate to run after current event loop, don't await
+      setImmediate(async () => {
+        try {
+          // Get client name for notification
+          const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { firstName: true, lastName: true },
+          });
+          const clientName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown';
 
-        // Emit profile completed event (taxCase already created in transaction)
-        await this.progressAutomation.processEvent({
-          type: 'PROFILE_COMPLETED',
-          userId,
-          taxCaseId: result.taxCase.id,
-          metadata: { clientName },
-        });
-        this.logger.log(`Emitted PROFILE_COMPLETED event for user ${userId}`);
-      } catch (error) {
-        // Don't fail profile save if automation fails
-        this.logger.error('Progress automation error (non-fatal):', error);
-      }
+          // Emit profile completed event (taxCase already created in transaction)
+          await this.progressAutomation.processEvent({
+            type: 'PROFILE_COMPLETED',
+            userId,
+            taxCaseId: result.taxCase.id,
+            metadata: { clientName },
+          });
+          this.logger.log(`Emitted PROFILE_COMPLETED event for user ${userId}`);
+        } catch (error) {
+          // Don't fail profile save if automation fails
+          this.logger.error('Progress automation error (non-fatal):', error);
+        }
+      });
     }
 
     return {
