@@ -13,6 +13,7 @@ import { UsersService } from '../users/users.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { EmailService } from '../../common/services';
+import { SupabaseService } from '../../config/supabase.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuditAction } from '@prisma/client';
@@ -20,6 +21,7 @@ import { AuditAction } from '@prisma/client';
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly PROFILE_PICTURES_BUCKET = 'profile-pictures';
 
   constructor(
     private usersService: UsersService,
@@ -28,7 +30,25 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailService: EmailService,
+    private supabaseService: SupabaseService,
   ) {}
+
+  /**
+   * Get signed URL for profile picture if user has one
+   */
+  private async getProfilePictureUrl(profilePicturePath: string | null): Promise<string | null> {
+    if (!profilePicturePath) return null;
+    try {
+      return await this.supabaseService.getSignedUrl(
+        this.PROFILE_PICTURES_BUCKET,
+        profilePicturePath,
+        3600,
+      );
+    } catch (err) {
+      this.logger.error('Failed to get profile picture signed URL', err);
+      return null;
+    }
+  }
 
   async register(registerDto: RegisterDto) {
     const existingUser = await this.usersService.findByEmail(registerDto.email);
@@ -173,6 +193,9 @@ export class AuthService {
       userAgent,
     });
 
+    // Get profile picture URL if exists
+    const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
+
     return {
       user: {
         id: user.id,
@@ -182,6 +205,7 @@ export class AuthService {
         phone: user.phone,
         role: user.role,
         created_at: user.createdAt,
+        profilePictureUrl,
       },
       ...tokens,
     };
@@ -214,6 +238,9 @@ export class AuthService {
       const rememberMe = payload.rememberMe || false;
       const tokens = await this.generateTokens(user.id, user.email, user.role, rememberMe);
 
+      // Get profile picture URL if exists
+      const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
+
       // Return user object along with tokens (frontend expects this)
       return {
         user: {
@@ -224,6 +251,7 @@ export class AuthService {
           phone: user.phone,
           role: user.role,
           created_at: user.createdAt,
+          profilePictureUrl,
         },
         ...tokens,
       };
@@ -342,6 +370,9 @@ export class AuthService {
     await this.usersService.updateLastLogin(user.id);
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
+    // Get profile picture URL if exists
+    const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
+
     this.logger.log(`Google OAuth login successful for: ${user.email}`);
 
     return {
@@ -353,6 +384,7 @@ export class AuthService {
         phone: user.phone,
         role: user.role,
         created_at: user.createdAt,
+        profilePictureUrl,
       },
       ...tokens,
     };

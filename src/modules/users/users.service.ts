@@ -50,6 +50,7 @@ export class UsersService {
         role: true,
         isActive: true,
         googleId: true,
+        profilePicturePath: true,
         createdAt: true,
         updatedAt: true,
       },
