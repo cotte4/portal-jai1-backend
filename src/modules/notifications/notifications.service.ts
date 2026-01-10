@@ -22,11 +22,16 @@ export class NotificationsService {
     });
   }
 
-  async findAll(userId: string, unreadOnly: boolean) {
+  async findAll(userId: string, unreadOnly: boolean, includeArchived = false) {
     const where: any = { userId };
 
     if (unreadOnly) {
       where.isRead = false;
+    }
+
+    // Exclude archived notifications by default
+    if (!includeArchived) {
+      where.isArchived = false;
     }
 
     const notifications = await this.prisma.notification.findMany({
@@ -40,6 +45,7 @@ export class NotificationsService {
       title: notification.title,
       message: notification.message,
       isRead: notification.isRead,
+      isArchived: notification.isArchived,
       createdAt: notification.createdAt,
     }));
   }
@@ -75,8 +81,39 @@ export class NotificationsService {
   }
 
   async getUnreadCount(userId: string) {
-    return this.prisma.notification.count({
-      where: { userId, isRead: false },
+    const count = await this.prisma.notification.count({
+      where: { userId, isRead: false, isArchived: false },
     });
+    return { count };
+  }
+
+  async archive(notificationId: string, userId: string) {
+    const notification = await this.prisma.notification.findUnique({
+      where: { id: notificationId },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    if (notification.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    await this.prisma.notification.update({
+      where: { id: notificationId },
+      data: { isArchived: true },
+    });
+
+    return { message: 'Notification archived' };
+  }
+
+  async archiveAllRead(userId: string) {
+    const result = await this.prisma.notification.updateMany({
+      where: { userId, isRead: true, isArchived: false },
+      data: { isArchived: true },
+    });
+
+    return { message: 'All read notifications archived', count: result.count };
   }
 }
