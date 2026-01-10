@@ -10,7 +10,13 @@ import {
   Query,
   Res,
   StreamableFile,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { ClientsService } from './clients.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
@@ -61,6 +67,34 @@ export class ClientsController {
     },
   ) {
     return this.clientsService.updateUserInfo(user.id, updateData);
+  }
+
+  @Post('profile/picture')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProfilePicture(
+    @CurrentUser() user: any,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new FileTypeValidator({ fileType: /(image\/(jpeg|png|webp|gif))/ }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return this.clientsService.uploadProfilePicture(
+      user.id,
+      file.buffer,
+      file.mimetype,
+    );
+  }
+
+  @Delete('profile/picture')
+  @UseGuards(JwtAuthGuard)
+  async deleteProfilePicture(@CurrentUser() user: any) {
+    return this.clientsService.deleteProfilePicture(user.id);
   }
 
   // Admin endpoints

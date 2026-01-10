@@ -1,18 +1,22 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import { SupabaseService } from '../../config/supabase.service';
 import { EncryptionService, EmailService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProgressAutomationService } from '../progress/progress-automation.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import * as ExcelJS from 'exceljs';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class ClientsService {
   private readonly logger = new Logger(ClientsService.name);
+  private readonly PROFILE_PICTURES_BUCKET = 'profile-pictures';
 
   constructor(
     private prisma: PrismaService,
+    private supabase: SupabaseService,
     private encryption: EncryptionService,
     private emailService: EmailService,
     private notificationsService: NotificationsService,
@@ -30,6 +34,7 @@ export class ClientsService {
         firstName: true,
         lastName: true,
         phone: true,
+        profilePicturePath: true,
         clientProfile: {
           select: {
             ssn: true,
@@ -69,6 +74,20 @@ export class ClientsService {
       throw new NotFoundException('User not found');
     }
 
+    // Generate signed URL for profile picture if exists
+    let profilePictureUrl: string | null = null;
+    if (user.profilePicturePath) {
+      try {
+        profilePictureUrl = await this.supabase.getSignedUrl(
+          this.PROFILE_PICTURES_BUCKET,
+          user.profilePicturePath,
+          3600, // 1 hour expiry
+        );
+      } catch (err) {
+        this.logger.error('Failed to get profile picture signed URL', err);
+      }
+    }
+
     return {
       user: {
         id: user.id,
@@ -76,6 +95,7 @@ export class ClientsService {
         firstName: user.firstName,
         lastName: user.lastName,
         phone: user.phone,
+        profilePictureUrl,
       },
       profile: user.clientProfile
         ? {
@@ -353,6 +373,23 @@ export class ClientsService {
     });
 
     this.logger.log(`User info updated for ${userId}`);
+
+    // Notify admins if address or dateOfBirth was updated (significant changes)
+    if (data.address || data.dateOfBirth) {
+      const clientName = `${result.user.firstName} ${result.user.lastName}`;
+      this.progressAutomation.processEvent(
+        'DOCUMENT_UPLOADED', // Using existing event type for admin notification
+        userId,
+        {
+          clientName,
+          fileName: 'Actualización de perfil',
+          title: 'Perfil Actualizado',
+          message: `El cliente ${clientName} ha actualizado su información personal.`,
+        },
+      ).catch((err) => {
+        this.logger.error('Failed to notify admins of profile update', err);
+      });
+    }
 
     return {
       user: {
@@ -876,7 +913,9 @@ export class ClientsService {
         previousClientStatus,
         clientStatus,
         statusData.comment || '',
-      );
+      ).catch((err) => {
+        this.logger.error(`Failed to send status change email to ${client.user.email}`, err);
+      });
     }
 
     // Notify for federal status change
@@ -1242,5 +1281,109 @@ export class ClientsService {
     // Generate buffer
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
+  }
+
+  /**
+   * Upload profile picture to Supabase and save path to database
+   */
+  async uploadProfilePicture(
+    userId: string,
+    file: Buffer,
+    mimeType: string,
+  ): Promise<{ profilePictureUrl: string }> {
+    // Validate mime type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(mimeType)) {
+      throw new BadRequestException('Invalid file type. Allowed: JPEG, PNG, WebP, GIF');
+    }
+
+    // Get user to check if they already have a profile picture
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { profilePicturePath: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Store old path for cleanup AFTER successful upload
+    const oldPicturePath = user.profilePicturePath;
+
+    // Generate new file path
+    const extension = mimeType.split('/')[1];
+    const fileName = `${userId}/${uuidv4()}.${extension}`;
+
+    // Upload NEW file to Supabase FIRST (before deleting old one)
+    await this.supabase.uploadFile(
+      this.PROFILE_PICTURES_BUCKET,
+      fileName,
+      file,
+      mimeType,
+    );
+
+    // Update user with new profile picture path
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { profilePicturePath: fileName },
+    });
+
+    // Get signed URL for the new picture
+    const profilePictureUrl = await this.supabase.getSignedUrl(
+      this.PROFILE_PICTURES_BUCKET,
+      fileName,
+      3600,
+    );
+
+    // NOW delete old profile picture (cleanup - after successful upload)
+    if (oldPicturePath) {
+      try {
+        await this.supabase.deleteFile(this.PROFILE_PICTURES_BUCKET, oldPicturePath);
+        this.logger.log(`Deleted old profile picture: ${oldPicturePath}`);
+      } catch (err) {
+        this.logger.error('Failed to delete old profile picture (orphaned file)', err);
+        // Continue - old file is orphaned but new upload succeeded
+      }
+    }
+
+    this.logger.log(`Profile picture uploaded for user ${userId}: ${fileName}`);
+
+    return { profilePictureUrl };
+  }
+
+  /**
+   * Delete profile picture from Supabase and remove path from database
+   */
+  async deleteProfilePicture(userId: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { profilePicturePath: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.profilePicturePath) {
+      return { message: 'No profile picture to delete' };
+    }
+
+    // Delete from Supabase
+    try {
+      await this.supabase.deleteFile(this.PROFILE_PICTURES_BUCKET, user.profilePicturePath);
+    } catch (err) {
+      this.logger.error('Failed to delete profile picture from storage', err);
+      // Continue to remove from database even if storage delete fails
+    }
+
+    // Remove path from database
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { profilePicturePath: null },
+    });
+
+    this.logger.log(`Profile picture deleted for user ${userId}`);
+
+    return { message: 'Profile picture deleted successfully' };
   }
 }

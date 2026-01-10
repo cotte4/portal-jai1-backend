@@ -107,6 +107,7 @@ export class AuthService {
         email: user.email,
         first_name: user.firstName,
         last_name: user.lastName,
+        phone: user.phone,
         role: user.role,
         created_at: user.createdAt,
       },
@@ -178,6 +179,7 @@ export class AuthService {
         email: user.email,
         first_name: user.firstName,
         last_name: user.lastName,
+        phone: user.phone,
         role: user.role,
         created_at: user.createdAt,
       },
@@ -208,7 +210,9 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      const tokens = await this.generateTokens(user.id, user.email, user.role);
+      // Preserve rememberMe preference from the original token
+      const rememberMe = payload.rememberMe || false;
+      const tokens = await this.generateTokens(user.id, user.email, user.role, rememberMe);
 
       // Return user object along with tokens (frontend expects this)
       return {
@@ -217,6 +221,7 @@ export class AuthService {
           email: user.email,
           first_name: user.firstName,
           last_name: user.lastName,
+          phone: user.phone,
           role: user.role,
           created_at: user.createdAt,
         },
@@ -345,6 +350,7 @@ export class AuthService {
         email: user.email,
         first_name: user.firstName,
         last_name: user.lastName,
+        phone: user.phone,
         role: user.role,
         created_at: user.createdAt,
       },
@@ -358,7 +364,8 @@ export class AuthService {
     role: string,
     rememberMe: boolean = false,
   ) {
-    const payload = { sub: userId, email, role };
+    // Include rememberMe in payload so it persists through token refreshes
+    const payload = { sub: userId, email, role, rememberMe };
 
     // Extended expiration for "Remember Me" option
     const accessTokenExpiry = rememberMe ? '7d' : '15m';

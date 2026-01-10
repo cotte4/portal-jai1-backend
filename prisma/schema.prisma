@@ -16,6 +16,7 @@ model User {
   firstName             String          @map("first_name")
   lastName              String          @map("last_name")
   phone                 String?
+  profilePicturePath    String?         @map("profile_picture_path")
   googleId              String?         @unique @map("google_id")
   isActive              Boolean         @default(true) @map("is_active")
   lastLoginAt           DateTime?       @map("last_login_at")
