@@ -467,6 +467,7 @@ export class ReferralsService {
         id: true,
         firstName: true,
         lastName: true,
+        profilePicturePath: true,
       },
     });
 
@@ -480,6 +481,7 @@ export class ReferralsService {
         displayName: user
           ? `${user.firstName} ${user.lastName?.charAt(0) || ''}.`
           : 'Usuario',
+        profilePicturePath: user?.profilePicturePath || null,
         successfulReferrals: entry._count.id,
         currentTier: this.calculateDiscount(entry._count.id),
       };
