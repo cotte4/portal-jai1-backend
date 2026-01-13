@@ -18,7 +18,7 @@ export class EmailService {
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
     // Use format "Name <email>" for better deliverability
-    const emailFrom = this.configService.get<string>('EMAIL_FROM') || 'noreply@portaljai1.com';
+    const emailFrom = this.configService.get<string>('EMAIL_FROM') || 'contacto@jai1taxes.com';
     this.fromEmail = emailFrom.includes('<') ? emailFrom : `JAI1 <${emailFrom}>`;
 
     // Log configuration on startup for debugging
