@@ -12,16 +12,20 @@ import {
   MaxFileSizeValidator,
   FileTypeValidator,
   Body,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
 import { UploadDocumentDto } from './dto/upload-document.dto';
+import { logStorageSuccess } from '../../common/utils/storage-logger';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard)
 export class DocumentsController {
+  private readonly logger = new Logger(DocumentsController.name);
+
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Post('upload')
@@ -38,10 +42,15 @@ export class DocumentsController {
     file: Express.Multer.File,
     @Body() uploadDto: UploadDocumentDto,
   ) {
-    console.log('=== UPLOAD REQUEST RECEIVED ===');
-    console.log('User:', user?.id, user?.email);
-    console.log('File:', file?.originalname, file?.mimetype, file?.size);
-    console.log('DTO:', uploadDto);
+    logStorageSuccess(this.logger, {
+      operation: 'DOCUMENT_UPLOAD_START',
+      userId: user?.id,
+      fileName: file?.originalname,
+      fileSize: file?.size,
+      mimeType: file?.mimetype,
+      documentType: uploadDto?.type,
+    });
+
     return this.documentsService.upload(user.id, file, uploadDto);
   }
 

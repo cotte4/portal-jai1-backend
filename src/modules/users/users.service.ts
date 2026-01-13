@@ -51,6 +51,7 @@ export class UsersService {
         isActive: true,
         googleId: true,
         profilePicturePath: true,
+        tokenVersion: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -116,6 +117,15 @@ export class UsersService {
         passwordHash,
         resetToken: null,
         resetTokenExpiresAt: null,
+      },
+    });
+  }
+
+  async incrementTokenVersion(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        tokenVersion: { increment: 1 },
       },
     });
   }

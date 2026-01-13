@@ -182,6 +182,7 @@ export class AuthService {
       user.email,
       user.role,
       loginDto.rememberMe || false,
+      user.tokenVersion,
     );
 
     // Log successful login
@@ -212,6 +213,9 @@ export class AuthService {
   }
 
   async logout(userId: string, ipAddress?: string, userAgent?: string) {
+    // Invalidate all existing tokens by incrementing tokenVersion
+    await this.usersService.incrementTokenVersion(userId);
+
     // Log logout
     this.auditLogsService.log({
       action: AuditAction.LOGOUT,
@@ -219,7 +223,8 @@ export class AuthService {
       ipAddress,
       userAgent,
     });
-    // In a full implementation, you would invalidate the refresh token here
+
+    this.logger.log(`User ${userId} logged out - all tokens invalidated`);
     return { message: 'Logged out successfully' };
   }
 
@@ -234,9 +239,15 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
+      // Check if token version matches - if not, token has been invalidated by logout
+      if (payload.tokenVersion !== undefined && payload.tokenVersion !== user.tokenVersion) {
+        this.logger.warn(`Token version mismatch for user ${user.email} - token invalidated`);
+        throw new UnauthorizedException('Token has been invalidated');
+      }
+
       // Preserve rememberMe preference from the original token
       const rememberMe = payload.rememberMe || false;
-      const tokens = await this.generateTokens(user.id, user.email, user.role, rememberMe);
+      const tokens = await this.generateTokens(user.id, user.email, user.role, rememberMe, user.tokenVersion);
 
       // Get profile picture URL if exists
       const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
@@ -368,7 +379,8 @@ export class AuthService {
     }
 
     await this.usersService.updateLastLogin(user.id);
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    // Google OAuth defaults to rememberMe=true for better UX (matches frontend expectation)
+    const tokens = await this.generateTokens(user.id, user.email, user.role, true, user.tokenVersion || 1);
 
     // Get profile picture URL if exists
     const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
@@ -395,9 +407,10 @@ export class AuthService {
     email: string,
     role: string,
     rememberMe: boolean = false,
+    tokenVersion: number = 1,
   ) {
-    // Include rememberMe in payload so it persists through token refreshes
-    const payload = { sub: userId, email, role, rememberMe };
+    // Include rememberMe and tokenVersion in payload for validation and persistence
+    const payload = { sub: userId, email, role, rememberMe, tokenVersion };
 
     // Extended expiration for "Remember Me" option
     const accessTokenExpiry = rememberMe ? '7d' : '15m';

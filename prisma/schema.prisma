@@ -24,6 +24,7 @@ model User {
   updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz
   resetToken            String?         @map("reset_token")
   resetTokenExpiresAt   DateTime?       @map("reset_token_expires_at") @db.Timestamptz
+  tokenVersion          Int             @default(1) @map("token_version")
   // Referral program fields
   referralCode          String?         @unique @map("referral_code")
   referredByCode        String?         @map("referred_by_code")

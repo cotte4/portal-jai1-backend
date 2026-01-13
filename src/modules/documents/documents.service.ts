@@ -10,6 +10,11 @@ import { SupabaseService } from '../../config/supabase.service';
 import { StoragePathService } from '../../common/services';
 import { ProgressAutomationService } from '../progress/progress-automation.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
+import {
+  logStorageSuccess,
+  logStorageError,
+  logStorageWarning,
+} from '../../common/utils/storage-logger';
 
 @Injectable()
 export class DocumentsService {
@@ -67,12 +72,18 @@ export class DocumentsService {
       originalFileName: file.originalname,
     });
 
-    console.log('About to upload to Supabase Storage...');
-    console.log('File details:', {
-      originalname: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size,
-      bufferLength: file.buffer?.length,
+    const uploadStartTime = Date.now();
+
+    logStorageSuccess(this.logger, {
+      operation: 'DOCUMENT_UPLOAD_START',
+      userId,
+      fileName: file.originalname,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+      bucket: this.BUCKET_NAME,
+      storagePath,
+      documentType: uploadDto.type,
+      taxYear,
     });
 
     // Upload to Supabase Storage
@@ -83,23 +94,22 @@ export class DocumentsService {
         file.buffer,
         file.mimetype,
       );
-      console.log('Supabase upload completed successfully');
     } catch (uploadError) {
-      console.error('Supabase upload failed:', uploadError);
+      logStorageError(this.logger, {
+        operation: 'DOCUMENT_UPLOAD_FAILED',
+        userId,
+        fileName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        bucket: this.BUCKET_NAME,
+        storagePath,
+        error: uploadError instanceof Error ? uploadError.message : 'Unknown error',
+        durationMs: Date.now() - uploadStartTime,
+      });
       throw uploadError;
     }
 
     // Save document metadata
-    console.log('Creating document with data:', {
-      taxCaseId: taxCase.id,
-      type: uploadDto.type,
-      fileName: file.originalname,
-      storagePath,
-      mimeType: file.mimetype,
-      fileSize: file.size,
-      taxYear: uploadDto.tax_year,
-    });
-
     const document = await this.prisma.document.create({
       data: {
         taxCaseId: taxCase.id,
@@ -112,7 +122,19 @@ export class DocumentsService {
       },
     });
 
-    console.log('Document created with ID:', document.id);
+    logStorageSuccess(this.logger, {
+      operation: 'DOCUMENT_UPLOAD_SUCCESS',
+      userId,
+      documentId: document.id,
+      fileName: file.originalname,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+      bucket: this.BUCKET_NAME,
+      storagePath,
+      documentType: uploadDto.type,
+      taxYear,
+      durationMs: Date.now() - uploadStartTime,
+    });
 
     // === PROGRESS AUTOMATION: Emit events based on document type ===
     try {
@@ -240,7 +262,13 @@ export class DocumentsService {
   }
 
   async remove(documentId: string, userId: string, userRole: string) {
-    console.log('Delete request for documentId:', documentId, 'userId:', userId);
+    logStorageSuccess(this.logger, {
+      operation: 'DOCUMENT_DELETE',
+      userId,
+      userRole,
+      documentId,
+    });
+
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
       include: {

@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { logStorageSuccess, logStorageError } from '../common/utils/storage-logger';
 
 @Injectable()
 export class SupabaseService {
+  private readonly logger = new Logger(SupabaseService.name);
   private supabase: SupabaseClient;
 
   constructor(private configService: ConfigService) {
@@ -27,7 +29,15 @@ export class SupabaseService {
     file: Buffer,
     contentType: string,
   ) {
-    console.log(`Uploading file to bucket: ${bucket}, path: ${path}, size: ${file.length}, type: ${contentType}`);
+    const startTime = Date.now();
+
+    logStorageSuccess(this.logger, {
+      operation: 'STORAGE_UPLOAD',
+      bucket,
+      storagePath: path,
+      fileSize: file.length,
+      mimeType: contentType,
+    });
 
     try {
       const { data, error } = await this.supabase.storage
@@ -38,14 +48,35 @@ export class SupabaseService {
         });
 
       if (error) {
-        console.error('Supabase upload error:', error);
+        logStorageError(this.logger, {
+          operation: 'STORAGE_UPLOAD_FAILED',
+          bucket,
+          storagePath: path,
+          fileSize: file.length,
+          mimeType: contentType,
+          error: error.message,
+          durationMs: Date.now() - startTime,
+        });
         throw error;
       }
 
-      console.log('Supabase upload successful:', data);
+      logStorageSuccess(this.logger, {
+        operation: 'STORAGE_UPLOAD_SUCCESS',
+        bucket,
+        storagePath: path,
+        fileSize: file.length,
+        durationMs: Date.now() - startTime,
+      });
+
       return data;
     } catch (err) {
-      console.error('Supabase upload exception:', err);
+      logStorageError(this.logger, {
+        operation: 'STORAGE_UPLOAD_FAILED',
+        bucket,
+        storagePath: path,
+        error: err instanceof Error ? err.message : 'Unknown error',
+        durationMs: Date.now() - startTime,
+      });
       throw err;
     }
   }
@@ -55,13 +86,96 @@ export class SupabaseService {
       .from(bucket)
       .createSignedUrl(path, expiresIn);
 
-    if (error) throw error;
+    if (error) {
+      logStorageError(this.logger, {
+        operation: 'STORAGE_SIGNED_URL',
+        bucket,
+        storagePath: path,
+        error: error.message,
+      });
+      throw error;
+    }
+
+    logStorageSuccess(this.logger, {
+      operation: 'STORAGE_SIGNED_URL',
+      bucket,
+      storagePath: path,
+      expiresIn,
+    });
+
     return data.signedUrl;
   }
 
   async deleteFile(bucket: string, path: string) {
     const { error } = await this.supabase.storage.from(bucket).remove([path]);
 
-    if (error) throw error;
+    if (error) {
+      logStorageError(this.logger, {
+        operation: 'STORAGE_DELETE_FAILED',
+        bucket,
+        storagePath: path,
+        error: error.message,
+      });
+      throw error;
+    }
+
+    logStorageSuccess(this.logger, {
+      operation: 'STORAGE_DELETE',
+      bucket,
+      storagePath: path,
+    });
+  }
+
+  /**
+   * List all files in a bucket folder recursively.
+   * Used for orphan file detection.
+   */
+  async listFiles(
+    bucket: string,
+    folder: string = '',
+    options: { limit?: number; offset?: number } = {},
+  ): Promise<{ name: string; id: string; created_at: string; metadata: Record<string, unknown> }[]> {
+    const { limit = 1000, offset = 0 } = options;
+
+    const { data, error } = await this.supabase.storage
+      .from(bucket)
+      .list(folder, {
+        limit,
+        offset,
+        sortBy: { column: 'created_at', order: 'asc' },
+      });
+
+    if (error) {
+      this.logger.error(`Failed to list files in ${bucket}/${folder}: ${error.message}`);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  /**
+   * List all files in a bucket recursively by traversing folders.
+   * Returns full paths relative to bucket root.
+   */
+  async listAllFiles(bucket: string): Promise<string[]> {
+    const allFiles: string[] = [];
+
+    const traverseFolder = async (folderPath: string) => {
+      const items = await this.listFiles(bucket, folderPath);
+
+      for (const item of items) {
+        const fullPath = folderPath ? `${folderPath}/${item.name}` : item.name;
+
+        // If item has no id, it's a folder (Supabase convention)
+        if (!item.id) {
+          await traverseFolder(fullPath);
+        } else {
+          allFiles.push(fullPath);
+        }
+      }
+    };
+
+    await traverseFolder('');
+    return allFiles;
   }
 }
