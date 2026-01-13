@@ -125,6 +125,7 @@ model TaxCase {
   @@index([taxYear])
   @@index([hasProblem])
   @@index([createdAt])
+  @@index([internalStatus, createdAt]) // Compound index for admin filtering
   @@map("tax_cases")
 }
 
@@ -138,12 +139,14 @@ model Document {
   fileSize    Int          @map("file_size")
   taxYear     Int?         @map("tax_year")
   isReviewed  Boolean      @default(false) @map("is_reviewed")
+  reviewedAt  DateTime?    @map("reviewed_at") @db.Timestamptz
   uploadedAt  DateTime     @default(now()) @map("uploaded_at") @db.Timestamptz
   taxCase     TaxCase      @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
 
   @@index([taxCaseId])
   @@index([type])
   @@index([uploadedAt])
+  @@index([isReviewed])
   @@map("documents")
 }
 
@@ -206,15 +209,18 @@ model Notification {
   message    String
   isRead     Boolean          @default(false) @map("is_read")
   isArchived Boolean          @default(false) @map("is_archived")
+  deletedAt  DateTime?        @map("deleted_at") @db.Timestamptz
   createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz
   user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([isRead])
   @@index([isArchived])
+  @@index([deletedAt])
   @@index([userId, isRead])
   @@index([userId, isArchived])
   @@index([createdAt])
+  @@index([userId, createdAt]) // Compound index for client feed pagination
   @@map("notifications")
 }
 

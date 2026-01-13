@@ -2,26 +2,33 @@ import {
   Injectable,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
+import { StoragePathService } from '../../common/services';
 import OpenAI from 'openai';
-import { v4 as uuidv4 } from 'uuid';
 
 interface OcrResult {
   box_2: string;
   box_17: string;
 }
 
+// Retry configuration
+const OCR_MAX_RETRIES = 3;
+const OCR_RETRY_DELAY_MS = 1000;
+
 @Injectable()
 export class CalculatorService {
+  private readonly logger = new Logger(CalculatorService.name);
   private readonly BUCKET_NAME = 'documents';
   private openai: OpenAI | null = null;
 
   constructor(
     private prisma: PrismaService,
     private supabase: SupabaseService,
+    private storagePath: StoragePathService,
     private configService: ConfigService,
   ) {}
 
@@ -49,66 +56,10 @@ export class CalculatorService {
     const base64Image = file.buffer.toString('base64');
     const mimeType = file.mimetype;
 
-    // Call OpenAI Vision API
-    let ocrResult: OcrResult;
-    let rawResponse: any;
+    this.logger.log(`Processing W2 OCR for user ${userId}: ${file.originalname} (${file.size} bytes)`);
 
-    try {
-      console.log('=== CALCULATOR: Calling OpenAI Vision API ===');
-      console.log('File:', file.originalname, 'Size:', file.size, 'Type:', file.mimetype);
-
-      const response = await this.getOpenAI().chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `Your task is to correctly extract the numerical values from [box 2] and [box 17] from this W2 document.
-[box 2] corresponds to: Federal income Tax withheld
-[box 17] corresponds to: State income Tax
-In most cases you will find both values inside of their respective boxes.
-If you do not find a value on those boxes, make a second try in searching the correct value. If you didnt find one of the values, use the value as a last resource: [0.00]
-Format the response as JSON.
-FORMAT: Only output the response in JSON
-EXAMPLE OF A GOOD OUTPUT:
-{
-  "box_2": "1110.02",
-  "box_17": "410.11"
-}`,
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${mimeType};base64,${base64Image}`,
-                },
-              },
-            ],
-          },
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 500,
-      });
-
-      rawResponse = response;
-      const content = response.choices[0]?.message?.content;
-
-      if (!content) {
-        throw new Error('No response from OpenAI');
-      }
-
-      ocrResult = JSON.parse(content);
-    } catch (error: any) {
-      console.error('=== CALCULATOR ERROR ===');
-      console.error('Error name:', error?.name);
-      console.error('Error message:', error?.message);
-      console.error('Error status:', error?.status);
-      console.error('Full error:', JSON.stringify(error, null, 2));
-      throw new InternalServerErrorException(
-        error?.message || 'Failed to process W2 document. Please try again.',
-      );
-    }
+    // Call OpenAI Vision API with retry logic
+    const { ocrResult, rawResponse } = await this.callOpenAIWithRetry(base64Image, mimeType);
 
     // Parse values
     const box2Federal = parseFloat(ocrResult.box_2) || 0;
@@ -125,20 +76,21 @@ EXAMPLE OF A GOOD OUTPUT:
       ocrConfidence = 'low';
     }
 
-    // Upload file to Supabase Storage (optional - for record keeping)
-    let storagePath: string | null = null;
+    // Upload file to Supabase Storage using centralized path service
+    let w2StoragePath: string | null = null;
     try {
-      const fileExtension = file.originalname.split('.').pop();
-      storagePath = `w2-estimates/${userId}/${Date.now()}-${uuidv4()}.${fileExtension}`;
+      const taxYear = new Date().getFullYear();
+      w2StoragePath = this.storagePath.generateEstimatePath(userId, file.originalname, taxYear);
 
       await this.supabase.uploadFile(
         this.BUCKET_NAME,
-        storagePath,
+        w2StoragePath,
         file.buffer,
         file.mimetype,
       );
+      this.logger.log(`W2 estimate image stored at: ${w2StoragePath}`);
     } catch (uploadError) {
-      console.error('Failed to upload W2 to storage:', uploadError);
+      this.logger.error('Failed to upload W2 to storage (non-fatal):', uploadError);
       // Continue without storage - estimate can still be saved
     }
 
@@ -150,11 +102,13 @@ EXAMPLE OF A GOOD OUTPUT:
         box17State,
         estimatedRefund,
         w2FileName: file.originalname,
-        w2StoragePath: storagePath,
+        w2StoragePath,
         ocrConfidence,
         ocrRawResponse: rawResponse,
       },
     });
+
+    this.logger.log(`W2 estimate created: ${estimate.id} (confidence: ${ocrConfidence})`);
 
     return {
       box2Federal,
@@ -164,6 +118,99 @@ EXAMPLE OF A GOOD OUTPUT:
       w2FileName: file.originalname,
       estimateId: estimate.id,
     };
+  }
+
+  /**
+   * Call OpenAI Vision API with retry logic
+   * Retries up to OCR_MAX_RETRIES times with exponential backoff
+   */
+  private async callOpenAIWithRetry(
+    base64Image: string,
+    mimeType: string,
+  ): Promise<{ ocrResult: OcrResult; rawResponse: any }> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= OCR_MAX_RETRIES; attempt++) {
+      try {
+        this.logger.log(`OpenAI OCR attempt ${attempt}/${OCR_MAX_RETRIES}`);
+
+        const response = await this.getOpenAI().chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `Your task is to correctly extract the numerical values from [box 2] and [box 17] from this W2 document.
+[box 2] corresponds to: Federal income Tax withheld
+[box 17] corresponds to: State income Tax
+In most cases you will find both values inside of their respective boxes.
+If you do not find a value on those boxes, make a second try in searching the correct value. If you didnt find one of the values, use the value as a last resource: [0.00]
+Format the response as JSON.
+FORMAT: Only output the response in JSON
+EXAMPLE OF A GOOD OUTPUT:
+{
+  "box_2": "1110.02",
+  "box_17": "410.11"
+}`,
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Image}`,
+                  },
+                },
+              ],
+            },
+          ],
+          response_format: { type: 'json_object' },
+          max_tokens: 500,
+        });
+
+        const content = response.choices[0]?.message?.content;
+
+        if (!content) {
+          throw new Error('No response content from OpenAI');
+        }
+
+        const ocrResult = JSON.parse(content) as OcrResult;
+        this.logger.log(`OpenAI OCR successful on attempt ${attempt}`);
+
+        return { ocrResult, rawResponse: response };
+      } catch (error: any) {
+        lastError = error;
+        this.logger.warn(
+          `OpenAI OCR attempt ${attempt} failed: ${error?.message || 'Unknown error'}`,
+        );
+
+        // Don't retry on certain errors (bad request, auth issues)
+        if (error?.status === 400 || error?.status === 401 || error?.status === 403) {
+          this.logger.error('Non-retryable OpenAI error, aborting retries');
+          break;
+        }
+
+        // Wait before retrying (exponential backoff)
+        if (attempt < OCR_MAX_RETRIES) {
+          const delay = OCR_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+          this.logger.log(`Waiting ${delay}ms before retry...`);
+          await this.sleep(delay);
+        }
+      }
+    }
+
+    // All retries exhausted
+    this.logger.error(`OpenAI OCR failed after ${OCR_MAX_RETRIES} attempts`);
+    throw new InternalServerErrorException(
+      lastError?.message || 'Failed to process W2 document after multiple attempts. Please try again.',
+    );
+  }
+
+  /**
+   * Helper function to sleep for a given number of milliseconds
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   async getEstimateHistory(userId: string) {

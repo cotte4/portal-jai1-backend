@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 
@@ -9,7 +10,7 @@ import { SupabaseService } from './config/supabase.service';
 
 // Common
 import { HttpExceptionFilter } from './common/filters';
-import { EncryptionService, EmailService } from './common/services';
+import { EncryptionService, EmailService, StoragePathService } from './common/services';
 
 // Modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -18,7 +19,6 @@ import { ClientsModule } from './modules/clients/clients.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
-import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { CalculatorModule } from './modules/calculator/calculator.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
@@ -31,13 +31,13 @@ import { HealthModule } from './modules/health/health.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
     ClientsModule,
     DocumentsModule,
     TicketsModule,
     NotificationsModule,
-    WebhooksModule,
     CalculatorModule,
     ProgressModule,
     ReferralsModule,
@@ -50,6 +50,7 @@ import { HealthModule } from './modules/health/health.module';
     SupabaseService,
     EncryptionService,
     EmailService,
+    StoragePathService,
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,

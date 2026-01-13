@@ -1,8 +1,10 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -22,8 +24,13 @@ const DISCOUNT_TIERS = [
 
 const REFERRED_BONUS = 11; // $11 USD discount for referred person
 
+// Referrals expire after 180 days of being pending
+const REFERRAL_EXPIRATION_DAYS = 180;
+
 @Injectable()
 export class ReferralsService {
+  private readonly logger = new Logger(ReferralsService.name);
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -794,5 +801,37 @@ export class ReferralsService {
       id: discount.id,
       message: 'Discount applied successfully',
     };
+  }
+
+  /**
+   * Cron job: Expire old pending referrals
+   * Runs daily at 3:00 AM to mark referrals older than 180 days as expired
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async expireOldReferrals(): Promise<void> {
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() - REFERRAL_EXPIRATION_DAYS);
+
+    try {
+      const result = await this.prisma.referral.updateMany({
+        where: {
+          status: 'pending',
+          createdAt: {
+            lt: expirationDate,
+          },
+        },
+        data: {
+          status: 'expired',
+        },
+      });
+
+      if (result.count > 0) {
+        this.logger.log(
+          `Expired ${result.count} referral(s) older than ${REFERRAL_EXPIRATION_DAYS} days`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Failed to expire old referrals', error);
+    }
   }
 }

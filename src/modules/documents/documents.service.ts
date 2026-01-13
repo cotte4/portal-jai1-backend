@@ -7,9 +7,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
+import { StoragePathService } from '../../common/services';
 import { ProgressAutomationService } from '../progress/progress-automation.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
-import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class DocumentsService {
@@ -19,6 +19,7 @@ export class DocumentsService {
   constructor(
     private prisma: PrismaService,
     private supabase: SupabaseService,
+    private storagePath: StoragePathService,
     private progressAutomation: ProgressAutomationService,
   ) {}
 
@@ -57,9 +58,14 @@ export class DocumentsService {
       });
     }
 
-    // Generate unique storage path
-    const fileExtension = file.originalname.split('.').pop();
-    const storagePath = `${clientProfile.id}/${uuidv4()}.${fileExtension}`;
+    // Generate unique storage path using centralized service
+    const taxYear = uploadDto.tax_year || taxCase.taxYear || new Date().getFullYear();
+    const storagePath = this.storagePath.generateDocumentPath({
+      userId,
+      taxYear,
+      documentType: uploadDto.type,
+      originalFileName: file.originalname,
+    });
 
     console.log('About to upload to Supabase Storage...');
     console.log('File details:', {
@@ -281,7 +287,10 @@ export class DocumentsService {
   async markAsReviewed(documentId: string) {
     return this.prisma.document.update({
       where: { id: documentId },
-      data: { isReviewed: true },
+      data: {
+        isReviewed: true,
+        reviewedAt: new Date(),
+      },
     });
   }
 }
