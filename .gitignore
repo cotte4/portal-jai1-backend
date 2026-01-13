@@ -5,3 +5,4 @@ dist
 .env
 
 /generated/prisma
+tmpclaude-*
