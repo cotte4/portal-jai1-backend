@@ -23,7 +23,10 @@ export class NotificationsService {
   }
 
   async findAll(userId: string, unreadOnly: boolean, includeArchived = false) {
-    const where: any = { userId };
+    const where: any = {
+      userId,
+      deletedAt: null, // Exclude soft-deleted notifications
+    };
 
     if (unreadOnly) {
       where.isRead = false;
@@ -82,7 +85,7 @@ export class NotificationsService {
 
   async getUnreadCount(userId: string) {
     const count = await this.prisma.notification.count({
-      where: { userId, isRead: false, isArchived: false },
+      where: { userId, isRead: false, isArchived: false, deletedAt: null },
     });
     return { count };
   }

@@ -365,6 +365,7 @@ model DiscountApplication {
   referral      Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
   appliedByAdmin User?    @relation("DiscountAppliedBy", fields: [appliedByAdminId], references: [id], onDelete: SetNull)
 
+  @@unique([referralId, discountType]) // Prevent duplicate discounts per referral
   @@index([userId])
   @@index([status])
   @@index([taxCaseId])

@@ -869,9 +869,10 @@ export class ReferralsService {
     expirationDate.setDate(expirationDate.getDate() - REFERRAL_EXPIRATION_DAYS);
 
     try {
+      // Expire both 'pending' and 'tax_form_submitted' referrals that are too old
       const result = await this.prisma.referral.updateMany({
         where: {
-          status: 'pending',
+          status: { in: ['pending', 'tax_form_submitted'] },
           createdAt: {
             lt: expirationDate,
           },
