@@ -36,6 +36,7 @@ model User {
   ticketMessages        TicketMessage[]
   tickets               Ticket[]
   w2Estimates           W2Estimate[]
+  documentsUploaded     Document[]      @relation("DocumentUploader")
   referralsMade         Referral[]      @relation("ReferrerUser")
   referralReceived      Referral?       @relation("ReferredUser")
   discountsReceived     DiscountApplication[] @relation("DiscountUser")
@@ -127,23 +128,26 @@ model TaxCase {
 }
 
 model Document {
-  id          String       @id @default(uuid()) @db.Uuid
-  taxCaseId   String       @map("tax_case_id") @db.Uuid
-  type        DocumentType
-  fileName    String       @map("file_name")
-  storagePath String       @map("storage_path")
-  mimeType    String       @map("mime_type")
-  fileSize    Int          @map("file_size")
-  taxYear     Int?         @map("tax_year")
-  isReviewed  Boolean      @default(false) @map("is_reviewed")
-  reviewedAt  DateTime?    @map("reviewed_at") @db.Timestamptz
-  uploadedAt  DateTime     @default(now()) @map("uploaded_at") @db.Timestamptz
-  taxCase     TaxCase      @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+  id           String       @id @default(uuid()) @db.Uuid
+  taxCaseId    String       @map("tax_case_id") @db.Uuid
+  type         DocumentType
+  fileName     String       @map("file_name")
+  storagePath  String       @unique @map("storage_path")
+  mimeType     String       @map("mime_type")
+  fileSize     Int          @map("file_size")
+  taxYear      Int?         @map("tax_year")
+  isReviewed   Boolean      @default(false) @map("is_reviewed")
+  reviewedAt   DateTime?    @map("reviewed_at") @db.Timestamptz
+  uploadedAt   DateTime     @default(now()) @map("uploaded_at") @db.Timestamptz
+  uploadedById String?      @map("uploaded_by_id") @db.Uuid
+  taxCase      TaxCase      @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+  uploadedBy   User?        @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@index([taxCaseId])
   @@index([type])
   @@index([uploadedAt])
   @@index([isReviewed])
+  @@index([uploadedById])
   @@map("documents")
 }
 

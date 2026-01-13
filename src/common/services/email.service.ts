@@ -19,9 +19,15 @@ export class EmailService {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
     this.fromEmail = this.configService.get<string>('EMAIL_FROM') || 'noreply@portaljai1.com';
 
+    // Log configuration on startup for debugging
+    this.logger.log(`Email service initializing...`);
+    this.logger.log(`EMAIL_FROM: ${this.fromEmail}`);
+    this.logger.log(`RESEND_API_KEY: ${apiKey ? `${apiKey.substring(0, 8)}...` : 'NOT SET'}`);
+
     if (apiKey && apiKey !== 're_your_resend_api_key') {
       this.resend = new Resend(apiKey);
       this.isConfigured = true;
+      this.logger.log(`Email service configured successfully with Resend`);
     } else {
       this.isConfigured = false;
       this.logger.warn('Resend API key not configured. Emails will be logged only.');
@@ -49,9 +55,13 @@ export class EmailService {
       return true;
     } catch (error: any) {
       this.logger.error(`Failed to send email to ${options.to}`);
-      this.logger.error(`Error details: ${error?.message || JSON.stringify(error)}`);
+      this.logger.error(`From address used: ${this.fromEmail}`);
+      this.logger.error(`Error details: ${JSON.stringify(error, null, 2)}`);
       if (error?.statusCode) {
         this.logger.error(`Resend status code: ${error.statusCode}`);
+      }
+      if (error?.name) {
+        this.logger.error(`Error name: ${error.name}`);
       }
       return false;
     }
