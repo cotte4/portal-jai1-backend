@@ -104,22 +104,23 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
+    // TODO: Re-enable when needed
     // Send welcome email (async, don't wait)
-    this.emailService
-      .sendWelcomeEmail(user.email, user.firstName)
-      .catch((err) => this.logger.error('Failed to send welcome email', err));
+    // this.emailService
+    //   .sendWelcomeEmail(user.email, user.firstName)
+    //   .catch((err) => this.logger.error('Failed to send welcome email', err));
 
     // Notify admin of new registration (async, don't wait)
-    const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
-    if (adminEmail) {
-      this.emailService
-        .sendNewClientNotification(
-          adminEmail,
-          `${user.firstName} ${user.lastName}`,
-          user.email,
-        )
-        .catch((err) => this.logger.error('Failed to send admin notification', err));
-    }
+    // const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
+    // if (adminEmail) {
+    //   this.emailService
+    //     .sendNewClientNotification(
+    //       adminEmail,
+    //       `${user.firstName} ${user.lastName}`,
+    //       user.email,
+    //     )
+    //     .catch((err) => this.logger.error('Failed to send admin notification', err));
+    // }
 
     return {
       user: {
@@ -401,10 +402,11 @@ export class AuthService {
 
       this.logger.log(`New user created via Google OAuth: ${user.email}`);
 
+      // TODO: Re-enable when needed
       // Send welcome email
-      this.emailService
-        .sendWelcomeEmail(user.email, user.firstName)
-        .catch((err) => this.logger.error('Failed to send welcome email', err));
+      // this.emailService
+      //   .sendWelcomeEmail(user.email, user.firstName)
+      //   .catch((err) => this.logger.error('Failed to send welcome email', err));
     } else {
       // Update googleId if not set
       if (!user.googleId) {

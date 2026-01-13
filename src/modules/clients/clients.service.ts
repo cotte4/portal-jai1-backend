@@ -908,16 +908,17 @@ export class ClientsService {
         newStatusLabel,
       );
 
+      // TODO: Re-enable when needed
       // Send email notification (don't await to avoid blocking response)
-      this.emailService.sendStatusChangeEmail(
-        client.user.email,
-        client.user.firstName,
-        previousClientStatus,
-        clientStatus,
-        statusData.comment || '',
-      ).catch((err) => {
-        this.logger.error(`Failed to send status change email to ${client.user.email}`, err);
-      });
+      // this.emailService.sendStatusChangeEmail(
+      //   client.user.email,
+      //   client.user.firstName,
+      //   previousClientStatus,
+      //   clientStatus,
+      //   statusData.comment || '',
+      // ).catch((err) => {
+      //   this.logger.error(`Failed to send status change email to ${client.user.email}`, err);
+      // });
     }
 
     // Notify for federal status change
@@ -1180,19 +1181,20 @@ export class ClientsService {
       notifyData.message,
     );
 
+    // TODO: Re-enable when needed
     // Send email if requested
-    if (notifyData.sendEmail) {
-      await this.emailService.sendNotificationEmail(
-        client.user.email,
-        client.user.firstName,
-        notifyData.title,
-        notifyData.message,
-      );
-    }
+    // if (notifyData.sendEmail) {
+    //   await this.emailService.sendNotificationEmail(
+    //     client.user.email,
+    //     client.user.firstName,
+    //     notifyData.title,
+    //     notifyData.message,
+    //   );
+    // }
 
     return {
       message: 'Notification sent successfully',
-      emailSent: notifyData.sendEmail || false,
+      emailSent: false, // Emails disabled for now
     };
   }
 

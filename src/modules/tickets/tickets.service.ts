@@ -360,17 +360,18 @@ export class TicketsService {
           this.logger.error(`Failed to create notification for ticket ${ticketId}`, err);
         });
 
+        // TODO: Re-enable when needed
         // Send email notification (fire and forget with error handling)
-        if (ticket.user.email && ticket.user.firstName) {
-          this.emailService.sendTicketResponseEmail(
-            ticket.user.email,
-            ticket.user.firstName,
-            ticket.subject,
-            createMessageDto.message,
-          ).catch((err: Error) => {
-            this.logger.error(`Failed to send email for ticket ${ticketId}`, err);
-          });
-        }
+        // if (ticket.user.email && ticket.user.firstName) {
+        //   this.emailService.sendTicketResponseEmail(
+        //     ticket.user.email,
+        //     ticket.user.firstName,
+        //     ticket.subject,
+        //     createMessageDto.message,
+        //   ).catch((err: Error) => {
+        //     this.logger.error(`Failed to send email for ticket ${ticketId}`, err);
+        //   });
+        // }
       }
 
       this.logger.log(`Successfully added message to ticket ${ticketId}`);

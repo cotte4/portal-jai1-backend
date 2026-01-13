@@ -204,23 +204,24 @@ export class ProgressAutomationService {
         }
       }
 
+      // TODO: Re-enable when needed
       // Send email to admin (using configured ADMIN_EMAIL or first admin)
-      const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
-      const targetEmail = adminEmail || admins[0]?.email;
+      // const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
+      // const targetEmail = adminEmail || admins[0]?.email;
 
-      if (targetEmail) {
-        try {
-          await this.emailService.sendNotificationEmail(
-            targetEmail,
-            'Admin',
-            title,
-            message,
-          );
-          this.logger.log(`Sent admin email to ${targetEmail}`);
-        } catch (error) {
-          this.logger.error(`Failed to send admin email:`, error);
-        }
-      }
+      // if (targetEmail) {
+      //   try {
+      //     await this.emailService.sendNotificationEmail(
+      //       targetEmail,
+      //       'Admin',
+      //       title,
+      //       message,
+      //     );
+      //     this.logger.log(`Sent admin email to ${targetEmail}`);
+      //   } catch (error) {
+      //     this.logger.error(`Failed to send admin email:`, error);
+      //   }
+      // }
     } catch (error) {
       this.logger.error('Error notifying admins:', error);
     }
