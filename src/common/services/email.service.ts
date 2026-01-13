@@ -44,25 +44,27 @@ export class EmailService {
 
     try {
       this.logger.log(`Attempting to send email to ${options.to}...`);
-      const result = await this.resend.emails.send({
+      this.logger.log(`From address: ${this.fromEmail}`);
+      const { data, error } = await this.resend.emails.send({
         from: this.fromEmail,
         to: options.to,
         subject: options.subject,
         html: options.html,
       });
+
+      if (error) {
+        this.logger.error(`Resend API error: ${JSON.stringify(error)}`);
+        this.logger.error(`Status code: ${error.statusCode}, Message: ${error.message}`);
+        return false;
+      }
+
       this.logger.log(`Email sent successfully to ${options.to}: ${options.subject}`);
-      this.logger.debug(`Resend response: ${JSON.stringify(result)}`);
+      this.logger.log(`Resend ID: ${data?.id}`);
       return true;
     } catch (error: any) {
       this.logger.error(`Failed to send email to ${options.to}`);
       this.logger.error(`From address used: ${this.fromEmail}`);
       this.logger.error(`Error details: ${JSON.stringify(error, null, 2)}`);
-      if (error?.statusCode) {
-        this.logger.error(`Resend status code: ${error.statusCode}`);
-      }
-      if (error?.name) {
-        this.logger.error(`Error name: ${error.name}`);
-      }
       return false;
     }
   }

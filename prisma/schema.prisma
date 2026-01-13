@@ -114,6 +114,7 @@ model TaxCase {
   documents          Document[]
   statusHistory      StatusHistory[]
   discounts          DiscountApplication[]
+  w2Estimates        W2Estimate[]
   clientProfile      ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
 
   @@unique([clientProfileId, taxYear])
@@ -302,13 +303,15 @@ model W2Estimate {
   box17State      Decimal        @map("box_17_state") @db.Decimal(10, 2)
   estimatedRefund Decimal        @map("estimated_refund") @db.Decimal(10, 2)
   w2FileName      String         @map("w2_file_name")
-  w2StoragePath   String?        @map("w2_storage_path")
+  w2StoragePath   String?        @unique @map("w2_storage_path")
   ocrConfidence   OcrConfidence  @map("ocr_confidence")
   ocrRawResponse  Json?          @map("ocr_raw_response")
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
   user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taxCase         TaxCase?       @relation(fields: [taxCaseId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([taxCaseId])
   @@map("w2_estimates")
 }
 
