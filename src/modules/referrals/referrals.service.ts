@@ -8,6 +8,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { AuditAction } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
+import { SupabaseService } from '../../config/supabase.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
@@ -29,12 +30,16 @@ const REFERRED_BONUS = 11; // $11 USD discount for referred person
 // Referrals expire after 180 days of being pending
 const REFERRAL_EXPIRATION_DAYS = 180;
 
+// Supabase bucket for profile pictures
+const PROFILE_PICTURES_BUCKET = 'profile-pictures';
+
 @Injectable()
 export class ReferralsService {
   private readonly logger = new Logger(ReferralsService.name);
 
   constructor(
     private prisma: PrismaService,
+    private supabase: SupabaseService,
     private notificationsService: NotificationsService,
     private auditLogsService: AuditLogsService,
   ) {}
@@ -401,6 +406,19 @@ export class ReferralsService {
   }
 
   /**
+   * Calculate tier number based on successful referral count
+   * Tier 1 = 1 referral, Tier 2 = 2 referrals, etc.
+   */
+  calculateTier(successfulCount: number): number {
+    for (let i = DISCOUNT_TIERS.length - 1; i >= 0; i--) {
+      if (successfulCount >= DISCOUNT_TIERS[i].min) {
+        return i + 1; // Tier is 1-indexed
+      }
+    }
+    return 0;
+  }
+
+  /**
    * Get user's referral code
    * If user is eligible (profileComplete = true) but doesn't have a code, generate one on-demand
    */
@@ -574,19 +592,39 @@ export class ReferralsService {
 
     const userMap = new Map(users.map((u) => [u.id, u]));
 
-    return leaderboard.map((entry, index) => {
-      const user = userMap.get(entry.referrerId);
-      return {
-        rank: index + 1,
-        userId: entry.referrerId,
-        displayName: user
-          ? `${user.firstName} ${user.lastName?.charAt(0) || ''}.`
-          : 'Usuario',
-        profilePicturePath: user?.profilePicturePath || null,
-        successfulReferrals: entry._count.id,
-        currentTier: this.calculateDiscount(entry._count.id),
-      };
-    });
+    // Generate signed URLs for profile pictures
+    const results = await Promise.all(
+      leaderboard.map(async (entry, index) => {
+        const user = userMap.get(entry.referrerId);
+        let profilePictureUrl: string | null = null;
+
+        // Generate signed URL if user has a profile picture
+        if (user?.profilePicturePath) {
+          try {
+            profilePictureUrl = await this.supabase.getSignedUrl(
+              PROFILE_PICTURES_BUCKET,
+              user.profilePicturePath,
+              3600, // 1 hour expiry
+            );
+          } catch (err) {
+            this.logger.error(`Failed to get signed URL for user ${entry.referrerId}`, err);
+          }
+        }
+
+        return {
+          rank: index + 1,
+          userId: entry.referrerId,
+          displayName: user
+            ? `${user.firstName} ${user.lastName?.charAt(0) || ''}.`
+            : 'Usuario',
+          profilePicturePath: profilePictureUrl,
+          successfulReferrals: entry._count.id,
+          currentTier: this.calculateTier(entry._count.id),
+        };
+      }),
+    );
+
+    return results;
   }
 
   /**
