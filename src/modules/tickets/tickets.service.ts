@@ -426,12 +426,18 @@ export class TicketsService {
   }
 
   /**
-   * Soft-delete a ticket (user can delete own, admin can delete any)
+   * Soft-delete a ticket (admin only - clients cannot delete tickets to preserve conversation history)
    */
   async deleteTicket(ticketId: string, userId: string, userRole: string): Promise<{ message: string }> {
     this.logger.log(`Deleting ticket ${ticketId} by user ${userId}`);
 
     try {
+      // Only admin can delete tickets - prevents clients from hiding conversations
+      if (userRole !== 'admin') {
+        this.logger.warn(`Non-admin user ${userId} attempted to delete ticket ${ticketId}`);
+        throw new ForbiddenException('Solo los administradores pueden eliminar tickets');
+      }
+
       const ticket = await this.prisma.ticket.findUnique({
         where: { id: ticketId, deletedAt: null },
         select: { id: true, userId: true },
@@ -440,12 +446,6 @@ export class TicketsService {
       if (!ticket) {
         this.logger.warn(`Ticket ${ticketId} not found when deleting`);
         throw new NotFoundException('Ticket not found');
-      }
-
-      // Check access: user can only delete their own tickets, admin can delete any
-      if (userRole !== 'admin' && ticket.userId !== userId) {
-        this.logger.warn(`User ${userId} denied access to delete ticket ${ticketId}`);
-        throw new ForbiddenException('Access denied');
       }
 
       // Soft-delete the ticket
