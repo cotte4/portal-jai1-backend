@@ -115,6 +115,7 @@ model TaxCase {
   statusHistory      StatusHistory[]
   discounts          DiscountApplication[]
   w2Estimates        W2Estimate[]
+  referrals          Referral[]
   clientProfile      ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
 
   @@unique([clientProfileId, taxYear])
@@ -183,6 +184,7 @@ model TicketMessage {
   ticket    Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
+  @@index([senderId])
   @@index([isRead])
   @@index([deletedAt])
   @@map("ticket_messages")
@@ -200,6 +202,7 @@ model StatusHistory {
   taxCase        TaxCase  @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
 
   @@index([taxCaseId])
+  @@index([changedById])
   @@index([createdAt])
   @@map("status_history")
 }
@@ -321,7 +324,7 @@ model Referral {
   id               String         @id @default(uuid()) @db.Uuid
   referrerId       String         @map("referrer_id") @db.Uuid
   referredUserId   String         @unique @map("referred_user_id") @db.Uuid
-  referralCode     String         @map("referral_code")
+  referralCode     String         @unique @map("referral_code")
   status           ReferralStatus @default(pending)
   taxCaseId        String?        @map("tax_case_id") @db.Uuid
   completedAt      DateTime?      @map("completed_at") @db.Timestamptz
@@ -329,8 +332,9 @@ model Referral {
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
-  referrer     User @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
-  referredUser User @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  referrer     User     @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUser User     @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  taxCase      TaxCase? @relation(fields: [taxCaseId], references: [id], onDelete: SetNull)
   discounts    DiscountApplication[]
 
   @@index([referrerId])
@@ -365,6 +369,7 @@ model DiscountApplication {
   @@index([status])
   @@index([taxCaseId])
   @@index([referralId])
+  @@index([seasonYear])
   @@map("discount_applications")
 }
 
