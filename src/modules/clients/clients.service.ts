@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { AuditAction } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
 import { EncryptionService, EmailService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProgressAutomationService } from '../progress/progress-automation.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import * as ExcelJS from 'exceljs';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,6 +24,7 @@ export class ClientsService {
     private notificationsService: NotificationsService,
     private progressAutomation: ProgressAutomationService,
     private referralsService: ReferralsService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async getProfile(userId: string) {
@@ -936,6 +939,23 @@ export class ClientsService {
         this.logger.error('Failed to mark referral as successful', err);
         // Don't fail status update if referral marking fails
       }
+    }
+
+    // Audit log - refund updates (keep forever for financial tracking)
+    if (statusData.federalActualRefund !== undefined || statusData.stateActualRefund !== undefined) {
+      this.auditLogsService.log({
+        action: AuditAction.REFUND_UPDATE,
+        userId: changedById,
+        targetUserId: client.user.id,
+        details: {
+          taxCaseId: taxCase.id,
+          taxYear: taxCase.taxYear,
+          federalActualRefund: statusData.federalActualRefund,
+          stateActualRefund: statusData.stateActualRefund,
+          previousFederalRefund: taxCase.federalActualRefund,
+          previousStateRefund: taxCase.stateActualRefund,
+        },
+      });
     }
 
     return { message: 'Status updated successfully' };

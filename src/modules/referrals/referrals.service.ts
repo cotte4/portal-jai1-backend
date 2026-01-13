@@ -5,9 +5,11 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { AuditAction } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
 import { UpdateReferralStatusDto } from './dto/update-referral-status.dto';
 
@@ -34,6 +36,7 @@ export class ReferralsService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   /**
@@ -796,6 +799,21 @@ export class ReferralsService {
       'Descuento aplicado',
       `Se te ha aplicado un descuento de ${dto.discountPercent ? dto.discountPercent + '%' : '$' + dto.discountAmount} en tu comisión.`,
     );
+
+    // Audit log - discount applied (keep forever for financial tracking)
+    this.auditLogsService.log({
+      action: AuditAction.DISCOUNT_APPLIED,
+      userId: adminId,
+      targetUserId: clientId,
+      details: {
+        discountId: discount.id,
+        discountType: dto.discountType,
+        discountAmount: dto.discountAmount,
+        discountPercent: dto.discountPercent,
+        seasonYear: dto.seasonYear,
+        referralId: dto.referralId,
+      },
+    });
 
     return {
       id: discount.id,

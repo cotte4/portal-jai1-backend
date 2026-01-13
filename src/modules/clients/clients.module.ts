@@ -8,12 +8,14 @@ import { EncryptionService, EmailService } from '../../common/services';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ProgressModule } from '../progress/progress.module';
 import { ReferralsModule } from '../referrals/referrals.module';
+import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 
 @Module({
   imports: [
     NotificationsModule,
     ProgressModule,
     ReferralsModule,
+    AuditLogsModule,
     MulterModule.register({
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     }),

@@ -38,6 +38,8 @@ model User {
   w2Estimates           W2Estimate[]
   referralsMade         Referral[]      @relation("ReferrerUser")
   referralReceived      Referral?       @relation("ReferredUser")
+  discountsReceived     DiscountApplication[] @relation("DiscountUser")
+  discountsApplied      DiscountApplication[] @relation("DiscountAppliedBy")
 
   @@index([role])
   @@index([isActive])
@@ -54,13 +56,6 @@ model ClientProfile {
   addressState      String?   @map("address_state")
   addressZip        String?   @map("address_zip")
   addressCountry    String?   @map("address_country") @default("USA")
-  // DEPRECATED: Banking/employment moved to TaxCase (year-specific)
-  // These fields kept for backward compatibility, will be removed in Phase 6
-  bankName          String?   @map("bank_name")
-  bankRoutingNumber String?   @map("bank_routing_number")
-  bankAccountNumber String?   @map("bank_account_number")
-  workState         String?   @map("work_state")
-  employerName      String?   @map("employer_name")
   turbotaxEmail     String?   @map("turbotax_email")
   turbotaxPassword  String?   @map("turbotax_password")
   profileComplete   Boolean   @default(false) @map("profile_complete")
@@ -117,6 +112,7 @@ model TaxCase {
   updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz
   documents          Document[]
   statusHistory      StatusHistory[]
+  discounts          DiscountApplication[]
   clientProfile      ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
 
   @@unique([clientProfileId, taxYear])
@@ -198,6 +194,7 @@ model StatusHistory {
   changedBy      User?    @relation("ChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
   taxCase        TaxCase  @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
 
+  @@index([taxCaseId])
   @@index([createdAt])
   @@map("status_history")
 }
@@ -327,10 +324,12 @@ model Referral {
 
   referrer     User @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
   referredUser User @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  discounts    DiscountApplication[]
 
   @@index([referrerId])
   @@index([status])
   @@index([referrerId, status])
+  @@index([referralCode])
   @@map("referrals")
 }
 
@@ -349,8 +348,16 @@ model DiscountApplication {
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
+  // Relations
+  user          User      @relation("DiscountUser", fields: [userId], references: [id], onDelete: Cascade)
+  taxCase       TaxCase?  @relation(fields: [taxCaseId], references: [id], onDelete: SetNull)
+  referral      Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  appliedByAdmin User?    @relation("DiscountAppliedBy", fields: [appliedByAdminId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([status])
+  @@index([taxCaseId])
+  @@index([referralId])
   @@map("discount_applications")
 }
 
@@ -395,37 +402,19 @@ model AuditLog {
   @@index([targetUserId])
   @@index([action])
   @@index([createdAt])
+  @@index([action, createdAt])
   @@map("audit_logs")
 }
 
 enum AuditAction {
-  // Authentication
-  LOGIN_SUCCESS
-  LOGIN_FAILED
-  LOGOUT
-  // Profile
-  PROFILE_VIEW
-  PROFILE_UPDATE
-  PROFILE_COMPLETE
-  // Documents
-  DOCUMENT_UPLOAD
-  DOCUMENT_DELETE
-  DOCUMENT_DOWNLOAD
-  // Tax Cases
-  TAX_CASE_CREATE
-  TAX_CASE_UPDATE
-  STATUS_CHANGE
-  // Financials
-  REFUND_UPDATE
-  DISCOUNT_APPLIED
-  // Admin actions
-  ADMIN_CLIENT_VIEW
-  ADMIN_STATUS_CHANGE
-  // Referrals
-  REFERRAL_CODE_GENERATED
-  REFERRAL_CREATED
-  REFERRAL_COMPLETED
-  // Security
+  // Security (keep forever)
   PASSWORD_CHANGE
   PASSWORD_RESET
+  // Documents (keep forever)
+  DOCUMENT_DELETE
+  // Financial (keep forever)
+  REFUND_UPDATE
+  DISCOUNT_APPLIED
+  // Auth (30-day retention)
+  LOGIN_FAILED
 }

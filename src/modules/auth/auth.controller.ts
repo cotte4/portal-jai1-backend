@@ -18,6 +18,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../../common/guards';
 import { CurrentUser } from '../../common/decorators';
 
@@ -44,10 +45,8 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  async logout(@CurrentUser() user: any, @Req() req: any) {
-    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress;
-    const userAgent = req.headers['user-agent'];
-    return this.authService.logout(user.id, ipAddress, userAgent);
+  async logout(@CurrentUser() user: any) {
+    return this.authService.logout(user.id);
   }
 
   @Post('refresh')
@@ -68,6 +67,20 @@ export class AuthController {
     return this.authService.resetPassword(
       resetPasswordDto.token,
       resetPasswordDto.new_password,
+    );
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(
+      user.id,
+      changePasswordDto.current_password,
+      changePasswordDto.new_password,
     );
   }
 

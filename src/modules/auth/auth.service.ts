@@ -185,15 +185,6 @@ export class AuthService {
       user.tokenVersion,
     );
 
-    // Log successful login
-    this.auditLogsService.log({
-      action: AuditAction.LOGIN_SUCCESS,
-      userId: user.id,
-      details: { rememberMe: loginDto.rememberMe || false },
-      ipAddress,
-      userAgent,
-    });
-
     // Get profile picture URL if exists
     const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
 
@@ -212,17 +203,9 @@ export class AuthService {
     };
   }
 
-  async logout(userId: string, ipAddress?: string, userAgent?: string) {
+  async logout(userId: string) {
     // Invalidate all existing tokens by incrementing tokenVersion
     await this.usersService.incrementTokenVersion(userId);
-
-    // Log logout
-    this.auditLogsService.log({
-      action: AuditAction.LOGOUT,
-      userId,
-      ipAddress,
-      userAgent,
-    });
 
     this.logger.log(`User ${userId} logged out - all tokens invalidated`);
     return { message: 'Logged out successfully' };
@@ -283,8 +266,11 @@ export class AuthService {
     const resetToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
 
-    // Save token to database
-    await this.usersService.setResetToken(user.id, resetToken, expiresAt);
+    // Hash token before storing (security: if DB is compromised, tokens can't be used)
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    // Save hashed token to database (send unhashed token to user via email)
+    await this.usersService.setResetToken(user.id, hashedToken, expiresAt);
 
     // Send password reset email
     this.emailService
@@ -302,8 +288,11 @@ export class AuthService {
   }
 
   async resetPassword(token: string, newPassword: string) {
-    // Find user by reset token
-    const user = await this.usersService.findByResetToken(token);
+    // Hash the incoming token to match against stored hash
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user by hashed reset token
+    const user = await this.usersService.findByResetToken(hashedToken);
     if (!user) {
       throw new BadRequestException('Invalid or expired reset token');
     }
@@ -319,6 +308,9 @@ export class AuthService {
     // Update password and clear token
     await this.usersService.updatePassword(user.id, hashedPassword);
 
+    // Invalidate all existing tokens (forces re-login on all devices)
+    await this.usersService.incrementTokenVersion(user.id);
+
     // Log password reset
     this.auditLogsService.log({
       action: AuditAction.PASSWORD_RESET,
@@ -329,6 +321,52 @@ export class AuthService {
     this.logger.log(`Password reset successful for user: ${user.email}`);
 
     return { message: 'Password has been reset successfully' };
+  }
+
+  /**
+   * Change password for authenticated user
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    // Get user with password hash
+    const user = await this.usersService.findByEmail(
+      (await this.usersService.findById(userId))?.email || '',
+    );
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    // Validate new password is different
+    const isSamePassword = await bcrypt.compare(newPassword, user.passwordHash);
+    if (isSamePassword) {
+      throw new BadRequestException('New password must be different from current password');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await this.usersService.updatePassword(user.id, hashedPassword);
+
+    // Invalidate all existing tokens (forces re-login on all devices)
+    await this.usersService.incrementTokenVersion(user.id);
+
+    // Log password change
+    this.auditLogsService.log({
+      action: AuditAction.PASSWORD_RESET,
+      userId: user.id,
+      details: { method: 'user_change' },
+    });
+
+    this.logger.log(`Password changed successfully for user: ${user.email}`);
+
+    return { message: 'Password has been changed successfully' };
   }
 
   /**

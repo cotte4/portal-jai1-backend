@@ -5,10 +5,12 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { AuditAction } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
 import { StoragePathService } from '../../common/services';
 import { ProgressAutomationService } from '../progress/progress-automation.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import {
   logStorageSuccess,
@@ -26,6 +28,7 @@ export class DocumentsService {
     private supabase: SupabaseService,
     private storagePath: StoragePathService,
     private progressAutomation: ProgressAutomationService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async upload(
@@ -307,6 +310,19 @@ export class DocumentsService {
     // Delete from database
     await this.prisma.document.delete({
       where: { id: documentId },
+    });
+
+    // Audit log - document deletion (keep forever for legal protection)
+    this.auditLogsService.log({
+      action: AuditAction.DOCUMENT_DELETE,
+      userId,
+      targetUserId: document.taxCase.clientProfile.userId,
+      details: {
+        documentId,
+        fileName: document.fileName,
+        documentType: document.type,
+        deletedByRole: userRole,
+      },
     });
 
     return { message: 'Document deleted successfully' };

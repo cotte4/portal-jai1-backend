@@ -2,9 +2,10 @@
  * Migration Script: Encrypt Existing Sensitive Data
  *
  * This script encrypts plain text data that was stored before encryption was implemented:
- * - bankRoutingNumber
- * - bankAccountNumber
- * - turbotaxEmail
+ * - turbotaxEmail (in ClientProfile)
+ *
+ * Note: bankRoutingNumber and bankAccountNumber were moved to TaxCase
+ * and are now encrypted there directly.
  *
  * Run with: npx ts-node scripts/migrate-encrypt-sensitive-data.ts
  *
@@ -72,12 +73,10 @@ async function migrateEncryption() {
   console.log('='.repeat(60));
   console.log('');
 
-  // Get all client profiles
+  // Get all client profiles with turbotaxEmail
   const profiles = await prisma.clientProfile.findMany({
     select: {
       id: true,
-      bankRoutingNumber: true,
-      bankAccountNumber: true,
       turbotaxEmail: true,
       user: {
         select: {
@@ -95,24 +94,10 @@ async function migrateEncryption() {
 
   for (const profile of profiles) {
     const updates: {
-      bankRoutingNumber?: string;
-      bankAccountNumber?: string;
       turbotaxEmail?: string;
     } = {};
 
     let needsUpdate = false;
-
-    // Check bankRoutingNumber
-    if (profile.bankRoutingNumber && !isEncrypted(profile.bankRoutingNumber)) {
-      updates.bankRoutingNumber = encrypt(profile.bankRoutingNumber);
-      needsUpdate = true;
-    }
-
-    // Check bankAccountNumber
-    if (profile.bankAccountNumber && !isEncrypted(profile.bankAccountNumber)) {
-      updates.bankAccountNumber = encrypt(profile.bankAccountNumber);
-      needsUpdate = true;
-    }
 
     // Check turbotaxEmail
     if (profile.turbotaxEmail && !isEncrypted(profile.turbotaxEmail)) {
