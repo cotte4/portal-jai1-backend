@@ -123,28 +123,16 @@ export class ProgressAutomationService {
   }
 
   /**
-   * Handle all docs complete - consider advancing admin step
+   * Handle all docs complete - notify admins that client is ready for review
+   * NOTE: adminStep auto-advance removed - admin should manually update internalStatus
    */
   private async handleAllDocsComplete(event: ProgressEvent): Promise<void> {
     this.logger.log('Handling ALL_DOCS_COMPLETE event');
 
-    const taxCase = await this.prisma.taxCase.findUnique({
-      where: { id: event.taxCaseId },
-    });
-
-    // If at step 1, consider moving to step 2
-    if (taxCase && (!taxCase.adminStep || taxCase.adminStep === 1)) {
-      await this.prisma.taxCase.update({
-        where: { id: event.taxCaseId },
-        data: { adminStep: 2 },
-      });
-      this.logger.log(`Advanced adminStep to 2 for TaxCase ${event.taxCaseId}`);
-    }
-
-    // Notify admins
+    // Notify admins that client is ready for review
     await this.notifyAdmins(
       'Documentación Completa',
-      `El cliente ${event.metadata?.clientName || 'Unknown'} ha completado toda la documentación requerida.`,
+      `El cliente ${event.metadata?.clientName || 'Unknown'} ha completado toda la documentación requerida. Listo para revisión.`,
     );
   }
 

@@ -8,6 +8,11 @@ import { ProgressAutomationService } from '../progress/progress-automation.servi
 import { ReferralsService } from '../referrals/referrals.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import {
+  UpdateStatusDto,
+  SetProblemDto,
+  SendNotificationDto,
+} from './dto/admin-update.dto';
 import * as ExcelJS from 'exceljs';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -807,11 +812,25 @@ export class ClientsService {
     });
   }
 
-  async updateStatus(id: string, statusData: any, changedById: string) {
+  async updateStatus(id: string, statusData: UpdateStatusDto, changedById: string) {
+    // Auto-sync mapping: InternalStatus → ClientStatus
+    const internalToClientStatusMap: Record<string, string> = {
+      revision_de_registro: 'cuenta_en_revision',
+      esperando_datos: 'esperando_datos',
+      falta_documentacion: 'cuenta_en_revision',
+      en_proceso: 'taxes_en_proceso',
+      en_verificacion: 'en_verificacion',
+      resolviendo_verificacion: 'en_verificacion',
+      inconvenientes: 'cuenta_en_revision',
+      cheque_en_camino: 'taxes_en_camino',
+      esperando_pago_comision: 'pago_realizado',
+      proceso_finalizado: 'taxes_finalizados',
+    };
+
     const client = await this.prisma.clientProfile.findUnique({
       where: { id },
       include: {
-        user: true,
+        user: { select: { id: true, email: true, firstName: true, lastName: true, referralCode: true } },
         taxCases: { orderBy: { taxYear: 'desc' }, take: 1 },
       },
     });
@@ -821,15 +840,25 @@ export class ClientsService {
     }
 
     const taxCase = client.taxCases[0];
+    const previousInternalStatus = taxCase.internalStatus;
     const previousClientStatus = taxCase.clientStatus;
     const previousFederalStatus = taxCase.federalStatus;
     const previousStateStatus = taxCase.stateStatus;
 
-    // Support both camelCase (from frontend) and snake_case
-    const internalStatus = statusData.internalStatus || statusData.internal_status;
-    const clientStatus = statusData.clientStatus || statusData.client_status;
-    const federalStatus = statusData.federalStatus || statusData.federal_status;
-    const stateStatus = statusData.stateStatus || statusData.state_status;
+    // Get status values from DTO
+    const internalStatus = statusData.internalStatus;
+    let clientStatus = statusData.clientStatus;
+    const federalStatus = statusData.federalStatus;
+    const stateStatus = statusData.stateStatus;
+
+    // Auto-sync: If internalStatus is provided and clientStatus is not, derive it from the mapping
+    if (internalStatus && !clientStatus) {
+      const mappedClientStatus = internalToClientStatusMap[internalStatus];
+      if (mappedClientStatus) {
+        clientStatus = mappedClientStatus as any; // Cast to ClientStatus
+        this.logger.log(`Auto-synced clientStatus to '${clientStatus}' from internalStatus '${internalStatus}'`);
+      }
+    }
 
     // Build update data dynamically
     const updateData: any = {
@@ -939,6 +968,21 @@ export class ClientsService {
       } catch (err) {
         this.logger.error('Failed to mark referral as successful', err);
         // Don't fail status update if referral marking fails
+      }
+    }
+
+    // Generate referral code when internalStatus changes to EN_PROCESO (replaces old adminStep >= 3 trigger)
+    const isNewEnProceso = internalStatus === 'en_proceso' && previousInternalStatus !== 'en_proceso';
+    if (isNewEnProceso && !client.user.referralCode) {
+      try {
+        const code = await this.referralsService.generateCode(client.user.id);
+        this.logger.log(`Generated referral code ${code} for user ${client.user.id} (status changed to EN_PROCESO)`);
+
+        // Also update referral status if this user was referred
+        await this.referralsService.updateReferralOnTaxFormSubmit(client.user.id);
+      } catch (err) {
+        this.logger.error('Failed to generate referral code', err);
+        // Don't fail the status update if referral code generation fails
       }
     }
 
@@ -1107,14 +1151,7 @@ export class ClientsService {
     return { message: 'Admin step updated successfully', step };
   }
 
-  async setProblem(
-    id: string,
-    problemData: {
-      hasProblem: boolean;
-      problemType?: string;
-      problemDescription?: string;
-    },
-  ) {
+  async setProblem(id: string, problemData: SetProblemDto) {
     const client = await this.prisma.clientProfile.findUnique({
       where: { id },
       include: {
@@ -1156,14 +1193,7 @@ export class ClientsService {
     };
   }
 
-  async sendClientNotification(
-    id: string,
-    notifyData: {
-      title: string;
-      message: string;
-      sendEmail?: boolean;
-    },
-  ) {
+  async sendClientNotification(id: string, notifyData: SendNotificationDto) {
     const client = await this.prisma.clientProfile.findUnique({
       where: { id },
       include: { user: true },

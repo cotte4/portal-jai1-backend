@@ -22,6 +22,11 @@ import { ClientsService } from './clients.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import {
+  UpdateStatusDto,
+  SetProblemDto,
+  SendNotificationDto,
+} from './dto/admin-update.dto';
 
 @Controller()
 export class ClientsController {
@@ -150,7 +155,7 @@ export class ClientsController {
   @Roles('admin' as any)
   async updateStatus(
     @Param('id') id: string,
-    @Body() statusData: any,
+    @Body() statusData: UpdateStatusDto,
     @CurrentUser() user: any,
   ) {
     return this.clientsService.updateStatus(id, statusData, user.id);
@@ -170,28 +175,15 @@ export class ClientsController {
     return this.clientsService.markPaid(id);
   }
 
-  @Patch('admin/clients/:id/step')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
-  async updateAdminStep(
-    @Param('id') id: string,
-    @Body() stepData: { step: number },
-    @CurrentUser() user: any,
-  ) {
-    return this.clientsService.updateAdminStep(id, stepData.step, user.id);
-  }
+  // DEPRECATED: adminStep endpoint removed - use internalStatus instead
+  // Referral code generation now triggers when internalStatus changes to EN_PROCESO
 
   @Patch('admin/clients/:id/problem')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin' as any)
   async setProblem(
     @Param('id') id: string,
-    @Body()
-    problemData: {
-      hasProblem: boolean;
-      problemType?: string;
-      problemDescription?: string;
-    },
+    @Body() problemData: SetProblemDto,
   ) {
     return this.clientsService.setProblem(id, problemData);
   }
@@ -201,12 +193,7 @@ export class ClientsController {
   @Roles('admin' as any)
   async sendClientNotification(
     @Param('id') id: string,
-    @Body()
-    notifyData: {
-      title: string;
-      message: string;
-      sendEmail?: boolean;
-    },
+    @Body() notifyData: SendNotificationDto,
   ) {
     return this.clientsService.sendClientNotification(id, notifyData);
   }
