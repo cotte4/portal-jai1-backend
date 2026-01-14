@@ -1155,6 +1155,7 @@ export class ClientsService {
     const client = await this.prisma.clientProfile.findUnique({
       where: { id },
       include: {
+        user: { select: { id: true, firstName: true } },
         taxCases: { orderBy: { taxYear: 'desc' }, take: 1 },
       },
     });
@@ -1164,6 +1165,7 @@ export class ClientsService {
     }
 
     const taxCase = client.taxCases[0];
+    const wasAlreadyProblem = taxCase.hasProblem;
 
     const updateData: any = {
       hasProblem: problemData.hasProblem,
@@ -1184,6 +1186,28 @@ export class ClientsService {
       where: { id: taxCase.id },
       data: updateData,
     });
+
+    // Auto-notify client when problem is marked (not when resolved, and not if already had problem)
+    if (problemData.hasProblem && !wasAlreadyProblem) {
+      await this.notificationsService.create(
+        client.user.id,
+        'problem_alert',
+        'Necesitamos tu ayuda',
+        'Hay un inconveniente con tu trámite. Por favor contacta a soporte para resolverlo.',
+      );
+      this.logger.log(`Problem notification sent to user ${client.user.id}`);
+    }
+
+    // Notify when problem is resolved
+    if (!problemData.hasProblem && wasAlreadyProblem) {
+      await this.notificationsService.create(
+        client.user.id,
+        'status_change',
+        'Inconveniente resuelto',
+        '¡El inconveniente con tu trámite ha sido resuelto! Tu proceso continúa normalmente.',
+      );
+      this.logger.log(`Problem resolved notification sent to user ${client.user.id}`);
+    }
 
     return {
       message: problemData.hasProblem
