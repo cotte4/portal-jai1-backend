@@ -595,7 +595,23 @@ export class ClientsService {
         taxCases: {
           orderBy: { taxYear: 'desc' },
           take: 1,
-          include: {
+          select: {
+            id: true,
+            taxesFiled: true,
+            taxesFiledAt: true,
+            preFilingStatus: true,
+            federalStatus: true,
+            stateStatus: true,
+            federalLastComment: true,
+            stateLastComment: true,
+            federalActualRefund: true,
+            stateActualRefund: true,
+            federalLastReviewedAt: true,
+            stateLastReviewedAt: true,
+            paymentReceived: true,
+            bankName: true,
+            bankRoutingNumber: true,
+            bankAccountNumber: true,
             documents: {
               select: {
                 type: true,
@@ -691,6 +707,16 @@ export class ClientsService {
         const isReadyToPresent =
           client.profileComplete && !client.isDraft && hasW2;
 
+        // Compute last review date (most recent of federal/state)
+        const federalReview = taxCase?.federalLastReviewedAt;
+        const stateReview = taxCase?.stateLastReviewedAt;
+        let lastReviewDate: Date | null = null;
+        if (federalReview && stateReview) {
+          lastReviewDate = federalReview > stateReview ? federalReview : stateReview;
+        } else {
+          lastReviewDate = federalReview || stateReview || null;
+        }
+
         return {
           id: client.id,
           user: {
@@ -699,16 +725,29 @@ export class ClientsService {
             firstName: client.user.firstName,
             lastName: client.user.lastName,
           },
+          // SSN (masked for security)
+          ssn: client.ssn ? this.encryption.maskSSN(client.ssn) : null,
           // Phase-based status fields
-          taxesFiled: (taxCase as any)?.taxesFiled || false,
-          preFilingStatus: (taxCase as any)?.preFilingStatus || null,
+          taxesFiled: taxCase?.taxesFiled || false,
+          taxesFiledAt: taxCase?.taxesFiledAt || null,
+          preFilingStatus: taxCase?.preFilingStatus || null,
           federalStatus: taxCase?.federalStatus || null,
           stateStatus: taxCase?.stateStatus || null,
           // Status tracking
-          federalLastComment: (taxCase as any)?.federalLastComment || null,
-          stateLastComment: (taxCase as any)?.stateLastComment || null,
+          federalLastComment: taxCase?.federalLastComment || null,
+          stateLastComment: taxCase?.stateLastComment || null,
           federalActualRefund: taxCase?.federalActualRefund ? Number(taxCase.federalActualRefund) : null,
           stateActualRefund: taxCase?.stateActualRefund ? Number(taxCase.stateActualRefund) : null,
+          lastReviewDate,
+          // Account credentials (decrypted for admin use)
+          credentials: {
+            turbotaxEmail: client.turbotaxEmail ? this.encryption.decrypt(client.turbotaxEmail) : null,
+            turbotaxPassword: client.turbotaxPassword ? this.encryption.decrypt(client.turbotaxPassword) : null,
+            irsUsername: client.irsUsername ? this.encryption.decrypt(client.irsUsername) : null,
+            irsPassword: client.irsPassword ? this.encryption.decrypt(client.irsPassword) : null,
+            stateUsername: client.stateUsername ? this.encryption.decrypt(client.stateUsername) : null,
+            statePassword: client.statePassword ? this.encryption.decrypt(client.statePassword) : null,
+          },
           paymentReceived: taxCase?.paymentReceived || false,
           profileComplete: client.profileComplete,
           isDraft: client.isDraft,
