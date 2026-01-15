@@ -8,6 +8,7 @@ import {
 
 export class RegisterDto {
   @IsEmail()
+  @MaxLength(255, { message: 'Email must be less than 255 characters' })
   email: string;
 
   @IsString()
@@ -27,6 +28,7 @@ export class RegisterDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(30, { message: 'Phone must be less than 30 characters' })
   phone?: string;
 
   @IsOptional()

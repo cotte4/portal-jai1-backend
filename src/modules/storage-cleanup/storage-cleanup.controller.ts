@@ -8,6 +8,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { StorageCleanupService } from './storage-cleanup.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles } from '../../common/decorators';
@@ -15,7 +16,7 @@ import { ScanOptionsDto, ExecuteCleanupDto } from './dto/cleanup-options.dto';
 
 @Controller('admin/storage-cleanup')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin')
+@Roles(UserRole.admin)
 export class StorageCleanupController {
   private readonly logger = new Logger(StorageCleanupController.name);
 

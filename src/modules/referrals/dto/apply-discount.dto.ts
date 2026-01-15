@@ -6,6 +6,7 @@ import {
   IsEnum,
   Min,
   Max,
+  MaxLength,
 } from 'class-validator';
 
 export class ApplyDiscountDto {
@@ -24,6 +25,7 @@ export class ApplyDiscountDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'Referral ID must be less than 100 characters' })
   referralId?: string;
 
   @IsNumber()
@@ -35,5 +37,6 @@ export class ApplyDiscountDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(500, { message: 'Notes must be less than 500 characters' })
   notes?: string;
 }

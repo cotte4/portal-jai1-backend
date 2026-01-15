@@ -26,6 +26,7 @@ import { v4 as uuidv4 } from 'uuid';
 export class ClientsService {
   private readonly logger = new Logger(ClientsService.name);
   private readonly PROFILE_PICTURES_BUCKET = 'profile-pictures';
+  private readonly BACKGROUND_TASK_TIMEOUT_MS = 30000; // 30 seconds
 
   constructor(
     private prisma: PrismaService,
@@ -37,6 +38,44 @@ export class ClientsService {
     private referralsService: ReferralsService,
     private auditLogsService: AuditLogsService,
   ) {}
+
+  /**
+   * Run a task in the background with proper error handling and timeout.
+   * This prevents fire-and-forget async operations from causing unhandled promise rejections.
+   *
+   * @param taskName - Name of the task for logging purposes
+   * @param task - Async function to execute
+   * @param timeoutMs - Timeout in milliseconds (defaults to 30 seconds)
+   */
+  private runBackgroundTask(
+    taskName: string,
+    task: () => Promise<void>,
+    timeoutMs: number = this.BACKGROUND_TASK_TIMEOUT_MS,
+  ): void {
+    setImmediate(() => {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(
+          () => reject(new Error(`${taskName} timeout after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      });
+
+      Promise.race([task(), timeoutPromise])
+        .then(() => {
+          this.logger.debug(
+            `Background task '${taskName}' completed successfully`,
+          );
+        })
+        .catch((error: Error) => {
+          this.logger.error(`Background task '${taskName}' failed:`, {
+            message: error.message || 'Unknown error',
+            name: error.name || 'Error',
+            // Limited stack trace to avoid log bloat
+            stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+          });
+        });
+    });
+  }
 
   async getProfile(userId: string) {
     // Optimized: Use select instead of include for better query performance
@@ -269,11 +308,11 @@ export class ClientsService {
     );
 
     // === PROGRESS AUTOMATION: Emit event when profile is completed (not draft) ===
-    // Run in background (fire-and-forget) to avoid blocking the response
+    // Run in background with timeout and proper error handling to avoid blocking the response
     if (!data.is_draft) {
-      // Use setImmediate to run after current event loop, don't await
-      setImmediate(async () => {
-        try {
+      this.runBackgroundTask(
+        'progress-automation-profile-completed',
+        async () => {
           // Get client name for notification
           const user = await this.prisma.user.findUnique({
             where: { id: userId },
@@ -291,11 +330,8 @@ export class ClientsService {
             metadata: { clientName },
           });
           this.logger.log(`Emitted PROFILE_COMPLETED event for user ${userId}`);
-        } catch (error) {
-          // Don't fail profile save if automation fails
-          this.logger.error('Progress automation error (non-fatal):', error);
-        }
-      });
+        },
+      );
     }
 
     return {
@@ -327,7 +363,7 @@ export class ClientsService {
       };
     },
   ) {
-    this.logger.log(`Updating user info for ${userId}`, data);
+    this.logger.log(`Updating user info for ${userId}: fields=[${Object.keys(data).join(', ')}]`);
 
     // Use transaction to ensure atomicity
     const result = await this.prisma.$transaction(async (tx) => {
@@ -1043,8 +1079,28 @@ export class ClientsService {
     }
 
     const taxCase = client.taxCases[0];
+
+    // Capture previous status BEFORE the update (for audit trail)
     const previousFederalStatus = taxCase.federalStatus;
     const previousStateStatus = taxCase.stateStatus;
+    const previousPreFilingStatus = taxCase.preFilingStatus;
+    const previousTaxesFiled = (taxCase as any).taxesFiled;
+
+    // Build previous status string for StatusHistory
+    const previousStatusParts: string[] = [];
+    if (previousTaxesFiled !== undefined) {
+      previousStatusParts.push(`taxesFiled: ${previousTaxesFiled}`);
+    }
+    if (previousPreFilingStatus) {
+      previousStatusParts.push(`preFiling: ${previousPreFilingStatus}`);
+    }
+    if (previousFederalStatus) {
+      previousStatusParts.push(`federal: ${previousFederalStatus}`);
+    }
+    if (previousStateStatus) {
+      previousStatusParts.push(`state: ${previousStateStatus}`);
+    }
+    const previousStatusString = previousStatusParts.join(', ') || null;
 
     // Get status values from DTO
     const federalStatus = statusData.federalStatus;
@@ -1157,7 +1213,7 @@ export class ClientsService {
       this.prisma.statusHistory.create({
         data: {
           taxCaseId: taxCase.id,
-          previousStatus: null,
+          previousStatus: previousStatusString,
           newStatus: statusChanges.join(', ') || 'status update',
           changedById,
           comment: statusData.comment,
@@ -1421,7 +1477,7 @@ export class ClientsService {
 
   async updateAdminStep(id: string, step: number, changedById: string) {
     if (step < 1 || step > 5) {
-      throw new NotFoundException('Step must be between 1 and 5');
+      throw new BadRequestException('Step must be between 1 and 5');
     }
 
     const client = await this.prisma.clientProfile.findUnique({

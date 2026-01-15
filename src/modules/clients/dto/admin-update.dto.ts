@@ -10,6 +10,9 @@ import {
   ValidationArguments,
   registerDecorator,
   ValidationOptions,
+  Min,
+  ValidateIf,
+  MaxLength,
 } from 'class-validator';
 import {
   TaxStatus,
@@ -77,15 +80,18 @@ export class UpdateStatusDto {
   // Comment is REQUIRED for status updates in new system (validated in service)
   @IsOptional()
   @IsString()
+  @MaxLength(2000, { message: 'Comment must be less than 2000 characters' })
   comment?: string;
 
   // NEW: Separate comments for federal/state tracks
   @IsOptional()
   @IsString()
+  @MaxLength(1000, { message: 'Federal comment must be less than 1000 characters' })
   federalComment?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(1000, { message: 'State comment must be less than 1000 characters' })
   stateComment?: string;
 
   // Federal tracking fields
@@ -95,6 +101,7 @@ export class UpdateStatusDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0, { message: 'Federal refund cannot be negative' })
   federalActualRefund?: number;
 
   @IsOptional()
@@ -109,6 +116,7 @@ export class UpdateStatusDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0, { message: 'State refund cannot be negative' })
   stateActualRefund?: number;
 
   @IsOptional()
@@ -123,20 +131,23 @@ export class SetProblemDto {
   @IsBoolean()
   hasProblem: boolean;
 
-  @IsOptional()
-  @IsEnum(ProblemType, { message: 'Invalid problem type' })
+  @ValidateIf((o) => o.hasProblem === true)
+  @IsEnum(ProblemType, { message: 'Problem type is required when marking a problem' })
   problemType?: ProblemType;
 
   @IsOptional()
   @IsString()
+  @MaxLength(2000, { message: 'Problem description must be less than 2000 characters' })
   problemDescription?: string;
 }
 
 export class SendNotificationDto {
   @IsString()
+  @MaxLength(200, { message: 'Title must be less than 200 characters' })
   title: string;
 
   @IsString()
+  @MaxLength(2000, { message: 'Message must be less than 2000 characters' })
   message: string;
 
   @IsOptional()
@@ -150,70 +161,86 @@ export class SendNotificationDto {
 export class AdminUpdateProfileDto {
   @IsOptional()
   @IsString()
+  @MaxLength(20, { message: 'SSN must be less than 20 characters' })
   ssn?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(500, { message: 'Street address must be less than 500 characters' })
   addressStreet?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'City must be less than 100 characters' })
   addressCity?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(50, { message: 'State must be less than 50 characters' })
   addressState?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(20, { message: 'ZIP code must be less than 20 characters' })
   addressZip?: string;
 
   // TurboTax credentials
   @IsOptional()
   @IsString()
+  @MaxLength(255, { message: 'TurboTax email must be less than 255 characters' })
   turbotaxEmail?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200, { message: 'TurboTax password must be less than 200 characters' })
   turbotaxPassword?: string;
 
   // IRS account credentials (encrypted)
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'IRS username must be less than 100 characters' })
   irsUsername?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200, { message: 'IRS password must be less than 200 characters' })
   irsPassword?: string;
 
   // State account credentials (encrypted)
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'State username must be less than 100 characters' })
   stateUsername?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200, { message: 'State password must be less than 200 characters' })
   statePassword?: string;
 
   // Bank info (stored in TaxCase)
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'Bank name must be less than 100 characters' })
   bankName?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(20, { message: 'Routing number must be less than 20 characters' })
   bankRoutingNumber?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(30, { message: 'Account number must be less than 30 characters' })
   bankAccountNumber?: string;
 
   // Employment info (stored in TaxCase)
   @IsOptional()
   @IsString()
+  @MaxLength(50, { message: 'Work state must be less than 50 characters' })
   workState?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(200, { message: 'Employer name must be less than 200 characters' })
   employerName?: string;
 }

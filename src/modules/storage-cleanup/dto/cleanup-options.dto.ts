@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber, IsOptional, IsString, Min, Max } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, Min, Max, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class ScanOptionsDto {
@@ -11,11 +11,13 @@ export class ScanOptionsDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'Bucket name must be less than 100 characters' })
   bucket?: string;
 }
 
 export class ExecuteCleanupDto {
   @IsString()
+  @MaxLength(50, { message: 'Confirmation must be less than 50 characters' })
   confirmDeletion: string; // Must be 'DELETE_ORPHANS' to proceed
 
   @IsOptional()
@@ -32,6 +34,7 @@ export class ExecuteCleanupDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'Bucket name must be less than 100 characters' })
   bucket?: string;
 }
 

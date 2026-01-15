@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import { UserRole } from '@prisma/client';
 import { ClientsService } from './clients.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
@@ -106,52 +107,61 @@ export class ClientsController {
   // Admin endpoints
   @Get('admin/stats/season')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async getSeasonStats() {
     return this.clientsService.getSeasonStats();
   }
 
   @Get('admin/accounts')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async getAllClientAccounts() {
     return this.clientsService.getAllClientAccounts();
   }
 
   @Get('admin/payments')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async getPaymentsSummary() {
     return this.clientsService.getPaymentsSummary();
   }
 
   @Get('admin/delays')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async getDelaysData() {
     return this.clientsService.getDelaysData();
   }
 
   @Get('admin/clients')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async findAll(
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
+    // Validate limit to prevent DoS attacks
+    const MAX_LIMIT = 1000;
+    const DEFAULT_LIMIT = 20;
+    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
+    const validatedLimit =
+      isNaN(parsedLimit) || parsedLimit < 1
+        ? DEFAULT_LIMIT
+        : Math.min(parsedLimit, MAX_LIMIT);
+
     return this.clientsService.findAll({
       status,
       search,
       cursor,
-      limit: limit ? parseInt(limit, 10) : 20,
+      limit: validatedLimit,
     });
   }
 
   @Get('admin/clients/export')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async exportToExcel(@Res({ passthrough: true }) res: Response) {
     // Use streaming export to handle large datasets without timeout
     const stream = await this.clientsService.exportToExcelStream();
@@ -174,21 +184,21 @@ export class ClientsController {
 
   @Get('admin/clients/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async findOne(@Param('id') id: string) {
     return this.clientsService.findOne(id);
   }
 
   @Patch('admin/clients/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async update(@Param('id') id: string, @Body() updateData: any) {
     return this.clientsService.update(id, updateData);
   }
 
   @Patch('admin/clients/:id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async updateStatus(
     @Param('id') id: string,
     @Body() statusData: UpdateStatusDto,
@@ -199,14 +209,14 @@ export class ClientsController {
 
   @Delete('admin/clients/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async remove(@Param('id') id: string) {
     return this.clientsService.remove(id);
   }
 
   @Post('admin/clients/:id/mark-paid')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async markPaid(@Param('id') id: string) {
     return this.clientsService.markPaid(id);
   }
@@ -216,7 +226,7 @@ export class ClientsController {
 
   @Patch('admin/clients/:id/problem')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async setProblem(
     @Param('id') id: string,
     @Body() problemData: SetProblemDto,
@@ -226,7 +236,7 @@ export class ClientsController {
 
   @Post('admin/clients/:id/notify')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async sendClientNotification(
     @Param('id') id: string,
     @Body() notifyData: SendNotificationDto,

@@ -1,14 +1,16 @@
-import { IsOptional, IsString, IsDateString, IsEnum, IsInt, Min, Max } from 'class-validator';
+import { IsOptional, IsString, IsDateString, IsEnum, IsInt, Min, Max, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AuditAction } from '@prisma/client';
 
 export class AuditLogFiltersDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'User ID must be less than 100 characters' })
   userId?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'Target user ID must be less than 100 characters' })
   targetUserId?: string;
 
   @IsOptional()
@@ -25,6 +27,7 @@ export class AuditLogFiltersDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(200, { message: 'Search query must be less than 200 characters' })
   search?: string;
 
   @IsOptional()
@@ -44,10 +47,12 @@ export class AuditLogFiltersDto {
 export class ExportFiltersDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'User ID must be less than 100 characters' })
   userId?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'Target user ID must be less than 100 characters' })
   targetUserId?: string;
 
   @IsOptional()

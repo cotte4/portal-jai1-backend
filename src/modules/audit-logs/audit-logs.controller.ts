@@ -7,6 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { UserRole } from '@prisma/client';
 import { AuditLogsService } from './audit-logs.service';
 import { AuditLogFiltersDto, ExportFiltersDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -15,7 +16,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('admin/audit-logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin')
+@Roles(UserRole.admin)
 export class AuditLogsController {
   constructor(private readonly auditLogsService: AuditLogsService) {}
 
@@ -76,10 +77,28 @@ export class AuditLogsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    // Validate page and limit to prevent DoS attacks
+    const MAX_LIMIT = 100;
+    const DEFAULT_LIMIT = 50;
+    const MAX_PAGE = 10000;
+    const DEFAULT_PAGE = 1;
+
+    const parsedPage = page ? parseInt(page, 10) : DEFAULT_PAGE;
+    const validatedPage =
+      isNaN(parsedPage) || parsedPage < 1
+        ? DEFAULT_PAGE
+        : Math.min(parsedPage, MAX_PAGE);
+
+    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
+    const validatedLimit =
+      isNaN(parsedLimit) || parsedLimit < 1
+        ? DEFAULT_LIMIT
+        : Math.min(parsedLimit, MAX_LIMIT);
+
     return this.auditLogsService.findByUser(
       userId,
-      page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 50,
+      validatedPage,
+      validatedLimit,
     );
   }
 }

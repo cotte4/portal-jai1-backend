@@ -13,6 +13,7 @@ import {
   ParseUUIDPipe,
   BadRequestException,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { TicketsService } from './tickets.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
@@ -82,7 +83,7 @@ export class TicketsController {
   @Patch(':id/status')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
-  @Roles('admin' as const)
+  @Roles(UserRole.admin)
   async updateStatus(
     @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: string,
     @Body() updateStatusDto: UpdateStatusDto,
@@ -102,7 +103,7 @@ export class TicketsController {
   @Delete(':id/messages/:messageId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
-  @Roles('admin' as const)
+  @Roles(UserRole.admin)
   async deleteMessage(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: string,

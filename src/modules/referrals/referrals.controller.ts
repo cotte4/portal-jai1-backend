@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { ReferralsService } from './referrals.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
@@ -82,8 +83,15 @@ export class ReferralsController {
   @Get('leaderboard')
   @UseGuards(JwtAuthGuard)
   async getLeaderboard(@Query('limit') limit?: string) {
-    const limitNum = limit ? parseInt(limit, 10) : 10;
-    return this.referralsService.getLeaderboard(limitNum);
+    // Validate limit to prevent DoS attacks
+    const MAX_LIMIT = 100;
+    const DEFAULT_LIMIT = 10;
+    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
+    const validatedLimit =
+      isNaN(parsedLimit) || parsedLimit < 1
+        ? DEFAULT_LIMIT
+        : Math.min(parsedLimit, MAX_LIMIT);
+    return this.referralsService.getLeaderboard(validatedLimit);
   }
 
   /**
@@ -91,18 +99,41 @@ export class ReferralsController {
    */
   @Get('admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async getAllReferrals(
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
+    // Validate limit and offset to prevent DoS attacks
+    const MAX_LIMIT = 1000;
+    const DEFAULT_LIMIT = 50;
+    const MAX_OFFSET = 100000;
+
+    let validatedLimit: number | undefined;
+    if (limit) {
+      const parsedLimit = parseInt(limit, 10);
+      validatedLimit =
+        isNaN(parsedLimit) || parsedLimit < 1
+          ? DEFAULT_LIMIT
+          : Math.min(parsedLimit, MAX_LIMIT);
+    }
+
+    let validatedOffset: number | undefined;
+    if (offset) {
+      const parsedOffset = parseInt(offset, 10);
+      validatedOffset =
+        isNaN(parsedOffset) || parsedOffset < 0
+          ? 0
+          : Math.min(parsedOffset, MAX_OFFSET);
+    }
+
     return this.referralsService.getAllReferrals({
       status,
       search,
-      limit: limit ? parseInt(limit, 10) : undefined,
-      offset: offset ? parseInt(offset, 10) : undefined,
+      limit: validatedLimit,
+      offset: validatedOffset,
     });
   }
 
@@ -111,7 +142,7 @@ export class ReferralsController {
    */
   @Get('admin/summary')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async getReferralSummary() {
     return this.referralsService.getReferralSummary();
   }
@@ -121,7 +152,7 @@ export class ReferralsController {
    */
   @Get('admin/stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async getStats() {
     return this.referralsService.getStats();
   }
@@ -131,7 +162,7 @@ export class ReferralsController {
    */
   @Patch('admin/:id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateReferralStatusDto,
@@ -144,7 +175,7 @@ export class ReferralsController {
    */
   @Post('admin/clients/:id/apply-discount')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin' as any)
+  @Roles(UserRole.admin)
   async applyDiscount(
     @Param('id') clientId: string,
     @Body() dto: ApplyDiscountDto,
