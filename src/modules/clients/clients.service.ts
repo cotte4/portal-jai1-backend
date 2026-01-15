@@ -27,6 +27,8 @@ export class ClientsService {
   private readonly logger = new Logger(ClientsService.name);
   private readonly PROFILE_PICTURES_BUCKET = 'profile-pictures';
   private readonly BACKGROUND_TASK_TIMEOUT_MS = 30000; // 30 seconds
+  private readonly EXPORT_TIMEOUT_MS = 300000; // 5 minutes
+  private isExportInProgress = false;
 
   constructor(
     private prisma: PrismaService,
@@ -1677,6 +1679,14 @@ export class ClientsService {
    * Returns a PassThrough stream that can be piped to the response.
    */
   async exportToExcelStream(): Promise<PassThrough> {
+    // Prevent concurrent exports (mutex pattern)
+    if (this.isExportInProgress) {
+      throw new BadRequestException(
+        'Export already in progress. Please wait.',
+      );
+    }
+
+    this.isExportInProgress = true;
     const BATCH_SIZE = 500;
     const stream = new PassThrough();
 
@@ -1719,6 +1729,15 @@ export class ClientsService {
       fgColor: { argb: '1D345D' },
     };
     await headerRow.commit();
+
+    // Set up export timeout to prevent hanging forever
+    const exportTimeout = setTimeout(() => {
+      this.logger.error(
+        `Excel export timeout after ${this.EXPORT_TIMEOUT_MS}ms`,
+      );
+      this.isExportInProgress = false;
+      stream.destroy(new Error('Export timeout exceeded'));
+    }, this.EXPORT_TIMEOUT_MS);
 
     // Process clients in batches using cursor-based pagination
     // This is an async IIFE that runs the batch processing
@@ -1825,6 +1844,9 @@ export class ClientsService {
       } catch (error) {
         this.logger.error('Excel export failed:', error);
         stream.destroy(error as Error);
+      } finally {
+        clearTimeout(exportTimeout);
+        this.isExportInProgress = false;
       }
     })();
 
@@ -2061,38 +2083,48 @@ export class ClientsService {
   /**
    * Get all client accounts with decrypted credentials for admin view
    * Returns name, email, and all credential fields (turbotax, IRS, state)
+   * Supports cursor-based pagination for large datasets
    */
-  async getAllClientAccounts() {
+  async getAllClientAccounts(options: { cursor?: string; limit: number }) {
     const clients = await this.prisma.clientProfile.findMany({
+      take: options.limit + 1, // Fetch one extra to determine hasMore
+      cursor: options.cursor ? { id: options.cursor } : undefined,
       include: {
         user: { select: { firstName: true, lastName: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return clients.map((client) => ({
-      id: client.id,
-      name: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim(),
-      email: client.user.email,
-      turbotaxEmail: client.turbotaxEmail
-        ? this.encryption.decrypt(client.turbotaxEmail)
-        : null,
-      turbotaxPassword: client.turbotaxPassword
-        ? this.encryption.decrypt(client.turbotaxPassword)
-        : null,
-      irsUsername: client.irsUsername
-        ? this.encryption.decrypt(client.irsUsername)
-        : null,
-      irsPassword: client.irsPassword
-        ? this.encryption.decrypt(client.irsPassword)
-        : null,
-      stateUsername: client.stateUsername
-        ? this.encryption.decrypt(client.stateUsername)
-        : null,
-      statePassword: client.statePassword
-        ? this.encryption.decrypt(client.statePassword)
-        : null,
-    }));
+    const hasMore = clients.length > options.limit;
+    const results = hasMore ? clients.slice(0, -1) : clients;
+
+    return {
+      accounts: results.map((client) => ({
+        id: client.id,
+        name: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim(),
+        email: client.user.email,
+        turbotaxEmail: client.turbotaxEmail
+          ? this.encryption.decrypt(client.turbotaxEmail)
+          : null,
+        turbotaxPassword: client.turbotaxPassword
+          ? this.encryption.decrypt(client.turbotaxPassword)
+          : null,
+        irsUsername: client.irsUsername
+          ? this.encryption.decrypt(client.irsUsername)
+          : null,
+        irsPassword: client.irsPassword
+          ? this.encryption.decrypt(client.irsPassword)
+          : null,
+        stateUsername: client.stateUsername
+          ? this.encryption.decrypt(client.stateUsername)
+          : null,
+        statePassword: client.statePassword
+          ? this.encryption.decrypt(client.statePassword)
+          : null,
+      })),
+      nextCursor: hasMore ? results[results.length - 1]?.id : null,
+      hasMore,
+    };
   }
 
   /**

@@ -721,8 +721,14 @@ export class ReferralsService {
   /**
    * Admin: Get referral summary - aggregated by referrer
    * Shows each referrer with their successful referral count and discount earned
+   * Supports cursor-based pagination for large datasets
    */
-  async getReferralSummary() {
+  async getReferralSummary(options: {
+    cursor?: string;
+    limit?: number;
+  } = {}) {
+    const limit = options.limit || 50;
+
     // Get all referrers with successful referral counts
     const referrerStats = await this.prisma.referral.groupBy({
       by: ['referrerId'],
@@ -747,7 +753,7 @@ export class ReferralsService {
     const userMap = new Map(users.map((u) => [u.id, u]));
 
     // Build results with discount calculation
-    const results = referrerStats.map((stat) => {
+    const allResults = referrerStats.map((stat) => {
       const user = userMap.get(stat.referrerId);
       const count = stat._count.id;
       const discountPercent = this.calculateDiscount(count);
@@ -763,10 +769,35 @@ export class ReferralsService {
       };
     });
 
-    // Sort by referral count descending
-    results.sort((a, b) => b.successfulReferrals - a.successfulReferrals);
+    // Sort by referral count descending, then by name for stable ordering
+    allResults.sort((a, b) => {
+      if (b.successfulReferrals !== a.successfulReferrals) {
+        return b.successfulReferrals - a.successfulReferrals;
+      }
+      return a.name.localeCompare(b.name);
+    });
 
-    return { referrers: results, total: results.length };
+    const total = allResults.length;
+
+    // Apply cursor-based pagination
+    let startIndex = 0;
+    if (options.cursor) {
+      const cursorIndex = allResults.findIndex(r => r.userId === options.cursor);
+      if (cursorIndex !== -1) {
+        startIndex = cursorIndex + 1;
+      }
+    }
+
+    const paginatedResults = allResults.slice(startIndex, startIndex + limit);
+    const hasMore = startIndex + limit < total;
+    const nextCursor = hasMore ? paginatedResults[paginatedResults.length - 1]?.userId : null;
+
+    return {
+      referrers: paginatedResults,
+      total,
+      nextCursor,
+      hasMore,
+    };
   }
 
   /**

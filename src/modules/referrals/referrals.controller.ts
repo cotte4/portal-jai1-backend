@@ -139,12 +139,32 @@ export class ReferralsController {
 
   /**
    * ADMIN: Get referral summary - aggregated by referrer
+   * Supports cursor-based pagination with optional cursor and limit params
    */
   @Get('admin/summary')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
-  async getReferralSummary() {
-    return this.referralsService.getReferralSummary();
+  async getReferralSummary(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    // Validate limit to prevent DoS attacks
+    const MAX_LIMIT = 100;
+    const DEFAULT_LIMIT = 50;
+    let validatedLimit = DEFAULT_LIMIT;
+
+    if (limit) {
+      const parsedLimit = parseInt(limit, 10);
+      validatedLimit =
+        isNaN(parsedLimit) || parsedLimit < 1
+          ? DEFAULT_LIMIT
+          : Math.min(parsedLimit, MAX_LIMIT);
+    }
+
+    return this.referralsService.getReferralSummary({
+      cursor,
+      limit: validatedLimit,
+    });
   }
 
   /**

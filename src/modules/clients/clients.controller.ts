@@ -27,6 +27,7 @@ import {
   UpdateStatusDto,
   SetProblemDto,
   SendNotificationDto,
+  AdminUpdateProfileDto,
 } from './dto/admin-update.dto';
 
 @Controller()
@@ -115,8 +116,20 @@ export class ClientsController {
   @Get('admin/accounts')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
-  async getAllClientAccounts() {
-    return this.clientsService.getAllClientAccounts();
+  async getAllClientAccounts(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    // Validate limit to prevent DoS attacks
+    const MAX_LIMIT = 500;
+    const DEFAULT_LIMIT = 50;
+    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
+    const validatedLimit =
+      isNaN(parsedLimit) || parsedLimit < 1
+        ? DEFAULT_LIMIT
+        : Math.min(parsedLimit, MAX_LIMIT);
+
+    return this.clientsService.getAllClientAccounts({ cursor, limit: validatedLimit });
   }
 
   @Get('admin/payments')
@@ -192,7 +205,7 @@ export class ClientsController {
   @Patch('admin/clients/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
-  async update(@Param('id') id: string, @Body() updateData: any) {
+  async update(@Param('id') id: string, @Body() updateData: AdminUpdateProfileDto) {
     return this.clientsService.update(id, updateData);
   }
 
