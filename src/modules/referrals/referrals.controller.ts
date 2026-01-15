@@ -107,6 +107,16 @@ export class ReferralsController {
   }
 
   /**
+   * ADMIN: Get referral summary - aggregated by referrer
+   */
+  @Get('admin/summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin' as any)
+  async getReferralSummary() {
+    return this.referralsService.getReferralSummary();
+  }
+
+  /**
    * ADMIN: Get referral program stats
    */
   @Get('admin/stats')

@@ -59,6 +59,12 @@ model ClientProfile {
   addressCountry    String?   @map("address_country") @default("USA")
   turbotaxEmail     String?   @map("turbotax_email")
   turbotaxPassword  String?   @map("turbotax_password")
+  // IRS account credentials (encrypted)
+  irsUsername       String?   @map("irs_username")
+  irsPassword       String?   @map("irs_password")
+  // State account credentials (encrypted)
+  stateUsername     String?   @map("state_username")
+  statePassword     String?   @map("state_password")
   profileComplete   Boolean   @default(false) @map("profile_complete")
   isDraft           Boolean   @default(true) @map("is_draft")
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -76,15 +82,22 @@ model TaxCase {
   id                 String          @id @default(uuid()) @db.Uuid
   clientProfileId    String          @map("client_profile_id") @db.Uuid
   taxYear            Int             @map("tax_year") // CHECK constraint: 2020-2100 (see migration)
+
+  // DEPRECATED: Will be removed in Phase D - use preFilingStatus + federalStatus/stateStatus instead
   internalStatus     InternalStatus  @default(revision_de_registro) @map("internal_status")
   clientStatus       ClientStatus    @default(esperando_datos) @map("client_status")
+
+  // NEW: Phase indicator - separates pre-filing and post-filing workflows
+  taxesFiled         Boolean         @default(false) @map("taxes_filed")
+  taxesFiledAt       DateTime?       @map("taxes_filed_at") @db.Timestamptz
+
+  // NEW: Pre-filing status (used when taxesFiled = false)
+  preFilingStatus    PreFilingStatus @default(awaiting_registration) @map("pre_filing_status")
+
+  // Federal/State independent tracking (used when taxesFiled = true)
   federalStatus      TaxStatus?      @map("federal_status")
   stateStatus        TaxStatus?      @map("state_status")
   estimatedRefund    Decimal?        @map("estimated_refund") @db.Decimal(10, 2)
-  // DEPRECATED: actualRefund and refundDepositDate are redundant (Phase 7 removal)
-  // Use federalActualRefund + stateActualRefund and federal/stateDepositDate instead
-  actualRefund       Decimal?        @map("actual_refund") @db.Decimal(10, 2)
-  refundDepositDate  DateTime?       @map("refund_deposit_date") @db.Timestamptz
   // Separate federal/state tracking (SOURCE OF TRUTH)
   federalEstimatedDate  DateTime?    @map("federal_estimated_date") @db.Timestamptz
   stateEstimatedDate    DateTime?    @map("state_estimated_date") @db.Timestamptz
@@ -92,6 +105,17 @@ model TaxCase {
   stateActualRefund     Decimal?     @map("state_actual_refund") @db.Decimal(10, 2)
   federalDepositDate    DateTime?    @map("federal_deposit_date") @db.Timestamptz
   stateDepositDate      DateTime?    @map("state_deposit_date") @db.Timestamptz
+
+  // NEW: Federal status tracking (comments and dates)
+  federalLastComment      String?    @map("federal_last_comment")
+  federalStatusChangedAt  DateTime?  @map("federal_status_changed_at") @db.Timestamptz
+  federalLastReviewedAt   DateTime?  @map("federal_last_reviewed_at") @db.Timestamptz
+
+  // NEW: State status tracking (comments and dates)
+  stateLastComment        String?    @map("state_last_comment")
+  stateStatusChangedAt    DateTime?  @map("state_status_changed_at") @db.Timestamptz
+  stateLastReviewedAt     DateTime?  @map("state_last_reviewed_at") @db.Timestamptz
+
   paymentReceived    Boolean         @default(false) @map("payment_received")
   commissionPaid     Boolean         @default(false) @map("commission_paid")
   // Year-specific employment and banking info (SOURCE OF TRUTH - not ClientProfile)
@@ -126,6 +150,9 @@ model TaxCase {
   @@index([hasProblem])
   @@index([createdAt])
   @@index([internalStatus, createdAt]) // Compound index for admin filtering
+  @@index([taxesFiled]) // NEW: Phase filtering
+  @@index([preFilingStatus]) // NEW: Pre-filing status filtering
+  @@index([taxesFiled, preFilingStatus]) // NEW: Compound index for pre-filing queries
   @@map("tax_cases")
 }
 
@@ -260,11 +287,19 @@ enum ClientStatus {
 }
 
 enum TaxStatus {
+  filed
   pending
   processing
   approved
   rejected
   deposited
+}
+
+// Pre-filing workflow status (before taxes are filed)
+enum PreFilingStatus {
+  awaiting_registration
+  awaiting_documents
+  documentation_complete
 }
 
 enum DocumentType {
@@ -324,7 +359,7 @@ model Referral {
   id               String         @id @default(uuid()) @db.Uuid
   referrerId       String         @map("referrer_id") @db.Uuid
   referredUserId   String         @unique @map("referred_user_id") @db.Uuid
-  referralCode     String         @unique @map("referral_code")
+  referralCode     String         @map("referral_code")
   status           ReferralStatus @default(pending)
   taxCaseId        String?        @map("tax_case_id") @db.Uuid
   completedAt      DateTime?      @map("completed_at") @db.Timestamptz

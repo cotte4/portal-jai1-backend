@@ -79,7 +79,7 @@ export class EncryptionService {
 
   /**
    * Encrypts sensitive profile fields
-   * Includes: SSN, address, bank numbers, TurboTax credentials
+   * Includes: SSN, address, bank numbers, TurboTax credentials, IRS/State credentials
    */
   encryptProfileData(data: {
     ssn?: string;
@@ -88,6 +88,10 @@ export class EncryptionService {
     turbotaxPassword?: string;
     bankRoutingNumber?: string;
     bankAccountNumber?: string;
+    irsUsername?: string;
+    irsPassword?: string;
+    stateUsername?: string;
+    statePassword?: string;
   }): {
     ssn?: string;
     addressStreet?: string;
@@ -95,6 +99,10 @@ export class EncryptionService {
     turbotaxPassword?: string;
     bankRoutingNumber?: string;
     bankAccountNumber?: string;
+    irsUsername?: string;
+    irsPassword?: string;
+    stateUsername?: string;
+    statePassword?: string;
   } {
     return {
       ssn: data.ssn ? this.encrypt(data.ssn) : undefined,
@@ -103,12 +111,16 @@ export class EncryptionService {
       turbotaxPassword: data.turbotaxPassword ? this.encrypt(data.turbotaxPassword) : undefined,
       bankRoutingNumber: data.bankRoutingNumber ? this.encrypt(data.bankRoutingNumber) : undefined,
       bankAccountNumber: data.bankAccountNumber ? this.encrypt(data.bankAccountNumber) : undefined,
+      irsUsername: data.irsUsername ? this.encrypt(data.irsUsername) : undefined,
+      irsPassword: data.irsPassword ? this.encrypt(data.irsPassword) : undefined,
+      stateUsername: data.stateUsername ? this.encrypt(data.stateUsername) : undefined,
+      statePassword: data.statePassword ? this.encrypt(data.statePassword) : undefined,
     };
   }
 
   /**
    * Decrypts sensitive profile fields
-   * Includes: SSN, address, bank numbers, TurboTax credentials
+   * Includes: SSN, address, bank numbers, TurboTax credentials, IRS/State credentials
    */
   decryptProfileData(data: {
     ssn?: string;
@@ -117,6 +129,10 @@ export class EncryptionService {
     turbotaxPassword?: string;
     bankRoutingNumber?: string;
     bankAccountNumber?: string;
+    irsUsername?: string;
+    irsPassword?: string;
+    stateUsername?: string;
+    statePassword?: string;
   }): {
     ssn?: string;
     addressStreet?: string;
@@ -124,6 +140,10 @@ export class EncryptionService {
     turbotaxPassword?: string;
     bankRoutingNumber?: string;
     bankAccountNumber?: string;
+    irsUsername?: string;
+    irsPassword?: string;
+    stateUsername?: string;
+    statePassword?: string;
   } {
     return {
       ssn: data.ssn ? this.decrypt(data.ssn) : undefined,
@@ -132,6 +152,10 @@ export class EncryptionService {
       turbotaxPassword: data.turbotaxPassword ? this.decrypt(data.turbotaxPassword) : undefined,
       bankRoutingNumber: data.bankRoutingNumber ? this.decrypt(data.bankRoutingNumber) : undefined,
       bankAccountNumber: data.bankAccountNumber ? this.decrypt(data.bankAccountNumber) : undefined,
+      irsUsername: data.irsUsername ? this.decrypt(data.irsUsername) : undefined,
+      irsPassword: data.irsPassword ? this.decrypt(data.irsPassword) : undefined,
+      stateUsername: data.stateUsername ? this.decrypt(data.stateUsername) : undefined,
+      statePassword: data.statePassword ? this.decrypt(data.statePassword) : undefined,
     };
   }
 

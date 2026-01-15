@@ -58,7 +58,8 @@ export class ClientsController {
   @UseGuards(JwtAuthGuard)
   async updateUserInfo(
     @CurrentUser() user: any,
-    @Body() updateData: {
+    @Body()
+    updateData: {
       phone?: string;
       firstName?: string;
       lastName?: string;
@@ -103,6 +104,27 @@ export class ClientsController {
   }
 
   // Admin endpoints
+  @Get('admin/stats/season')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin' as any)
+  async getSeasonStats() {
+    return this.clientsService.getSeasonStats();
+  }
+
+  @Get('admin/accounts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin' as any)
+  async getAllClientAccounts() {
+    return this.clientsService.getAllClientAccounts();
+  }
+
+  @Get('admin/payments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin' as any)
+  async getPaymentsSummary() {
+    return this.clientsService.getPaymentsSummary();
+  }
+
   @Get('admin/clients')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin' as any)
@@ -124,16 +146,23 @@ export class ClientsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin' as any)
   async exportToExcel(@Res({ passthrough: true }) res: Response) {
-    const buffer = await this.clientsService.exportToExcel();
+    // Use streaming export to handle large datasets without timeout
+    const stream = await this.clientsService.exportToExcelStream();
     const filename = `clientes-${new Date().toISOString().split('T')[0]}.xlsx`;
 
     res.set({
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${filename}"`,
+      // Chunked transfer encoding for streaming (no Content-Length since we don't know final size)
+      'Transfer-Encoding': 'chunked',
+      // Prevent timeout during large exports
+      Connection: 'keep-alive',
+      // Cache control - don't cache exports
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
     });
 
-    return new StreamableFile(buffer);
+    return new StreamableFile(stream);
   }
 
   @Get('admin/clients/:id')

@@ -719,6 +719,57 @@ export class ReferralsService {
   }
 
   /**
+   * Admin: Get referral summary - aggregated by referrer
+   * Shows each referrer with their successful referral count and discount earned
+   */
+  async getReferralSummary() {
+    // Get all referrers with successful referral counts
+    const referrerStats = await this.prisma.referral.groupBy({
+      by: ['referrerId'],
+      _count: { id: true },
+      where: { status: 'successful' },
+    });
+
+    const referrerIds = referrerStats.map((r) => r.referrerId);
+
+    // Get user details
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: referrerIds } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        referralCode: true,
+      },
+    });
+
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    // Build results with discount calculation
+    const results = referrerStats.map((stat) => {
+      const user = userMap.get(stat.referrerId);
+      const count = stat._count.id;
+      const discountPercent = this.calculateDiscount(count);
+
+      return {
+        userId: stat.referrerId,
+        name: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+        email: user?.email || '',
+        referralCode: user?.referralCode || '',
+        successfulReferrals: count,
+        discountPercent,
+        tier: this.calculateTier(count),
+      };
+    });
+
+    // Sort by referral count descending
+    results.sort((a, b) => b.successfulReferrals - a.successfulReferrals);
+
+    return { referrers: results, total: results.length };
+  }
+
+  /**
    * Admin: Get referral program stats
    */
   async getStats() {
