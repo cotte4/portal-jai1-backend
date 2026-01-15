@@ -3,7 +3,7 @@ import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../../common/services';
 import { ConfigService } from '@nestjs/config';
-import { ClientStatus } from '@prisma/client';
+import { PreFilingStatus } from '@prisma/client';
 
 export type ProgressEventType =
   | 'PROFILE_COMPLETED'
@@ -73,10 +73,10 @@ export class ProgressAutomationService {
       where: { id: event.taxCaseId },
     });
 
-    // Only update if still in esperando_datos status
-    if (taxCase && taxCase.clientStatus === 'esperando_datos') {
-      await this.updateTaxCaseStatus(event.taxCaseId, 'cuenta_en_revision');
-      this.logger.log(`Updated clientStatus to cuenta_en_revision for TaxCase ${event.taxCaseId}`);
+    // Only update if still in awaiting_registration or awaiting_documents status
+    if (taxCase && ((taxCase as any).preFilingStatus === 'awaiting_registration' || (taxCase as any).preFilingStatus === 'awaiting_documents')) {
+      await this.updateTaxCaseStatus(event.taxCaseId, 'awaiting_documents' as PreFilingStatus);
+      this.logger.log(`Updated preFilingStatus to awaiting_documents for TaxCase ${event.taxCaseId}`);
     }
 
     // Notify all admins
@@ -149,16 +149,16 @@ export class ProgressAutomationService {
   }
 
   /**
-   * Update tax case client status
+   * Update tax case pre-filing status
    */
   private async updateTaxCaseStatus(
     taxCaseId: string,
-    clientStatus: ClientStatus,
+    preFilingStatus: PreFilingStatus,
   ): Promise<void> {
     await this.prisma.taxCase.update({
       where: { id: taxCaseId },
       data: {
-        clientStatus,
+        preFilingStatus,
         statusUpdatedAt: new Date(),
       },
     });
@@ -235,16 +235,16 @@ export class ProgressAutomationService {
     const hasW2 = taxCase.documents.some((d) => d.type === 'w2');
     const profileComplete = taxCase.clientProfile.profileComplete;
 
-    this.logger.log(`Checking status advancement: hasW2=${hasW2}, profileComplete=${profileComplete}, currentStatus=${taxCase.clientStatus}`);
+    this.logger.log(`Checking status advancement: hasW2=${hasW2}, profileComplete=${profileComplete}, currentStatus=${(taxCase as any).preFilingStatus}`);
 
-    // If profile complete AND W2 uploaded AND still in esperando_datos
+    // If profile complete AND W2 uploaded AND still in awaiting status
     if (
       profileComplete &&
       hasW2 &&
-      taxCase.clientStatus === 'esperando_datos'
+      ((taxCase as any).preFilingStatus === 'awaiting_registration' || (taxCase as any).preFilingStatus === 'awaiting_documents')
     ) {
-      await this.updateTaxCaseStatus(taxCaseId, 'cuenta_en_revision');
-      this.logger.log(`Auto-advanced status to cuenta_en_revision`);
+      await this.updateTaxCaseStatus(taxCaseId, 'documentation_complete' as PreFilingStatus);
+      this.logger.log(`Auto-advanced status to documentation_complete`);
     }
   }
 

@@ -68,8 +68,6 @@ export class ClientsService {
                 bankAccountNumber: true,
                 workState: true,
                 employerName: true,
-                internalStatus: true,
-                clientStatus: true,
                 federalStatus: true,
                 stateStatus: true,
                 adminStep: true,
@@ -520,59 +518,42 @@ export class ClientsService {
   }) {
     const where: any = {};
 
-    // Handle different filter types
+    // Handle different filter types using new status fields
     if (options.status && options.status !== 'all') {
-      // Group filters (map to multiple statuses)
       if (options.status === 'group_pending') {
-        // Pending: null status, esperando_datos, revision_de_registro
+        // Pending: not filed yet, pre-filing statuses
         where.OR = [
-          { taxCases: { none: {} } }, // No tax cases = no status
-          { taxCases: { some: { internalStatus: null } } },
-          { taxCases: { some: { internalStatus: 'esperando_datos' } } },
-          { taxCases: { some: { internalStatus: 'revision_de_registro' } } },
+          { taxCases: { none: {} } }, // No tax cases
+          { taxCases: { some: { taxesFiled: false } } },
         ];
       } else if (options.status === 'group_in_review') {
-        // In Review: en_proceso, en_verificacion, resolviendo_verificacion
+        // In Review: filed but not yet deposited
         where.taxCases = {
           some: {
-            internalStatus: {
-              in: ['en_proceso', 'en_verificacion', 'resolviendo_verificacion'],
-            },
+            taxesFiled: true,
+            federalStatus: { in: ['processing', 'pending', 'filed'] },
           },
         };
       } else if (options.status === 'group_completed') {
-        // Completed: proceso_finalizado, cheque_en_camino, esperando_pago_comision
+        // Completed: deposited or approved
         where.taxCases = {
           some: {
-            internalStatus: {
-              in: [
-                'proceso_finalizado',
-                'cheque_en_camino',
-                'esperando_pago_comision',
-              ],
-            },
+            OR: [
+              { federalStatus: 'deposited' },
+              { stateStatus: 'deposited' },
+            ],
           },
         };
       } else if (options.status === 'group_needs_attention') {
-        // Needs Attention: falta_documentacion, inconvenientes
+        // Needs Attention: rejected or has problem
         where.taxCases = {
           some: {
-            internalStatus: { in: ['falta_documentacion', 'inconvenientes'] },
+            OR: [
+              { federalStatus: 'rejected' },
+              { stateStatus: 'rejected' },
+              { hasProblem: true },
+            ],
           },
-        };
-      } else if (options.status === 'sin_asignar') {
-        // No status assigned (null internalStatus)
-        where.OR = [
-          { taxCases: { none: {} } },
-          { taxCases: { some: { internalStatus: null } } },
-        ];
-      } else if (
-        options.status !== 'ready_to_present' &&
-        options.status !== 'incomplete'
-      ) {
-        // Single status filter (direct match for individual statuses)
-        where.taxCases = {
-          some: { internalStatus: options.status },
         };
       }
       // Note: ready_to_present and incomplete are computed filters handled post-query
@@ -718,15 +699,12 @@ export class ClientsService {
             firstName: client.user.firstName,
             lastName: client.user.lastName,
           },
-          // DEPRECATED: Keep for backward compatibility
-          internalStatus: taxCase?.internalStatus || null,
-          clientStatus: taxCase?.clientStatus || null,
-          // NEW: Phase-based status fields
+          // Phase-based status fields
           taxesFiled: (taxCase as any)?.taxesFiled || false,
           preFilingStatus: (taxCase as any)?.preFilingStatus || null,
           federalStatus: taxCase?.federalStatus || null,
           stateStatus: taxCase?.stateStatus || null,
-          // NEW: Status tracking
+          // Status tracking
           federalLastComment: (taxCase as any)?.federalLastComment || null,
           stateLastComment: (taxCase as any)?.stateLastComment || null,
           federalActualRefund: taxCase?.federalActualRefund ? Number(taxCase.federalActualRefund) : null,
@@ -854,10 +832,7 @@ export class ClientsService {
         id: tc.id,
         clientProfileId: tc.clientProfileId,
         taxYear: tc.taxYear,
-        // DEPRECATED: Keep for backward compatibility
-        internalStatus: tc.internalStatus,
-        clientStatus: tc.clientStatus,
-        // NEW: Phase-based status fields
+        // Phase-based status fields
         taxesFiled: (tc as any).taxesFiled || false,
         taxesFiledAt: (tc as any).taxesFiledAt,
         preFilingStatus: (tc as any).preFilingStatus,
@@ -1008,41 +983,6 @@ export class ClientsService {
     statusData: UpdateStatusDto,
     changedById: string,
   ) {
-    // Auto-sync mapping: InternalStatus → ClientStatus (DEPRECATED - for backward compatibility)
-    const internalToClientStatusMap: Record<string, string> = {
-      revision_de_registro: 'cuenta_en_revision',
-      esperando_datos: 'esperando_datos',
-      falta_documentacion: 'cuenta_en_revision',
-      en_proceso: 'taxes_en_proceso',
-      en_verificacion: 'en_verificacion',
-      resolviendo_verificacion: 'en_verificacion',
-      inconvenientes: 'cuenta_en_revision',
-      cheque_en_camino: 'taxes_en_camino',
-      esperando_pago_comision: 'pago_realizado',
-      proceso_finalizado: 'taxes_finalizados',
-    };
-
-    // NEW: Dual-write mapping: PreFilingStatus → InternalStatus (for backward compatibility)
-    const preFilingToInternalMap: Record<string, string> = {
-      awaiting_registration: 'revision_de_registro',
-      awaiting_documents: 'esperando_datos',
-      documentation_complete: 'esperando_datos', // Closest match
-    };
-
-    // NEW: Dual-write mapping: InternalStatus → PreFilingStatus + taxesFiled
-    const internalToPreFilingMap: Record<string, { preFilingStatus: string; taxesFiled: boolean }> = {
-      revision_de_registro: { preFilingStatus: 'awaiting_registration', taxesFiled: false },
-      esperando_datos: { preFilingStatus: 'awaiting_documents', taxesFiled: false },
-      falta_documentacion: { preFilingStatus: 'awaiting_documents', taxesFiled: false },
-      en_proceso: { preFilingStatus: 'documentation_complete', taxesFiled: true },
-      en_verificacion: { preFilingStatus: 'documentation_complete', taxesFiled: true },
-      resolviendo_verificacion: { preFilingStatus: 'documentation_complete', taxesFiled: true },
-      inconvenientes: { preFilingStatus: 'documentation_complete', taxesFiled: true },
-      cheque_en_camino: { preFilingStatus: 'documentation_complete', taxesFiled: true },
-      esperando_pago_comision: { preFilingStatus: 'documentation_complete', taxesFiled: true },
-      proceso_finalizado: { preFilingStatus: 'documentation_complete', taxesFiled: true },
-    };
-
     const client = await this.prisma.clientProfile.findUnique({
       where: { id },
       include: {
@@ -1064,30 +1004,12 @@ export class ClientsService {
     }
 
     const taxCase = client.taxCases[0];
-    const previousInternalStatus = taxCase.internalStatus;
-    const previousClientStatus = taxCase.clientStatus;
     const previousFederalStatus = taxCase.federalStatus;
     const previousStateStatus = taxCase.stateStatus;
-    // NEW: Track previous values of new fields for dual-write logic
-    const previousTaxesFiled = (taxCase as any).taxesFiled ?? false;
-    const previousPreFilingStatus = (taxCase as any).preFilingStatus;
 
     // Get status values from DTO
-    const internalStatus = statusData.internalStatus;
-    let clientStatus = statusData.clientStatus;
     const federalStatus = statusData.federalStatus;
     const stateStatus = statusData.stateStatus;
-
-    // Auto-sync: If internalStatus is provided and clientStatus is not, derive it from the mapping
-    if (internalStatus && !clientStatus) {
-      const mappedClientStatus = internalToClientStatusMap[internalStatus];
-      if (mappedClientStatus) {
-        clientStatus = mappedClientStatus as any; // Cast to ClientStatus
-        this.logger.log(
-          `Auto-synced clientStatus to '${clientStatus}' from internalStatus '${internalStatus}'`,
-        );
-      }
-    }
 
     // Build update data dynamically
     const updateData: any = {
@@ -1096,35 +1018,9 @@ export class ClientsService {
 
     const now = new Date();
 
-    // Handle OLD fields (internalStatus, clientStatus) - DEPRECATED but still supported
-    if (internalStatus) {
-      updateData.internalStatus = internalStatus;
-
-      // DUAL-WRITE: Also update new fields based on internalStatus
-      const mapping = internalToPreFilingMap[internalStatus];
-      if (mapping) {
-        updateData.preFilingStatus = mapping.preFilingStatus;
-        if (mapping.taxesFiled && !taxCase.taxesFiled) {
-          updateData.taxesFiled = true;
-          updateData.taxesFiledAt = now;
-        }
-      }
-    }
-    if (clientStatus) updateData.clientStatus = clientStatus;
-
-    // Handle NEW fields (preFilingStatus, taxesFiled) - Phase B dual-write
+    // Handle preFilingStatus
     if (statusData.preFilingStatus) {
       updateData.preFilingStatus = statusData.preFilingStatus;
-
-      // DUAL-WRITE: Also update old internalStatus for backward compatibility
-      const mappedInternal = preFilingToInternalMap[statusData.preFilingStatus];
-      if (mappedInternal && !internalStatus) {
-        updateData.internalStatus = mappedInternal;
-        const mappedClient = internalToClientStatusMap[mappedInternal];
-        if (mappedClient && !clientStatus) {
-          updateData.clientStatus = mappedClient;
-        }
-      }
     }
 
     // Handle taxesFiled flag (mark as filed)
@@ -1132,14 +1028,11 @@ export class ClientsService {
       updateData.taxesFiled = statusData.taxesFiled;
       if (statusData.taxesFiled && statusData.taxesFiledAt) {
         updateData.taxesFiledAt = new Date(statusData.taxesFiledAt);
-      } else if (statusData.taxesFiled && !taxCase.taxesFiledAt) {
+      } else if (statusData.taxesFiled && !(taxCase as any).taxesFiledAt) {
         updateData.taxesFiledAt = now;
       }
-
-      // DUAL-WRITE: When marking as filed, update old internalStatus to en_proceso
-      if (statusData.taxesFiled && !internalStatus) {
-        updateData.internalStatus = 'en_proceso';
-        updateData.clientStatus = 'taxes_en_proceso';
+      // When marking as filed, ensure preFilingStatus is documentation_complete
+      if (statusData.taxesFiled) {
         updateData.preFilingStatus = 'documentation_complete';
       }
     }
@@ -1202,6 +1095,21 @@ export class ClientsService {
       !taxCase.stateDepositDate &&
       (statusData.federalDepositDate || statusData.stateDepositDate);
 
+    // Build status change description for history
+    const statusChanges: string[] = [];
+    if (statusData.preFilingStatus) {
+      statusChanges.push(`preFilingStatus: ${statusData.preFilingStatus}`);
+    }
+    if (federalStatus) {
+      statusChanges.push(`federal: ${federalStatus}`);
+    }
+    if (stateStatus) {
+      statusChanges.push(`state: ${stateStatus}`);
+    }
+    if (statusData.taxesFiled !== undefined) {
+      statusChanges.push(`taxesFiled: ${statusData.taxesFiled}`);
+    }
+
     await this.prisma.$transaction([
       this.prisma.taxCase.update({
         where: { id: taxCase.id },
@@ -1210,49 +1118,13 @@ export class ClientsService {
       this.prisma.statusHistory.create({
         data: {
           taxCaseId: taxCase.id,
-          previousStatus: taxCase.internalStatus,
-          newStatus: internalStatus || taxCase.internalStatus,
+          previousStatus: null,
+          newStatus: statusChanges.join(', ') || 'status update',
           changedById,
           comment: statusData.comment,
         },
       }),
     ]);
-
-    // Status labels for client status notifications
-    const statusLabels: Record<string, string> = {
-      esperando_datos: 'Necesitamos tus datos y documentos',
-      cuenta_en_revision: 'Estamos revisando tu información',
-      taxes_en_proceso: '¡Estamos trabajando en tu declaración!',
-      taxes_en_camino: 'Tu reembolso está en camino',
-      taxes_depositados: '¡Reembolso depositado en tu cuenta!',
-      pago_realizado: 'Gracias por tu pago',
-      en_verificacion: 'El IRS está verificando tu caso',
-      taxes_finalizados: '¡Proceso completado!',
-    };
-
-    // Notify for client status change
-    if (clientStatus && clientStatus !== previousClientStatus) {
-      const newStatusLabel = statusLabels[clientStatus] || clientStatus;
-
-      await this.notificationsService.create(
-        client.user.id,
-        'status_change',
-        'Tu trámite ha sido actualizado',
-        newStatusLabel,
-      );
-
-      // TODO: Re-enable when needed
-      // Send email notification (don't await to avoid blocking response)
-      // this.emailService.sendStatusChangeEmail(
-      //   client.user.email,
-      //   client.user.firstName,
-      //   previousClientStatus,
-      //   clientStatus,
-      //   statusData.comment || '',
-      // ).catch((err) => {
-      //   this.logger.error(`Failed to send status change email to ${client.user.email}`, err);
-      // });
-    }
 
     // Notify for federal status change
     if (federalStatus && federalStatus !== previousFederalStatus) {
@@ -1292,15 +1164,14 @@ export class ClientsService {
       }
     }
 
-    // Generate referral code when internalStatus changes to EN_PROCESO (replaces old adminStep >= 3 trigger)
-    const isNewEnProceso =
-      internalStatus === 'en_proceso' &&
-      previousInternalStatus !== 'en_proceso';
-    if (isNewEnProceso && !client.user.referralCode) {
+    // Generate referral code when taxesFiled changes to true
+    const isNewlyFiled =
+      statusData.taxesFiled === true && !(taxCase as any).taxesFiled;
+    if (isNewlyFiled && !client.user.referralCode) {
       try {
         const code = await this.referralsService.generateCode(client.user.id);
         this.logger.log(
-          `Generated referral code ${code} for user ${client.user.id} (status changed to EN_PROCESO)`,
+          `Generated referral code ${code} for user ${client.user.id} (taxes marked as filed)`,
         );
 
         // Also update referral status if this user was referred
@@ -1736,8 +1607,9 @@ export class ClientsService {
       { header: 'Banco', key: 'bank', width: 20 },
       { header: 'Routing #', key: 'routing', width: 12 },
       { header: 'Account #', key: 'account', width: 15 },
-      { header: 'Estado Interno', key: 'internalStatus', width: 20 },
-      { header: 'Estado Cliente', key: 'clientStatus', width: 20 },
+      { header: 'Taxes Filed', key: 'taxesFiled', width: 12 },
+      { header: 'Federal Status', key: 'federalStatus', width: 15 },
+      { header: 'State Status', key: 'stateStatus', width: 15 },
       { header: 'Reembolso Est.', key: 'estimatedRefund', width: 15 },
       { header: 'Pago Recibido', key: 'paymentReceived', width: 12 },
       { header: 'Fecha Registro', key: 'createdAt', width: 15 },
@@ -1824,8 +1696,9 @@ export class ClientsService {
               bank: taxCase?.bankName || '',
               routing: decryptedRouting,
               account: decryptedAccount,
-              internalStatus: taxCase?.internalStatus || '',
-              clientStatus: taxCase?.clientStatus || '',
+              taxesFiled: (taxCase as any)?.taxesFiled ? 'Sí' : 'No',
+              federalStatus: taxCase?.federalStatus || '',
+              stateStatus: taxCase?.stateStatus || '',
               estimatedRefund: taxCase?.estimatedRefund?.toString() || '',
               paymentReceived: taxCase?.paymentReceived ? 'Sí' : 'No',
               createdAt: client.createdAt.toISOString().split('T')[0],
@@ -1902,8 +1775,9 @@ export class ClientsService {
       { header: 'Banco', key: 'bank', width: 20 },
       { header: 'Routing #', key: 'routing', width: 12 },
       { header: 'Account #', key: 'account', width: 15 },
-      { header: 'Estado Interno', key: 'internalStatus', width: 20 },
-      { header: 'Estado Cliente', key: 'clientStatus', width: 20 },
+      { header: 'Taxes Filed', key: 'taxesFiled', width: 12 },
+      { header: 'Federal Status', key: 'federalStatus', width: 15 },
+      { header: 'State Status', key: 'stateStatus', width: 15 },
       { header: 'Reembolso Est.', key: 'estimatedRefund', width: 15 },
       { header: 'Pago Recibido', key: 'paymentReceived', width: 12 },
       { header: 'Fecha Registro', key: 'createdAt', width: 15 },
@@ -1960,8 +1834,9 @@ export class ClientsService {
         bank: taxCase?.bankName || '',
         routing: decryptedRouting,
         account: decryptedAccount,
-        internalStatus: taxCase?.internalStatus || '',
-        clientStatus: taxCase?.clientStatus || '',
+        taxesFiled: (taxCase as any)?.taxesFiled ? 'Sí' : 'No',
+        federalStatus: taxCase?.federalStatus || '',
+        stateStatus: taxCase?.stateStatus || '',
         estimatedRefund: taxCase?.estimatedRefund?.toString() || '',
         paymentReceived: taxCase?.paymentReceived ? 'Sí' : 'No',
         createdAt: client.createdAt.toISOString().split('T')[0],
@@ -2235,7 +2110,8 @@ export class ClientsService {
           federalDepositDate: true,
           stateDepositDate: true,
           estimatedRefund: true,
-          internalStatus: true,
+          federalStatus: true,
+          stateStatus: true,
         },
       }),
     ]);
@@ -2246,7 +2122,8 @@ export class ClientsService {
 
     for (const tc of taxCases) {
       const isDeposited = tc.federalDepositDate || tc.stateDepositDate;
-      if (isDeposited || tc.internalStatus === 'proceso_finalizado') {
+      const isCompleted = tc.federalStatus === 'deposited' || tc.stateStatus === 'deposited';
+      if (isDeposited || isCompleted) {
         taxesCompletedCount++;
       }
 

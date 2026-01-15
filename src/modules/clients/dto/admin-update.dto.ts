@@ -12,8 +12,6 @@ import {
   ValidationOptions,
 } from 'class-validator';
 import {
-  InternalStatus,
-  ClientStatus,
   TaxStatus,
   ProblemType,
   PreFilingStatus,
@@ -52,16 +50,7 @@ export function IsNotFutureDate(validationOptions?: ValidationOptions) {
 }
 
 export class UpdateStatusDto {
-  // DEPRECATED: Use preFilingStatus + federalStatus/stateStatus instead
-  @IsOptional()
-  @IsEnum(InternalStatus, { message: 'Invalid internal status' })
-  internalStatus?: InternalStatus;
-
-  @IsOptional()
-  @IsEnum(ClientStatus, { message: 'Invalid client status' })
-  clientStatus?: ClientStatus;
-
-  // NEW: Phase indicator - when true, use federalStatus/stateStatus
+  // Phase indicator - when true, use federalStatus/stateStatus
   @IsOptional()
   @IsBoolean()
   taxesFiled?: boolean;

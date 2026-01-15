@@ -83,11 +83,7 @@ model TaxCase {
   clientProfileId    String          @map("client_profile_id") @db.Uuid
   taxYear            Int             @map("tax_year") // CHECK constraint: 2020-2100 (see migration)
 
-  // DEPRECATED: Will be removed in Phase D - use preFilingStatus + federalStatus/stateStatus instead
-  internalStatus     InternalStatus  @default(revision_de_registro) @map("internal_status")
-  clientStatus       ClientStatus    @default(esperando_datos) @map("client_status")
-
-  // NEW: Phase indicator - separates pre-filing and post-filing workflows
+  // Phase indicator - separates pre-filing and post-filing workflows
   taxesFiled         Boolean         @default(false) @map("taxes_filed")
   taxesFiledAt       DateTime?       @map("taxes_filed_at") @db.Timestamptz
 
@@ -144,15 +140,13 @@ model TaxCase {
 
   @@unique([clientProfileId, taxYear])
   @@index([clientProfileId])
-  @@index([internalStatus])
-  @@index([clientStatus])
   @@index([taxYear])
   @@index([hasProblem])
   @@index([createdAt])
-  @@index([internalStatus, createdAt]) // Compound index for admin filtering
-  @@index([taxesFiled]) // NEW: Phase filtering
-  @@index([preFilingStatus]) // NEW: Pre-filing status filtering
-  @@index([taxesFiled, preFilingStatus]) // NEW: Compound index for pre-filing queries
+  @@index([taxesFiled])
+  @@index([preFilingStatus])
+  @@index([taxesFiled, preFilingStatus])
+  @@index([taxesFiled, createdAt])
   @@map("tax_cases")
 }
 
@@ -260,30 +254,6 @@ model Notification {
 enum UserRole {
   client
   admin
-}
-
-enum InternalStatus {
-  revision_de_registro
-  esperando_datos
-  falta_documentacion
-  en_proceso
-  en_verificacion
-  resolviendo_verificacion
-  inconvenientes
-  cheque_en_camino
-  esperando_pago_comision
-  proceso_finalizado
-}
-
-enum ClientStatus {
-  esperando_datos
-  cuenta_en_revision
-  taxes_en_proceso
-  taxes_en_camino
-  taxes_depositados
-  pago_realizado
-  en_verificacion
-  taxes_finalizados
 }
 
 enum TaxStatus {
