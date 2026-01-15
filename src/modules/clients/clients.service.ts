@@ -2134,6 +2134,87 @@ export class ClientsService {
   }
 
   /**
+   * Get delays data for admin delays view
+   * Shows timing metrics: documentation complete, filing, deposit dates, and calculated delays
+   */
+  async getDelaysData() {
+    const clients = await this.prisma.clientProfile.findMany({
+      include: {
+        user: { select: { firstName: true, lastName: true } },
+        taxCases: {
+          orderBy: { taxYear: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            taxesFiled: true,
+            taxesFiledAt: true,
+            preFilingStatus: true,
+            federalStatus: true,
+            stateStatus: true,
+            federalDepositDate: true,
+            stateDepositDate: true,
+            problemType: true,
+            hasProblem: true,
+            statusHistory: {
+              select: { newStatus: true, comment: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Helper to calculate days between two dates
+    const daysBetween = (start: Date | null, end: Date | null): number | null => {
+      if (!start || !end) return null;
+      const diffMs = end.getTime() - start.getTime();
+      return Math.round(diffMs / (1000 * 60 * 60 * 24));
+    };
+
+    const delaysData = clients
+      .filter((client) => client.taxCases[0]?.taxesFiled) // Only show clients with filed taxes
+      .map((client) => {
+        const tc = client.taxCases[0];
+        const taxesFiledAt = tc.taxesFiledAt ? new Date(tc.taxesFiledAt) : null;
+        const federalDepositDate = tc.federalDepositDate ? new Date(tc.federalDepositDate) : null;
+        const stateDepositDate = tc.stateDepositDate ? new Date(tc.stateDepositDate) : null;
+
+        // Check if went through verification (irs_verification problem or status history mention)
+        const wentThroughVerification =
+          tc.problemType === 'irs_verification' ||
+          tc.statusHistory.some(
+            (h) =>
+              h.newStatus?.toLowerCase().includes('verif') ||
+              h.comment?.toLowerCase().includes('verif'),
+          );
+
+        // Documentation complete date - we use updatedAt of profile as proxy
+        // (Ideally we'd track when preFilingStatus became documentation_complete)
+        // For now, we use taxesFiledAt as the documentation was complete before filing
+        const documentationCompleteDate = taxesFiledAt; // Approximation
+
+        return {
+          id: client.id,
+          name: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim() || 'Sin Nombre',
+          documentationCompleteDate,
+          taxesFiledAt,
+          federalDepositDate,
+          stateDepositDate,
+          wentThroughVerification,
+          federalDelayDays: daysBetween(taxesFiledAt, federalDepositDate),
+          stateDelayDays: daysBetween(taxesFiledAt, stateDepositDate),
+          federalStatus: tc.federalStatus,
+          stateStatus: tc.stateStatus,
+        };
+      });
+
+    return {
+      clients: delaysData,
+      clientCount: delaysData.length,
+    };
+  }
+
+  /**
    * Get season summary stats for admin dashboard
    * Returns total clients, taxes completed %, projected earnings, and earnings to date
    */

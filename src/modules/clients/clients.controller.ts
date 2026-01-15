@@ -125,6 +125,13 @@ export class ClientsController {
     return this.clientsService.getPaymentsSummary();
   }
 
+  @Get('admin/delays')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin' as any)
+  async getDelaysData() {
+    return this.clientsService.getDelaysData();
+  }
+
   @Get('admin/clients')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin' as any)
