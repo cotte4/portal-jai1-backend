@@ -725,8 +725,8 @@ export class ClientsService {
             firstName: client.user.firstName,
             lastName: client.user.lastName,
           },
-          // SSN (masked for security)
-          ssn: client.ssn ? this.encryption.maskSSN(client.ssn) : null,
+          // SSN (decrypted for admin view)
+          ssn: client.ssn ? this.encryption.decrypt(client.ssn) : null,
           // Phase-based status fields
           taxesFiled: taxCase?.taxesFiled || false,
           taxesFiledAt: taxCase?.taxesFiledAt || null,
