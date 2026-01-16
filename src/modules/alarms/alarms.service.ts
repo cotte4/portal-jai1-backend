@@ -1,0 +1,584 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../config/prisma.service';
+import {
+  calculateAlarms,
+  StatusAlarm,
+  CustomAlarmThresholds,
+  DEFAULT_ALARM_THRESHOLDS,
+  getHighestAlarmLevel,
+} from '../../common/utils/status-mapping.util';
+import { AlarmResolution, AlarmType, AlarmLevel, Prisma } from '@prisma/client';
+
+// DTOs
+export interface AlarmDashboardItem {
+  taxCaseId: string;
+  clientName: string;
+  clientEmail: string;
+  alarms: StatusAlarm[];
+  highestLevel: 'warning' | 'critical' | null;
+  federalStatusNew: string | null;
+  stateStatusNew: string | null;
+  federalStatusNewChangedAt: Date | null;
+  stateStatusNewChangedAt: Date | null;
+  hasCustomThresholds: boolean;
+}
+
+export interface AlarmDashboardResponse {
+  items: AlarmDashboardItem[];
+  totalWithAlarms: number;
+  totalCritical: number;
+  totalWarning: number;
+}
+
+export interface AlarmHistoryItem {
+  id: string;
+  taxCaseId: string;
+  clientName: string;
+  alarmType: AlarmType;
+  alarmLevel: AlarmLevel;
+  track: string;
+  message: string;
+  thresholdDays: number;
+  actualDays: number;
+  statusAtTrigger: string;
+  statusChangedAt: Date;
+  resolution: AlarmResolution;
+  resolvedAt: Date | null;
+  resolvedByName: string | null;
+  resolvedNote: string | null;
+  autoResolveReason: string | null;
+  triggeredAt: Date;
+}
+
+export interface AlarmHistoryFilters {
+  taxCaseId?: string;
+  alarmType?: AlarmType;
+  alarmLevel?: AlarmLevel;
+  resolution?: AlarmResolution;
+  track?: 'federal' | 'state';
+  fromDate?: Date;
+  toDate?: Date;
+}
+
+export interface SetThresholdsDto {
+  federalInProcessDays?: number | null;
+  stateInProcessDays?: number | null;
+  verificationTimeoutDays?: number | null;
+  letterSentTimeoutDays?: number | null;
+  disableFederalAlarms?: boolean;
+  disableStateAlarms?: boolean;
+  reason?: string;
+}
+
+export interface ThresholdsResponse {
+  taxCaseId: string;
+  clientName: string;
+  thresholds: {
+    federalInProcessDays: number;
+    stateInProcessDays: number;
+    verificationTimeoutDays: number;
+    letterSentTimeoutDays: number;
+    disableFederalAlarms: boolean;
+    disableStateAlarms: boolean;
+  };
+  isCustom: boolean;
+  reason: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+}
+
+@Injectable()
+export class AlarmsService {
+  constructor(private prisma: PrismaService) {}
+
+  /**
+   * Get alarm dashboard with all cases that have active alarms
+   */
+  async getDashboard(): Promise<AlarmDashboardResponse> {
+    // Get all tax cases with their new status fields and custom thresholds
+    const taxCases = await this.prisma.taxCase.findMany({
+      where: {
+        OR: [
+          { federalStatusNew: { not: null } },
+          { stateStatusNew: { not: null } },
+        ],
+      },
+      include: {
+        clientProfile: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        },
+        alarmThreshold: true,
+      },
+    });
+
+    const items: AlarmDashboardItem[] = [];
+    let totalCritical = 0;
+    let totalWarning = 0;
+
+    for (const taxCase of taxCases) {
+      // Build custom thresholds from the AlarmThreshold relation
+      const customThresholds: CustomAlarmThresholds | null = taxCase.alarmThreshold
+        ? {
+            federalInProcessDays: taxCase.alarmThreshold.federalInProcessDays,
+            stateInProcessDays: taxCase.alarmThreshold.stateInProcessDays,
+            verificationTimeoutDays: taxCase.alarmThreshold.verificationTimeoutDays,
+            letterSentTimeoutDays: taxCase.alarmThreshold.letterSentTimeoutDays,
+            disableFederalAlarms: taxCase.alarmThreshold.disableFederalAlarms,
+            disableStateAlarms: taxCase.alarmThreshold.disableStateAlarms,
+          }
+        : null;
+
+      const alarms = calculateAlarms(
+        taxCase.federalStatusNew,
+        taxCase.federalStatusNewChangedAt,
+        taxCase.stateStatusNew,
+        taxCase.stateStatusNewChangedAt,
+        customThresholds,
+      );
+
+      if (alarms.length > 0) {
+        const highestLevel = getHighestAlarmLevel(alarms);
+
+        if (highestLevel === 'critical') totalCritical++;
+        else if (highestLevel === 'warning') totalWarning++;
+
+        const user = taxCase.clientProfile?.user;
+        const clientName = user
+          ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Cliente'
+          : 'Cliente';
+        const clientEmail = user?.email || '';
+
+        items.push({
+          taxCaseId: taxCase.id,
+          clientName,
+          clientEmail,
+          alarms,
+          highestLevel,
+          federalStatusNew: taxCase.federalStatusNew,
+          stateStatusNew: taxCase.stateStatusNew,
+          federalStatusNewChangedAt: taxCase.federalStatusNewChangedAt,
+          stateStatusNewChangedAt: taxCase.stateStatusNewChangedAt,
+          hasCustomThresholds: !!taxCase.alarmThreshold,
+        });
+      }
+    }
+
+    // Sort by severity (critical first) then by days
+    items.sort((a, b) => {
+      if (a.highestLevel === 'critical' && b.highestLevel !== 'critical') return -1;
+      if (a.highestLevel !== 'critical' && b.highestLevel === 'critical') return 1;
+      // Then by max days in alarms
+      const aMaxDays = Math.max(...a.alarms.map((al) => al.daysSinceStatusChange));
+      const bMaxDays = Math.max(...b.alarms.map((al) => al.daysSinceStatusChange));
+      return bMaxDays - aMaxDays;
+    });
+
+    return {
+      items,
+      totalWithAlarms: items.length,
+      totalCritical,
+      totalWarning,
+    };
+  }
+
+  /**
+   * Get alarm history with optional filters
+   */
+  async getHistory(filters: AlarmHistoryFilters = {}): Promise<AlarmHistoryItem[]> {
+    const where: Prisma.AlarmHistoryWhereInput = {};
+
+    if (filters.taxCaseId) where.taxCaseId = filters.taxCaseId;
+    if (filters.alarmType) where.alarmType = filters.alarmType;
+    if (filters.alarmLevel) where.alarmLevel = filters.alarmLevel;
+    if (filters.resolution) where.resolution = filters.resolution;
+    if (filters.track) where.track = filters.track;
+    if (filters.fromDate || filters.toDate) {
+      where.triggeredAt = {};
+      if (filters.fromDate) where.triggeredAt.gte = filters.fromDate;
+      if (filters.toDate) where.triggeredAt.lte = filters.toDate;
+    }
+
+    const history = await this.prisma.alarmHistory.findMany({
+      where,
+      include: {
+        taxCase: {
+          include: {
+            clientProfile: {
+              include: {
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        resolvedBy: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy: { triggeredAt: 'desc' },
+      take: 100,
+    });
+
+    return history.map((h) => {
+      const user = h.taxCase?.clientProfile?.user;
+      const clientName = user
+        ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Cliente'
+        : 'Cliente';
+
+      return {
+        id: h.id,
+        taxCaseId: h.taxCaseId,
+        clientName,
+        alarmType: h.alarmType,
+        alarmLevel: h.alarmLevel,
+        track: h.track,
+        message: h.message,
+        thresholdDays: h.thresholdDays,
+        actualDays: h.actualDays,
+        statusAtTrigger: h.statusAtTrigger,
+        statusChangedAt: h.statusChangedAt,
+        resolution: h.resolution,
+        resolvedAt: h.resolvedAt,
+        resolvedByName: h.resolvedBy
+          ? `${h.resolvedBy.firstName} ${h.resolvedBy.lastName}`
+          : null,
+        resolvedNote: h.resolvedNote,
+        autoResolveReason: h.autoResolveReason,
+        triggeredAt: h.triggeredAt,
+      };
+    });
+  }
+
+  /**
+   * Acknowledge an alarm (mark as seen but not resolved)
+   */
+  async acknowledgeAlarm(alarmId: string, userId: string): Promise<void> {
+    const alarm = await this.prisma.alarmHistory.findUnique({
+      where: { id: alarmId },
+    });
+
+    if (!alarm) {
+      throw new NotFoundException(`Alarm ${alarmId} not found`);
+    }
+
+    if (alarm.resolution !== 'active') {
+      return; // Already acknowledged or resolved
+    }
+
+    await this.prisma.alarmHistory.update({
+      where: { id: alarmId },
+      data: {
+        resolution: 'acknowledged',
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Resolve an alarm with a note
+   */
+  async resolveAlarm(
+    alarmId: string,
+    userId: string,
+    note?: string,
+  ): Promise<void> {
+    const alarm = await this.prisma.alarmHistory.findUnique({
+      where: { id: alarmId },
+    });
+
+    if (!alarm) {
+      throw new NotFoundException(`Alarm ${alarmId} not found`);
+    }
+
+    if (alarm.resolution === 'resolved' || alarm.resolution === 'auto_resolved') {
+      return; // Already resolved
+    }
+
+    await this.prisma.alarmHistory.update({
+      where: { id: alarmId },
+      data: {
+        resolution: 'resolved',
+        resolvedAt: new Date(),
+        resolvedById: userId,
+        resolvedNote: note || null,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Get thresholds for a tax case (custom or defaults)
+   */
+  async getThresholds(taxCaseId: string): Promise<ThresholdsResponse> {
+    const taxCase = await this.prisma.taxCase.findUnique({
+      where: { id: taxCaseId },
+      include: {
+        clientProfile: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+        alarmThreshold: true,
+      },
+    });
+
+    if (!taxCase) {
+      throw new NotFoundException(`Tax case ${taxCaseId} not found`);
+    }
+
+    const user = taxCase.clientProfile?.user;
+    const clientName = user
+      ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Cliente'
+      : 'Cliente';
+
+    const customThreshold = taxCase.alarmThreshold;
+    const isCustom = !!customThreshold;
+
+    return {
+      taxCaseId,
+      clientName,
+      thresholds: {
+        federalInProcessDays:
+          customThreshold?.federalInProcessDays ??
+          DEFAULT_ALARM_THRESHOLDS.POSSIBLE_VERIFICATION_FEDERAL,
+        stateInProcessDays:
+          customThreshold?.stateInProcessDays ??
+          DEFAULT_ALARM_THRESHOLDS.POSSIBLE_VERIFICATION_STATE,
+        verificationTimeoutDays:
+          customThreshold?.verificationTimeoutDays ??
+          DEFAULT_ALARM_THRESHOLDS.VERIFICATION_TIMEOUT,
+        letterSentTimeoutDays:
+          customThreshold?.letterSentTimeoutDays ??
+          DEFAULT_ALARM_THRESHOLDS.LETTER_SENT_TIMEOUT,
+        disableFederalAlarms: customThreshold?.disableFederalAlarms ?? false,
+        disableStateAlarms: customThreshold?.disableStateAlarms ?? false,
+      },
+      isCustom,
+      reason: customThreshold?.reason ?? null,
+      createdAt: customThreshold?.createdAt ?? null,
+      updatedAt: customThreshold?.updatedAt ?? null,
+    };
+  }
+
+  /**
+   * Set custom thresholds for a tax case
+   */
+  async setThresholds(
+    taxCaseId: string,
+    dto: SetThresholdsDto,
+    userId: string,
+  ): Promise<ThresholdsResponse> {
+    // Verify tax case exists
+    const taxCase = await this.prisma.taxCase.findUnique({
+      where: { id: taxCaseId },
+    });
+
+    if (!taxCase) {
+      throw new NotFoundException(`Tax case ${taxCaseId} not found`);
+    }
+
+    // Upsert the threshold record
+    await this.prisma.alarmThreshold.upsert({
+      where: { taxCaseId },
+      create: {
+        taxCaseId,
+        federalInProcessDays: dto.federalInProcessDays,
+        stateInProcessDays: dto.stateInProcessDays,
+        verificationTimeoutDays: dto.verificationTimeoutDays,
+        letterSentTimeoutDays: dto.letterSentTimeoutDays,
+        disableFederalAlarms: dto.disableFederalAlarms ?? false,
+        disableStateAlarms: dto.disableStateAlarms ?? false,
+        reason: dto.reason,
+        createdById: userId,
+      },
+      update: {
+        federalInProcessDays: dto.federalInProcessDays,
+        stateInProcessDays: dto.stateInProcessDays,
+        verificationTimeoutDays: dto.verificationTimeoutDays,
+        letterSentTimeoutDays: dto.letterSentTimeoutDays,
+        disableFederalAlarms: dto.disableFederalAlarms ?? false,
+        disableStateAlarms: dto.disableStateAlarms ?? false,
+        reason: dto.reason,
+        updatedAt: new Date(),
+      },
+    });
+
+    return this.getThresholds(taxCaseId);
+  }
+
+  /**
+   * Delete custom thresholds (revert to defaults)
+   */
+  async deleteThresholds(taxCaseId: string): Promise<void> {
+    await this.prisma.alarmThreshold.deleteMany({
+      where: { taxCaseId },
+    });
+  }
+
+  /**
+   * Record a new alarm to history (called when alarm is first triggered)
+   */
+  async recordAlarm(
+    taxCaseId: string,
+    alarm: StatusAlarm,
+    statusAtTrigger: string,
+    statusChangedAt: Date,
+  ): Promise<void> {
+    // Check if this exact alarm already exists and is still active
+    const existingAlarm = await this.prisma.alarmHistory.findFirst({
+      where: {
+        taxCaseId,
+        alarmType: alarm.type as AlarmType,
+        track: alarm.track,
+        resolution: { in: ['active', 'acknowledged'] },
+      },
+    });
+
+    if (existingAlarm) {
+      // Update the actual days but don't create duplicate
+      await this.prisma.alarmHistory.update({
+        where: { id: existingAlarm.id },
+        data: {
+          actualDays: alarm.daysSinceStatusChange,
+          message: alarm.message,
+          updatedAt: new Date(),
+        },
+      });
+      return;
+    }
+
+    // Create new alarm history record
+    await this.prisma.alarmHistory.create({
+      data: {
+        taxCaseId,
+        alarmType: alarm.type as AlarmType,
+        alarmLevel: alarm.level as AlarmLevel,
+        track: alarm.track,
+        message: alarm.message,
+        thresholdDays: alarm.threshold,
+        actualDays: alarm.daysSinceStatusChange,
+        statusAtTrigger,
+        statusChangedAt,
+      },
+    });
+  }
+
+  /**
+   * Auto-resolve alarms when status changes (e.g., moves out of in_process)
+   */
+  async autoResolveAlarms(
+    taxCaseId: string,
+    track: 'federal' | 'state',
+    reason: string,
+  ): Promise<void> {
+    await this.prisma.alarmHistory.updateMany({
+      where: {
+        taxCaseId,
+        track,
+        resolution: { in: ['active', 'acknowledged'] },
+      },
+      data: {
+        resolution: 'auto_resolved',
+        resolvedAt: new Date(),
+        autoResolveReason: reason,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Sync alarms for a tax case (recalculate and record/resolve as needed)
+   * Call this after status updates to keep alarm history in sync
+   */
+  async syncAlarmsForCase(taxCaseId: string): Promise<void> {
+    const taxCase = await this.prisma.taxCase.findUnique({
+      where: { id: taxCaseId },
+      include: { alarmThreshold: true },
+    });
+
+    if (!taxCase) return;
+
+    const customThresholds: CustomAlarmThresholds | null = taxCase.alarmThreshold
+      ? {
+          federalInProcessDays: taxCase.alarmThreshold.federalInProcessDays,
+          stateInProcessDays: taxCase.alarmThreshold.stateInProcessDays,
+          verificationTimeoutDays: taxCase.alarmThreshold.verificationTimeoutDays,
+          letterSentTimeoutDays: taxCase.alarmThreshold.letterSentTimeoutDays,
+          disableFederalAlarms: taxCase.alarmThreshold.disableFederalAlarms,
+          disableStateAlarms: taxCase.alarmThreshold.disableStateAlarms,
+        }
+      : null;
+
+    const currentAlarms = calculateAlarms(
+      taxCase.federalStatusNew,
+      taxCase.federalStatusNewChangedAt,
+      taxCase.stateStatusNew,
+      taxCase.stateStatusNewChangedAt,
+      customThresholds,
+    );
+
+    // Get current active alarms from history
+    const activeHistoryAlarms = await this.prisma.alarmHistory.findMany({
+      where: {
+        taxCaseId,
+        resolution: { in: ['active', 'acknowledged'] },
+      },
+    });
+
+    // Find alarms that should be auto-resolved (no longer triggered)
+    for (const historyAlarm of activeHistoryAlarms) {
+      const stillActive = currentAlarms.some(
+        (a) => a.type === historyAlarm.alarmType && a.track === historyAlarm.track,
+      );
+
+      if (!stillActive) {
+        await this.prisma.alarmHistory.update({
+          where: { id: historyAlarm.id },
+          data: {
+            resolution: 'auto_resolved',
+            resolvedAt: new Date(),
+            autoResolveReason: 'Status changed - alarm condition no longer met',
+            updatedAt: new Date(),
+          },
+        });
+      }
+    }
+
+    // Record new alarms that aren't in history yet
+    for (const alarm of currentAlarms) {
+      const statusChangedAt =
+        alarm.track === 'federal'
+          ? taxCase.federalStatusNewChangedAt
+          : taxCase.stateStatusNewChangedAt;
+
+      const statusAtTrigger =
+        alarm.track === 'federal'
+          ? taxCase.federalStatusNew
+          : taxCase.stateStatusNew;
+
+      if (statusChangedAt && statusAtTrigger) {
+        await this.recordAlarm(taxCaseId, alarm, statusAtTrigger, statusChangedAt);
+      }
+    }
+  }
+}

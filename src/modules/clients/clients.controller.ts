@@ -146,6 +146,13 @@ export class ClientsController {
     return this.clientsService.getDelaysData();
   }
 
+  @Get('admin/alarms')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  async getClientsWithAlarms() {
+    return this.clientsService.getClientsWithAlarms();
+  }
+
   @Get('admin/clients')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)

@@ -18,6 +18,9 @@ import {
   TaxStatus,
   ProblemType,
   PreFilingStatus,
+  CaseStatus,
+  FederalStatusNew,
+  StateStatusNew,
 } from '@prisma/client';
 
 /**
@@ -123,6 +126,23 @@ export class UpdateStatusDto {
   @IsDateString()
   @IsNotFutureDate({ message: 'State deposit date cannot be in the future' })
   stateDepositDate?: string;
+
+  // ============= NEW STATUS SYSTEM (v2) =============
+
+  // Unified case status (replaces preFilingStatus + taxesFiled)
+  @IsOptional()
+  @IsEnum(CaseStatus, { message: 'Invalid case status' })
+  caseStatus?: CaseStatus;
+
+  // Enhanced federal status
+  @IsOptional()
+  @IsEnum(FederalStatusNew, { message: 'Invalid federal status (new)' })
+  federalStatusNew?: FederalStatusNew;
+
+  // Enhanced state status
+  @IsOptional()
+  @IsEnum(StateStatusNew, { message: 'Invalid state status (new)' })
+  stateStatusNew?: StateStatusNew;
 }
 
 // DEPRECATED: UpdateAdminStepDto removed - use internalStatus changes instead

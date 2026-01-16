@@ -18,6 +18,19 @@ import {
   SetProblemDto,
   SendNotificationDto,
 } from './dto/admin-update.dto';
+import {
+  calculateAlarms,
+  StatusAlarm,
+  deriveCaseStatusFromOldSystem,
+  mapOldToNewFederalStatus,
+  mapOldToNewStateStatus,
+  getCaseStatusLabel,
+  getFederalStatusNewLabel,
+  getStateStatusNewLabel,
+  mapCaseStatusToClientDisplay,
+  mapFederalStatusToClientDisplay,
+  mapStateStatusToClientDisplay,
+} from '../../common/utils/status-mapping.util';
 import * as ExcelJS from 'exceljs';
 import { PassThrough } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
@@ -650,6 +663,14 @@ export class ClientsService {
             bankName: true,
             bankRoutingNumber: true,
             bankAccountNumber: true,
+            hasProblem: true,
+            // NEW STATUS SYSTEM (v2)
+            caseStatus: true,
+            caseStatusChangedAt: true,
+            federalStatusNew: true,
+            federalStatusNewChangedAt: true,
+            stateStatusNew: true,
+            stateStatusNewChangedAt: true,
             documents: {
               select: {
                 type: true,
@@ -755,6 +776,16 @@ export class ClientsService {
           lastReviewDate = federalReview || stateReview || null;
         }
 
+        // Calculate alarms for this client (new status system)
+        const alarms: StatusAlarm[] = taxCase
+          ? calculateAlarms(
+              taxCase.federalStatusNew,
+              taxCase.federalStatusNewChangedAt,
+              taxCase.stateStatusNew,
+              taxCase.stateStatusNewChangedAt,
+            )
+          : [];
+
         return {
           id: client.id,
           user: {
@@ -765,12 +796,23 @@ export class ClientsService {
           },
           // SSN (decrypted for admin view)
           ssn: client.ssn ? this.encryption.decrypt(client.ssn) : null,
-          // Phase-based status fields
+          // Phase-based status fields (OLD SYSTEM - kept for backward compatibility)
           taxesFiled: taxCase?.taxesFiled || false,
           taxesFiledAt: taxCase?.taxesFiledAt || null,
           preFilingStatus: taxCase?.preFilingStatus || null,
           federalStatus: taxCase?.federalStatus || null,
           stateStatus: taxCase?.stateStatus || null,
+          // NEW STATUS SYSTEM (v2)
+          caseStatus: taxCase?.caseStatus || null,
+          caseStatusChangedAt: taxCase?.caseStatusChangedAt || null,
+          federalStatusNew: taxCase?.federalStatusNew || null,
+          federalStatusNewChangedAt: taxCase?.federalStatusNewChangedAt || null,
+          stateStatusNew: taxCase?.stateStatusNew || null,
+          stateStatusNewChangedAt: taxCase?.stateStatusNewChangedAt || null,
+          // Alarms
+          alarms,
+          hasAlarm: alarms.length > 0,
+          hasCriticalAlarm: alarms.some(a => a.level === 'critical'),
           // Status tracking
           federalLastComment: taxCase?.federalLastComment || null,
           stateLastComment: taxCase?.stateLastComment || null,
@@ -905,52 +947,73 @@ export class ClientsService {
         createdAt: client.createdAt,
         updatedAt: client.updatedAt,
       },
-      taxCases: client.taxCases.map((tc) => ({
-        id: tc.id,
-        clientProfileId: tc.clientProfileId,
-        taxYear: tc.taxYear,
-        // Phase-based status fields
-        taxesFiled: (tc as any).taxesFiled || false,
-        taxesFiledAt: (tc as any).taxesFiledAt,
-        preFilingStatus: (tc as any).preFilingStatus,
-        // Federal/State status
-        federalStatus: tc.federalStatus,
-        stateStatus: tc.stateStatus,
-        estimatedRefund: tc.estimatedRefund,
-        // Computed from federal + state (for backward compatibility in API response)
-        actualRefund:
-          tc.federalActualRefund || tc.stateActualRefund
-            ? Number(tc.federalActualRefund || 0) +
-              Number(tc.stateActualRefund || 0)
-            : null,
-        // Computed: first available deposit date
-        refundDepositDate: tc.federalDepositDate || tc.stateDepositDate || null,
-        // Separate federal/state fields (SOURCE OF TRUTH)
-        federalEstimatedDate: tc.federalEstimatedDate,
-        stateEstimatedDate: tc.stateEstimatedDate,
-        federalActualRefund: tc.federalActualRefund,
-        stateActualRefund: tc.stateActualRefund,
-        federalDepositDate: tc.federalDepositDate,
-        stateDepositDate: tc.stateDepositDate,
-        // NEW: Status tracking fields
-        federalLastComment: (tc as any).federalLastComment,
-        federalStatusChangedAt: (tc as any).federalStatusChangedAt,
-        federalLastReviewedAt: (tc as any).federalLastReviewedAt,
-        stateLastComment: (tc as any).stateLastComment,
-        stateStatusChangedAt: (tc as any).stateStatusChangedAt,
-        stateLastReviewedAt: (tc as any).stateLastReviewedAt,
-        paymentReceived: tc.paymentReceived,
-        commissionPaid: tc.commissionPaid,
-        statusUpdatedAt: tc.statusUpdatedAt,
-        adminStep: tc.adminStep,
-        hasProblem: tc.hasProblem,
-        problemStep: tc.problemStep,
-        problemType: tc.problemType,
-        problemDescription: tc.problemDescription,
-        problemResolvedAt: tc.problemResolvedAt,
-        createdAt: tc.createdAt,
-        updatedAt: tc.updatedAt,
-      })),
+      taxCases: client.taxCases.map((tc) => {
+        // Calculate alarms for this tax case
+        const alarms = calculateAlarms(
+          (tc as any).federalStatusNew,
+          (tc as any).federalStatusNewChangedAt,
+          (tc as any).stateStatusNew,
+          (tc as any).stateStatusNewChangedAt,
+        );
+
+        return {
+          id: tc.id,
+          clientProfileId: tc.clientProfileId,
+          taxYear: tc.taxYear,
+          // Phase-based status fields (OLD SYSTEM - kept for backward compatibility)
+          taxesFiled: (tc as any).taxesFiled || false,
+          taxesFiledAt: (tc as any).taxesFiledAt,
+          preFilingStatus: (tc as any).preFilingStatus,
+          // Federal/State status (OLD)
+          federalStatus: tc.federalStatus,
+          stateStatus: tc.stateStatus,
+          // NEW STATUS SYSTEM (v2)
+          caseStatus: (tc as any).caseStatus,
+          caseStatusChangedAt: (tc as any).caseStatusChangedAt,
+          federalStatusNew: (tc as any).federalStatusNew,
+          federalStatusNewChangedAt: (tc as any).federalStatusNewChangedAt,
+          stateStatusNew: (tc as any).stateStatusNew,
+          stateStatusNewChangedAt: (tc as any).stateStatusNewChangedAt,
+          // Alarms
+          alarms,
+          hasAlarm: alarms.length > 0,
+          hasCriticalAlarm: alarms.some(a => a.level === 'critical'),
+          estimatedRefund: tc.estimatedRefund,
+          // Computed from federal + state (for backward compatibility in API response)
+          actualRefund:
+            tc.federalActualRefund || tc.stateActualRefund
+              ? Number(tc.federalActualRefund || 0) +
+                Number(tc.stateActualRefund || 0)
+              : null,
+          // Computed: first available deposit date
+          refundDepositDate: tc.federalDepositDate || tc.stateDepositDate || null,
+          // Separate federal/state fields (SOURCE OF TRUTH)
+          federalEstimatedDate: tc.federalEstimatedDate,
+          stateEstimatedDate: tc.stateEstimatedDate,
+          federalActualRefund: tc.federalActualRefund,
+          stateActualRefund: tc.stateActualRefund,
+          federalDepositDate: tc.federalDepositDate,
+          stateDepositDate: tc.stateDepositDate,
+          // Status tracking fields
+          federalLastComment: (tc as any).federalLastComment,
+          federalStatusChangedAt: (tc as any).federalStatusChangedAt,
+          federalLastReviewedAt: (tc as any).federalLastReviewedAt,
+          stateLastComment: (tc as any).stateLastComment,
+          stateStatusChangedAt: (tc as any).stateStatusChangedAt,
+          stateLastReviewedAt: (tc as any).stateLastReviewedAt,
+          paymentReceived: tc.paymentReceived,
+          commissionPaid: tc.commissionPaid,
+          statusUpdatedAt: tc.statusUpdatedAt,
+          adminStep: tc.adminStep,
+          hasProblem: tc.hasProblem,
+          problemStep: tc.problemStep,
+          problemType: tc.problemType,
+          problemDescription: tc.problemDescription,
+          problemResolvedAt: tc.problemResolvedAt,
+          createdAt: tc.createdAt,
+          updatedAt: tc.updatedAt,
+        };
+      }),
       documents: allDocuments,
       statusHistory: allStatusHistory,
     };
@@ -1186,6 +1249,57 @@ export class ClientsService {
       updateData.stateDepositDate = new Date(statusData.stateDepositDate);
     }
 
+    // ============= NEW STATUS SYSTEM (v2) - DUAL WRITE =============
+    // Update new caseStatus field
+    if (statusData.caseStatus) {
+      updateData.caseStatus = statusData.caseStatus;
+      updateData.caseStatusChangedAt = now;
+    } else {
+      // Derive caseStatus from old system fields if not explicitly provided
+      // This ensures new fields are always populated during transition
+      const newCaseStatus = deriveCaseStatusFromOldSystem(
+        statusData.taxesFiled !== undefined ? statusData.taxesFiled : (taxCase as any).taxesFiled,
+        statusData.preFilingStatus || (taxCase as any).preFilingStatus,
+        taxCase.hasProblem,
+      );
+      if (newCaseStatus && newCaseStatus !== (taxCase as any).caseStatus) {
+        updateData.caseStatus = newCaseStatus;
+        updateData.caseStatusChangedAt = now;
+      }
+    }
+
+    // Update new federalStatusNew field
+    if (statusData.federalStatusNew) {
+      const prevFederalStatusNew = (taxCase as any).federalStatusNew;
+      updateData.federalStatusNew = statusData.federalStatusNew;
+      if (statusData.federalStatusNew !== prevFederalStatusNew) {
+        updateData.federalStatusNewChangedAt = now;
+      }
+    } else if (federalStatus) {
+      // Dual-write: map old federalStatus to new federalStatusNew
+      const mappedFederalStatus = mapOldToNewFederalStatus(federalStatus);
+      if (mappedFederalStatus && mappedFederalStatus !== (taxCase as any).federalStatusNew) {
+        updateData.federalStatusNew = mappedFederalStatus;
+        updateData.federalStatusNewChangedAt = now;
+      }
+    }
+
+    // Update new stateStatusNew field
+    if (statusData.stateStatusNew) {
+      const prevStateStatusNew = (taxCase as any).stateStatusNew;
+      updateData.stateStatusNew = statusData.stateStatusNew;
+      if (statusData.stateStatusNew !== prevStateStatusNew) {
+        updateData.stateStatusNewChangedAt = now;
+      }
+    } else if (stateStatus) {
+      // Dual-write: map old stateStatus to new stateStatusNew
+      const mappedStateStatus = mapOldToNewStateStatus(stateStatus);
+      if (mappedStateStatus && mappedStateStatus !== (taxCase as any).stateStatusNew) {
+        updateData.stateStatusNew = mappedStateStatus;
+        updateData.stateStatusNewChangedAt = now;
+      }
+    }
+
     // Check if this is the first deposit date being set (referral completion trigger)
     const isFirstDepositDate =
       !taxCase.federalDepositDate &&
@@ -1205,6 +1319,16 @@ export class ClientsService {
     }
     if (statusData.taxesFiled !== undefined) {
       statusChanges.push(`taxesFiled: ${statusData.taxesFiled}`);
+    }
+    // NEW STATUS SYSTEM (v2) - add to history log
+    if (updateData.caseStatus) {
+      statusChanges.push(`caseStatus: ${updateData.caseStatus}`);
+    }
+    if (statusData.federalStatusNew || updateData.federalStatusNew) {
+      statusChanges.push(`federalStatusNew: ${statusData.federalStatusNew || updateData.federalStatusNew}`);
+    }
+    if (statusData.stateStatusNew || updateData.stateStatusNew) {
+      statusChanges.push(`stateStatusNew: ${statusData.stateStatusNew || updateData.stateStatusNew}`);
     }
 
     await this.prisma.$transaction([
@@ -2355,6 +2479,118 @@ export class ClientsService {
           : 0,
       projectedEarnings: Math.round(projectedEarnings * 100) / 100,
       earningsToDate: Math.round(earningsToDate * 100) / 100,
+    };
+  }
+
+  /**
+   * Get all clients that have active alarms (NEW STATUS SYSTEM v2)
+   * Used for alarm dashboard
+   */
+  async getClientsWithAlarms(): Promise<{
+    clients: Array<{
+      id: string;
+      name: string;
+      alarms: StatusAlarm[];
+      federalStatusNew: string | null;
+      stateStatusNew: string | null;
+      federalStatusNewChangedAt: Date | null;
+      stateStatusNewChangedAt: Date | null;
+    }>;
+    totalWithAlarms: number;
+    totalCritical: number;
+    totalWarning: number;
+  }> {
+    // Get all tax cases with the new status fields
+    const taxCases = await this.prisma.taxCase.findMany({
+      where: {
+        OR: [
+          { federalStatusNew: { not: null } },
+          { stateStatusNew: { not: null } },
+        ],
+      },
+      select: {
+        id: true,
+        federalStatusNew: true,
+        federalStatusNewChangedAt: true,
+        stateStatusNew: true,
+        stateStatusNewChangedAt: true,
+        clientProfile: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Calculate alarms for each client
+    const clientsWithAlarms: Array<{
+      id: string;
+      name: string;
+      alarms: StatusAlarm[];
+      federalStatusNew: string | null;
+      stateStatusNew: string | null;
+      federalStatusNewChangedAt: Date | null;
+      stateStatusNewChangedAt: Date | null;
+    }> = [];
+
+    let totalCritical = 0;
+    let totalWarning = 0;
+
+    for (const tc of taxCases) {
+      const alarms = calculateAlarms(
+        tc.federalStatusNew,
+        tc.federalStatusNewChangedAt,
+        tc.stateStatusNew,
+        tc.stateStatusNewChangedAt,
+      );
+
+      if (alarms.length > 0) {
+        const name = tc.clientProfile?.user
+          ? `${tc.clientProfile.user.firstName || ''} ${tc.clientProfile.user.lastName || ''}`.trim()
+          : 'Cliente';
+
+        clientsWithAlarms.push({
+          id: tc.clientProfile?.id || tc.id,
+          name,
+          alarms,
+          federalStatusNew: tc.federalStatusNew,
+          stateStatusNew: tc.stateStatusNew,
+          federalStatusNewChangedAt: tc.federalStatusNewChangedAt,
+          stateStatusNewChangedAt: tc.stateStatusNewChangedAt,
+        });
+
+        // Count alarm levels
+        for (const alarm of alarms) {
+          if (alarm.level === 'critical') totalCritical++;
+          else totalWarning++;
+        }
+      }
+    }
+
+    // Sort by critical alarms first, then by days since status change
+    clientsWithAlarms.sort((a, b) => {
+      const aHasCritical = a.alarms.some(al => al.level === 'critical');
+      const bHasCritical = b.alarms.some(al => al.level === 'critical');
+      if (aHasCritical && !bHasCritical) return -1;
+      if (!aHasCritical && bHasCritical) return 1;
+
+      // Sort by max days
+      const aMaxDays = Math.max(...a.alarms.map(al => al.daysSinceStatusChange));
+      const bMaxDays = Math.max(...b.alarms.map(al => al.daysSinceStatusChange));
+      return bMaxDays - aMaxDays;
+    });
+
+    return {
+      clients: clientsWithAlarms,
+      totalWithAlarms: clientsWithAlarms.length,
+      totalCritical,
+      totalWarning,
     };
   }
 }

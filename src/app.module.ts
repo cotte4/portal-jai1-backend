@@ -25,6 +25,7 @@ import { ReferralsModule } from './modules/referrals/referrals.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { HealthModule } from './modules/health/health.module';
 import { StorageCleanupModule } from './modules/storage-cleanup/storage-cleanup.module';
+import { AlarmsModule } from './modules/alarms/alarms.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { StorageCleanupModule } from './modules/storage-cleanup/storage-cleanup.
     AuditLogsModule,
     HealthModule,
     StorageCleanupModule,
+    AlarmsModule,
   ],
   controllers: [],
   providers: [
