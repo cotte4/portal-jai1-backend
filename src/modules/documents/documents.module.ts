@@ -6,9 +6,10 @@ import { SupabaseService } from '../../config/supabase.service';
 import { StoragePathService } from '../../common/services';
 import { ProgressModule } from '../progress/progress.module';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [ProgressModule, AuditLogsModule],
+  imports: [ProgressModule, AuditLogsModule, NotificationsModule],
   controllers: [DocumentsController],
   providers: [DocumentsService, PrismaService, SupabaseService, StoragePathService],
   exports: [DocumentsService],

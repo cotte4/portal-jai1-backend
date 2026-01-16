@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   calculateAlarms,
   StatusAlarm,
@@ -8,6 +9,7 @@ import {
   getHighestAlarmLevel,
 } from '../../common/utils/status-mapping.util';
 import { AlarmResolution, AlarmType, AlarmLevel, Prisma } from '@prisma/client';
+import { I18nService } from '../../i18n';
 
 // DTOs
 export interface AlarmDashboardItem {
@@ -89,7 +91,13 @@ export interface ThresholdsResponse {
 
 @Injectable()
 export class AlarmsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(AlarmsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+    private i18n: I18nService,
+  ) {}
 
   /**
    * Get alarm dashboard with all cases that have active alarms
@@ -481,6 +489,60 @@ export class AlarmsService {
         statusChangedAt,
       },
     });
+
+    // Notify the client about the alarm (only for NEW alarms, not updates)
+    await this.notifyClientAboutAlarm(taxCaseId, alarm);
+  }
+
+  /**
+   * Notify client when a new alarm is triggered
+   */
+  private async notifyClientAboutAlarm(
+    taxCaseId: string,
+    alarm: StatusAlarm,
+  ): Promise<void> {
+    try {
+      // Get client user ID from tax case
+      const taxCase = await this.prisma.taxCase.findUnique({
+        where: { id: taxCaseId },
+        include: {
+          clientProfile: {
+            include: { user: true },
+          },
+        },
+      });
+
+      if (!taxCase?.clientProfile?.user) {
+        this.logger.warn(`Could not find client for tax case ${taxCaseId}`);
+        return;
+      }
+
+      const userId = taxCase.clientProfile.userId;
+      const track = this.i18n.getTrack(alarm.track as 'federal' | 'state');
+
+      // Create a client-friendly notification based on alarm type
+      let templateKey: string;
+
+      if (alarm.type === 'verification_timeout') {
+        templateKey = 'notifications.alarm_verification_timeout';
+      } else if (alarm.type === 'letter_sent_timeout') {
+        templateKey = 'notifications.alarm_letter_sent';
+      } else {
+        templateKey = 'notifications.alarm_general';
+      }
+
+      await this.notificationsService.createFromTemplate(
+        userId,
+        'problem_alert',
+        templateKey,
+        { track, days: alarm.daysSinceStatusChange },
+      );
+
+      this.logger.log(`Sent alarm notification to client ${userId} for tax case ${taxCaseId}`);
+    } catch (error) {
+      this.logger.error(`Failed to notify client about alarm for tax case ${taxCaseId}:`, error);
+      // Don't throw - notification failure shouldn't break the alarm recording
+    }
   }
 
   /**

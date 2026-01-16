@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Delete,
   Param,
   Query,
   UseGuards,
@@ -28,8 +29,13 @@ export class NotificationsController {
     );
   }
 
+  @Get('unread-count')
+  async getUnreadCount(@CurrentUser() user: any) {
+    return this.notificationsService.getUnreadCount(user.id);
+  }
+
   // IMPORTANT: Static routes must come before dynamic routes
-  // 'read-all' and 'archive-all-read' must be defined before ':id/*' to prevent being matched as an :id
+  // 'read-all', 'archive-all-read', 'delete-all-read' must be defined before ':id/*'
   @Patch('read-all')
   async markAllAsRead(@CurrentUser() user: any) {
     return this.notificationsService.markAllAsRead(user.id);
@@ -40,6 +46,11 @@ export class NotificationsController {
     return this.notificationsService.archiveAllRead(user.id);
   }
 
+  @Delete('read')
+  async deleteAllRead(@CurrentUser() user: any) {
+    return this.notificationsService.deleteAllRead(user.id);
+  }
+
   @Patch(':id/read')
   async markAsRead(@CurrentUser() user: any, @Param('id') id: string) {
     return this.notificationsService.markAsRead(id, user.id);
@@ -48,5 +59,10 @@ export class NotificationsController {
   @Patch(':id/archive')
   async archive(@CurrentUser() user: any, @Param('id') id: string) {
     return this.notificationsService.archive(id, user.id);
+  }
+
+  @Delete(':id')
+  async delete(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.notificationsService.delete(id, user.id);
   }
 }

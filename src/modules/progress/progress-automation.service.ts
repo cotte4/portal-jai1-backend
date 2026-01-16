@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../../common/services';
 import { ConfigService } from '@nestjs/config';
 import { PreFilingStatus } from '@prisma/client';
+import { redactUserId, sanitizeMetadata } from '../../common/utils/log-sanitizer';
 
 export type ProgressEventType =
   | 'PROFILE_COMPLETED'
@@ -35,8 +37,8 @@ export class ProgressAutomationService {
    */
   async processEvent(event: ProgressEvent): Promise<void> {
     this.logger.log(`=== PROGRESS AUTOMATION: Processing event ${event.type} ===`);
-    this.logger.log(`User: ${event.userId}, TaxCase: ${event.taxCaseId}`);
-    this.logger.log(`Metadata: ${JSON.stringify(event.metadata)}`);
+    this.logger.log(`User: ${redactUserId(event.userId)}, TaxCase: ${redactUserId(event.taxCaseId)}`);
+    this.logger.log(`Metadata: ${JSON.stringify(sanitizeMetadata(event.metadata || {}))}`);
 
     try {
       switch (event.type) {
@@ -76,7 +78,7 @@ export class ProgressAutomationService {
     // Only update if still in awaiting_registration or awaiting_documents status
     if (taxCase && ((taxCase as any).preFilingStatus === 'awaiting_registration' || (taxCase as any).preFilingStatus === 'awaiting_documents')) {
       await this.updateTaxCaseStatus(event.taxCaseId, 'awaiting_documents' as PreFilingStatus);
-      this.logger.log(`Updated preFilingStatus to awaiting_documents for TaxCase ${event.taxCaseId}`);
+      this.logger.log(`Updated preFilingStatus to awaiting_documents for TaxCase ${redactUserId(event.taxCaseId)}`);
     }
 
     // Notify all admins
@@ -113,7 +115,7 @@ export class ProgressAutomationService {
       where: { id: event.taxCaseId },
       data: { paymentReceived: true },
     });
-    this.logger.log(`Set paymentReceived = true for TaxCase ${event.taxCaseId}`);
+    this.logger.log(`Set paymentReceived = true for TaxCase ${redactUserId(event.taxCaseId)}`);
 
     // Notify admins
     await this.notifyAdmins(
@@ -186,9 +188,9 @@ export class ProgressAutomationService {
             title,
             message,
           );
-          this.logger.log(`Created in-app notification for admin ${admin.id}`);
+          this.logger.log(`Created in-app notification for admin ${redactUserId(admin.id)}`);
         } catch (error) {
-          this.logger.error(`Failed to create notification for admin ${admin.id}:`, error);
+          this.logger.error(`Failed to create notification for admin ${redactUserId(admin.id)}:`, error);
         }
       }
 
@@ -290,5 +292,239 @@ export class ProgressAutomationService {
       select: { firstName: true, lastName: true },
     });
     return user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown' : 'Unknown';
+  }
+
+  /**
+   * CRON JOB: Runs daily at 9:00 AM to check for missing documents
+   * and notify clients who haven't uploaded required docs after 3 days
+   * NOTE: Only runs if cron_missing_docs_enabled setting is 'true'
+   */
+  @Cron('0 9 * * *', {
+    name: 'check-missing-documents',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  })
+  async handleMissingDocumentsCron(): Promise<void> {
+    // Check if cron is enabled
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: 'cron_missing_docs_enabled' },
+    });
+
+    if (setting?.value !== 'true') {
+      this.logger.log('=== CRON: Missing documents check is DISABLED - skipping ===');
+      return;
+    }
+
+    this.logger.log('=== CRON: Starting daily missing documents check ===');
+    const result = await this.checkAndNotifyMissingDocuments(3, 3);
+    this.logger.log(`=== CRON: Completed - ${result.notified} notified, ${result.skipped} skipped ===`);
+  }
+
+  /**
+   * Get the current status of the missing docs cron job
+   */
+  async getMissingDocsCronStatus(): Promise<{ enabled: boolean; lastUpdated: Date | null }> {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: 'cron_missing_docs_enabled' },
+    });
+
+    return {
+      enabled: setting?.value === 'true',
+      lastUpdated: setting?.updatedAt || null,
+    };
+  }
+
+  /**
+   * Enable or disable the missing docs cron job
+   */
+  async setMissingDocsCronEnabled(enabled: boolean, adminId?: string): Promise<{ enabled: boolean }> {
+    await this.prisma.systemSetting.upsert({
+      where: { key: 'cron_missing_docs_enabled' },
+      create: {
+        key: 'cron_missing_docs_enabled',
+        value: enabled ? 'true' : 'false',
+        description: 'Enable/disable the daily missing documents reminder cron job',
+        updatedBy: adminId,
+      },
+      update: {
+        value: enabled ? 'true' : 'false',
+        updatedBy: adminId,
+      },
+    });
+
+    this.logger.log(`Missing docs cron ${enabled ? 'ENABLED' : 'DISABLED'} by admin ${adminId || 'unknown'}`);
+    return { enabled };
+  }
+
+  /**
+   * Check for clients with missing documents and send notifications
+   * Called by cron job or manually via admin endpoint
+   *
+   * @param daysThreshold - Number of days since registration to wait before sending notification
+   * @param maxNotificationsPerClient - Max docs_missing notifications per client (to avoid spam)
+   */
+  async checkAndNotifyMissingDocuments(
+    daysThreshold: number = 3,
+    maxNotificationsPerClient: number = 3,
+  ): Promise<{ notified: number; skipped: number }> {
+    this.logger.log(`=== CHECKING FOR MISSING DOCUMENTS (threshold: ${daysThreshold} days) ===`);
+
+    let notified = 0;
+    let skipped = 0;
+
+    try {
+      // Find clients who:
+      // 1. Are in awaiting_documents or awaiting_registration status
+      // 2. Registered more than X days ago
+      // 3. Missing required documents (W2 or profile incomplete)
+      const thresholdDate = new Date();
+      thresholdDate.setDate(thresholdDate.getDate() - daysThreshold);
+
+      const taxCases = await this.prisma.taxCase.findMany({
+        where: {
+          OR: [
+            { preFilingStatus: 'awaiting_registration' },
+            { preFilingStatus: 'awaiting_documents' },
+          ],
+          createdAt: { lte: thresholdDate },
+        },
+        include: {
+          clientProfile: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  createdAt: true,
+                },
+              },
+            },
+          },
+          documents: {
+            select: { type: true },
+          },
+        },
+      });
+
+      this.logger.log(`Found ${taxCases.length} tax cases to check for missing documents`);
+
+      for (const taxCase of taxCases) {
+        const user = taxCase.clientProfile?.user;
+        if (!user) continue;
+
+        // Check what's missing
+        const hasW2 = taxCase.documents.some((d) => d.type === 'w2');
+        const profileComplete = taxCase.clientProfile?.profileComplete ?? false;
+
+        // Skip if nothing is missing
+        if (hasW2 && profileComplete) {
+          continue;
+        }
+
+        // Check how many docs_missing notifications this client has received
+        const existingNotifications = await this.prisma.notification.count({
+          where: {
+            userId: user.id,
+            type: 'docs_missing',
+            createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, // Last 30 days
+          },
+        });
+
+        if (existingNotifications >= maxNotificationsPerClient) {
+          this.logger.log(`Skipping client ${redactUserId(user.id)} - already received ${existingNotifications} docs_missing notifications`);
+          skipped++;
+          continue;
+        }
+
+        // Build the notification message
+        const missingItems: string[] = [];
+        if (!profileComplete) missingItems.push('completar tu perfil');
+        if (!hasW2) missingItems.push('subir tu documento W2');
+
+        const message = `Hola ${user.firstName}, para continuar con tu declaración de impuestos necesitas: ${missingItems.join(' y ')}. Ingresa a tu portal para completar estos pasos.`;
+
+        // Send the notification
+        await this.notificationsService.create(
+          user.id,
+          'docs_missing',
+          'Documentos pendientes',
+          message,
+        );
+
+        this.logger.log(`Sent docs_missing notification to client ${redactUserId(user.id)} (${user.firstName} ${user.lastName})`);
+        notified++;
+      }
+    } catch (error) {
+      this.logger.error('Error checking for missing documents:', error);
+    }
+
+    this.logger.log(`=== MISSING DOCUMENTS CHECK COMPLETE: ${notified} notified, ${skipped} skipped ===`);
+    return { notified, skipped };
+  }
+
+  /**
+   * Send docs_missing notification to a specific client
+   * Can be called from admin endpoint or automation
+   */
+  async sendMissingDocsNotification(userId: string): Promise<boolean> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, firstName: true },
+      });
+
+      if (!user) {
+        this.logger.warn(`User ${userId} not found for docs_missing notification`);
+        return false;
+      }
+
+      // Get their tax case to check what's missing
+      const clientProfile = await this.prisma.clientProfile.findUnique({
+        where: { userId },
+        include: {
+          taxCases: {
+            orderBy: { taxYear: 'desc' },
+            take: 1,
+            include: {
+              documents: { select: { type: true } },
+            },
+          },
+        },
+      });
+
+      if (!clientProfile) {
+        this.logger.warn(`Client profile not found for user ${redactUserId(userId)}`);
+        return false;
+      }
+
+      const taxCase = clientProfile.taxCases[0];
+      const hasW2 = taxCase?.documents.some((d) => d.type === 'w2') ?? false;
+      const profileComplete = clientProfile.profileComplete;
+
+      // Build message based on what's missing
+      const missingItems: string[] = [];
+      if (!profileComplete) missingItems.push('completar tu perfil');
+      if (!hasW2) missingItems.push('subir tu documento W2');
+
+      if (missingItems.length === 0) {
+        this.logger.log(`No missing documents for user ${redactUserId(userId)}`);
+        return false;
+      }
+
+      const message = `Hola ${user.firstName}, para continuar con tu declaración de impuestos necesitas: ${missingItems.join(' y ')}. Ingresa a tu portal para completar estos pasos.`;
+
+      await this.notificationsService.create(
+        userId,
+        'docs_missing',
+        'Documentos pendientes',
+        message,
+      );
+
+      this.logger.log(`Sent docs_missing notification to user ${redactUserId(userId)}`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error sending docs_missing notification to user ${redactUserId(userId)}:`, error);
+      return false;
+    }
   }
 }

@@ -11,6 +11,8 @@ import { SupabaseService } from '../../config/supabase.service';
 import { StoragePathService } from '../../common/services';
 import { ProgressAutomationService } from '../progress/progress-automation.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { I18nService } from '../../i18n';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import {
   logStorageSuccess,
@@ -29,6 +31,8 @@ export class DocumentsService {
     private storagePath: StoragePathService,
     private progressAutomation: ProgressAutomationService,
     private auditLogsService: AuditLogsService,
+    private notificationsService: NotificationsService,
+    private i18n: I18nService,
   ) {}
 
   async upload(
@@ -329,12 +333,46 @@ export class DocumentsService {
   }
 
   async markAsReviewed(documentId: string) {
-    return this.prisma.document.update({
+    // Get document with client info for notification
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      include: {
+        taxCase: {
+          include: {
+            clientProfile: {
+              include: { user: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    // Update document as reviewed
+    const updatedDocument = await this.prisma.document.update({
       where: { id: documentId },
       data: {
         isReviewed: true,
         reviewedAt: new Date(),
       },
     });
+
+    // Notify client that their document has been reviewed
+    const userId = document.taxCase.clientProfile.userId;
+    const documentType = this.i18n.getDocumentType(document.type);
+
+    this.notificationsService
+      .createFromTemplate(
+        userId,
+        'status_change',
+        'notifications.document_reviewed',
+        { documentType, fileName: document.fileName },
+      )
+      .catch((err) => this.logger.error('Failed to send document review notification', err));
+
+    return updatedDocument;
   }
 }

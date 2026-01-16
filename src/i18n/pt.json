@@ -1,0 +1,101 @@
+{
+  "notifications": {
+    "welcome": {
+      "title": "Bem-vindo ao JAI1!",
+      "message": "Olá {{firstName}}, obrigado por se registrar. Complete seu perfil e envie seus documentos para iniciar sua declaração de impostos."
+    },
+    "document_reviewed": {
+      "title": "Documento Revisado",
+      "message": "Seu {{documentType}} \"{{fileName}}\" foi revisado pela nossa equipe."
+    },
+    "docs_missing": {
+      "title": "Documentos pendentes",
+      "message": "Por favor, envie os documentos ausentes para continuar com sua declaração de impostos: {{missingDocs}}"
+    },
+    "ticket_response": {
+      "title": "Resposta ao seu ticket",
+      "message": "Você recebeu uma resposta ao seu ticket: {{subject}}"
+    },
+    "referral_new": {
+      "title": "Nova indicação",
+      "message": "{{referredName}} se registrou usando seu código de indicação."
+    },
+    "referral_successful": {
+      "title": "Indicação bem-sucedida",
+      "message": "Parabéns! {{referredName}} completou seu processo. Você receberá seu desconto de ${{amount}} quando receber seu reembolso."
+    },
+    "discount_applied": {
+      "title": "Desconto aplicado",
+      "message": "Um desconto de ${{amount}} foi aplicado à sua conta pela sua indicação bem-sucedida."
+    },
+    "problem_set": {
+      "title": "Precisamos da sua ajuda",
+      "message": "{{description}}"
+    },
+    "problem_resolved": {
+      "title": "Problema resolvido",
+      "message": "O problema com seu processo foi resolvido."
+    },
+    "alarm_verification_timeout": {
+      "title": "Ação necessária: Verificação pendente",
+      "message": "Sua declaração {{track}} está em verificação há {{days}} dias. Entre em contato com o suporte se não recebeu instruções do IRS."
+    },
+    "alarm_letter_sent": {
+      "title": "Lembrete: Carta enviada",
+      "message": "Uma carta relacionada à sua declaração {{track}} foi enviada há {{days}} dias. Verifique se a recebeu e responda se necessário."
+    },
+    "alarm_general": {
+      "title": "Atualização do seu processo",
+      "message": "Há uma atualização importante sobre sua declaração {{track}}. Verifique o status do seu processo ou entre em contato com o suporte para mais informações."
+    },
+    "status_federal_filed": {
+      "title": "Declaração federal enviada",
+      "message": "Sua declaração federal foi enviada ao IRS."
+    },
+    "status_federal_processing": {
+      "title": "Declaração federal em processo",
+      "message": "O IRS está processando sua declaração federal."
+    },
+    "status_federal_approved": {
+      "title": "Reembolso federal aprovado",
+      "message": "Seu reembolso federal foi aprovado! Data estimada de depósito: {{estimatedDate}}"
+    },
+    "status_federal_deposited": {
+      "title": "Reembolso federal depositado!",
+      "message": "Seu reembolso federal de ${{amount}} foi depositado em sua conta."
+    },
+    "status_state_filed": {
+      "title": "Declaração estadual enviada",
+      "message": "Sua declaração estadual foi enviada."
+    },
+    "status_state_processing": {
+      "title": "Declaração estadual em processo",
+      "message": "Seu estado está processando sua declaração."
+    },
+    "status_state_approved": {
+      "title": "Reembolso estadual aprovado",
+      "message": "Seu reembolso estadual foi aprovado! Data estimada de depósito: {{estimatedDate}}"
+    },
+    "status_state_deposited": {
+      "title": "Reembolso estadual depositado!",
+      "message": "Seu reembolso estadual de ${{amount}} foi depositado em sua conta."
+    },
+    "admin_document_uploaded": {
+      "title": "Novo documento enviado",
+      "message": "{{clientName}} enviou um novo documento: {{fileName}}"
+    },
+    "admin_new_registration": {
+      "title": "Novo cliente registrado",
+      "message": "{{clientName}} se registrou na plataforma."
+    }
+  },
+  "document_types": {
+    "w2": "W2",
+    "payment_proof": "comprovante de pagamento",
+    "other": "documento"
+  },
+  "tracks": {
+    "federal": "federal",
+    "state": "estadual"
+  }
+}

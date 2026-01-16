@@ -8,22 +8,28 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { UsersModule } from '../users/users.module';
 import { ReferralsModule } from '../referrals/referrals.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailService } from '../../common/services';
 import { SupabaseService } from '../../config/supabase.service';
+import { getAuthConfig } from '../../config/auth.config';
 
 @Module({
   imports: [
     UsersModule,
     ReferralsModule,
+    NotificationsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-        signOptions: {
-          expiresIn: '15m',
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const authConfig = getAuthConfig(configService);
+        return {
+          secret: authConfig.jwtSecret,
+          signOptions: {
+            expiresIn: authConfig.accessTokenExpirySeconds,
+          },
+        };
+      },
       inject: [ConfigService],
     }),
   ],

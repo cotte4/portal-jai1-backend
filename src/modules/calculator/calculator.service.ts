@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
 import { StoragePathService } from '../../common/services';
+import { redactUserId, redactFileName, redactStoragePath } from '../../common/utils/log-sanitizer';
 import OpenAI from 'openai';
 
 interface OcrResult {
@@ -56,7 +57,7 @@ export class CalculatorService {
     const base64Image = file.buffer.toString('base64');
     const mimeType = file.mimetype;
 
-    this.logger.log(`Processing W2 OCR for user ${userId}: ${file.originalname} (${file.size} bytes)`);
+    this.logger.log(`Processing W2 OCR for user ${redactUserId(userId)}: ${redactFileName(file.originalname)} (${file.size} bytes)`);
 
     // Call OpenAI Vision API with retry logic
     const { ocrResult, rawResponse } = await this.callOpenAIWithRetry(base64Image, mimeType);
@@ -88,13 +89,22 @@ export class CalculatorService {
         file.buffer,
         file.mimetype,
       );
-      this.logger.log(`W2 estimate image stored at: ${w2StoragePath}`);
+      this.logger.log(`W2 estimate image stored at: ${redactStoragePath(w2StoragePath)}`);
     } catch (uploadError) {
       this.logger.error('Failed to upload W2 to storage (non-fatal):', uploadError);
       // Continue without storage - estimate can still be saved
     }
 
     // Save estimate to database
+    // Store only safe OCR metadata (not the full response which may contain sensitive data)
+    const safeOcrMetadata = {
+      model: rawResponse?.model,
+      created: rawResponse?.created,
+      usage: rawResponse?.usage, // token counts only
+      finish_reason: rawResponse?.choices?.[0]?.finish_reason,
+      // Explicitly NOT storing: choices[].message.content (contains extracted tax values)
+    };
+
     const estimate = await this.prisma.w2Estimate.create({
       data: {
         userId,
@@ -104,7 +114,7 @@ export class CalculatorService {
         w2FileName: file.originalname,
         w2StoragePath,
         ocrConfidence,
-        ocrRawResponse: rawResponse,
+        ocrRawResponse: safeOcrMetadata,
       },
     });
 

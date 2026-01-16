@@ -1,0 +1,101 @@
+{
+  "notifications": {
+    "welcome": {
+      "title": "Welcome to JAI1!",
+      "message": "Hello {{firstName}}, thank you for registering. Complete your profile and upload your documents to begin your tax return."
+    },
+    "document_reviewed": {
+      "title": "Document Reviewed",
+      "message": "Your {{documentType}} \"{{fileName}}\" has been reviewed by our team."
+    },
+    "docs_missing": {
+      "title": "Documents pending",
+      "message": "Please upload the missing documents to continue with your tax return: {{missingDocs}}"
+    },
+    "ticket_response": {
+      "title": "Response to your ticket",
+      "message": "You have received a response to your ticket: {{subject}}"
+    },
+    "referral_new": {
+      "title": "New referral",
+      "message": "{{referredName}} signed up using your referral code."
+    },
+    "referral_successful": {
+      "title": "Successful referral",
+      "message": "Congratulations! {{referredName}} completed their process. You will receive your ${{amount}} discount when you get your refund."
+    },
+    "discount_applied": {
+      "title": "Discount applied",
+      "message": "A discount of ${{amount}} has been applied to your account for your successful referral."
+    },
+    "problem_set": {
+      "title": "We need your help",
+      "message": "{{description}}"
+    },
+    "problem_resolved": {
+      "title": "Issue resolved",
+      "message": "The issue with your process has been resolved."
+    },
+    "alarm_verification_timeout": {
+      "title": "Action required: Verification pending",
+      "message": "Your {{track}} return has been in verification for {{days}} days. Please contact support if you haven't received instructions from the IRS."
+    },
+    "alarm_letter_sent": {
+      "title": "Reminder: Letter sent",
+      "message": "A letter related to your {{track}} return was sent {{days}} days ago. Check if you have received it and respond if necessary."
+    },
+    "alarm_general": {
+      "title": "Update on your process",
+      "message": "There is an important update about your {{track}} return. Check your process status or contact support for more information."
+    },
+    "status_federal_filed": {
+      "title": "Federal return submitted",
+      "message": "Your federal return has been submitted to the IRS."
+    },
+    "status_federal_processing": {
+      "title": "Federal return in process",
+      "message": "The IRS is processing your federal return."
+    },
+    "status_federal_approved": {
+      "title": "Federal refund approved",
+      "message": "Your federal refund has been approved! Estimated deposit date: {{estimatedDate}}"
+    },
+    "status_federal_deposited": {
+      "title": "Federal refund deposited!",
+      "message": "Your federal refund of ${{amount}} has been deposited to your account."
+    },
+    "status_state_filed": {
+      "title": "State return submitted",
+      "message": "Your state return has been submitted."
+    },
+    "status_state_processing": {
+      "title": "State return in process",
+      "message": "Your state is processing your return."
+    },
+    "status_state_approved": {
+      "title": "State refund approved",
+      "message": "Your state refund has been approved! Estimated deposit date: {{estimatedDate}}"
+    },
+    "status_state_deposited": {
+      "title": "State refund deposited!",
+      "message": "Your state refund of ${{amount}} has been deposited to your account."
+    },
+    "admin_document_uploaded": {
+      "title": "New document uploaded",
+      "message": "{{clientName}} uploaded a new document: {{fileName}}"
+    },
+    "admin_new_registration": {
+      "title": "New client registered",
+      "message": "{{clientName}} registered on the platform."
+    }
+  },
+  "document_types": {
+    "w2": "W2",
+    "payment_proof": "payment proof",
+    "other": "document"
+  },
+  "tracks": {
+    "federal": "federal",
+    "state": "state"
+  }
+}

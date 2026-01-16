@@ -25,6 +25,8 @@ model User {
   resetToken            String?         @map("reset_token")
   resetTokenExpiresAt   DateTime?       @map("reset_token_expires_at") @db.Timestamptz
   tokenVersion          Int             @default(1) @map("token_version")
+  // Language preference
+  preferredLanguage     String          @default("es") @map("preferred_language") @db.VarChar(5)
   // Referral program fields
   referralCode          String?         @unique @map("referral_code")
   referredByCode        String?         @map("referred_by_code")
@@ -42,10 +44,34 @@ model User {
   discountsReceived     DiscountApplication[] @relation("DiscountUser")
   discountsApplied      DiscountApplication[] @relation("DiscountAppliedBy")
   alarmsResolved        AlarmHistory[]        @relation("AlarmResolver")
+  refreshTokens         RefreshToken[]
 
   @@index([role])
   @@index([isActive])
   @@map("users")
+}
+
+// Refresh token storage for secure token rotation
+model RefreshToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash") // SHA-256 hash of the token
+  deviceInfo  String?   @map("device_info") // User agent
+  ipAddress   String?   @map("ip_address")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  isRevoked   Boolean   @default(false) @map("is_revoked")
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  // Optional: track which token replaced this one (for audit trail)
+  replacedByTokenId String? @map("replaced_by_token_id") @db.Uuid
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([isRevoked])
+  @@index([userId, isRevoked])
+  @@map("refresh_tokens")
 }
 
 model ClientProfile {
@@ -573,4 +599,16 @@ enum AuditAction {
   DISCOUNT_APPLIED
   // Auth (30-day retention)
   LOGIN_FAILED
+}
+
+// ============= SYSTEM SETTINGS =============
+
+model SystemSetting {
+  key         String    @id
+  value       String
+  description String?
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  updatedBy   String?   @map("updated_by") @db.Uuid
+
+  @@map("system_settings")
 }

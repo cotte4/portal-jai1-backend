@@ -103,6 +103,7 @@ export class ClientsService {
         lastName: true,
         phone: true,
         profilePicturePath: true,
+        preferredLanguage: true,
         clientProfile: {
           select: {
             ssn: true,
@@ -370,6 +371,7 @@ export class ClientsService {
       firstName?: string;
       lastName?: string;
       dateOfBirth?: string;
+      preferredLanguage?: string;
       address?: {
         street?: string;
         city?: string;
@@ -382,12 +384,19 @@ export class ClientsService {
 
     // Use transaction to ensure atomicity
     const result = await this.prisma.$transaction(async (tx) => {
-      // Update user fields (name, phone)
+      // Update user fields (name, phone, language)
       const userUpdateData: any = {};
       if (data.phone !== undefined) userUpdateData.phone = data.phone;
       if (data.firstName !== undefined)
         userUpdateData.firstName = data.firstName;
       if (data.lastName !== undefined) userUpdateData.lastName = data.lastName;
+      if (data.preferredLanguage !== undefined) {
+        // Validate language
+        const validLanguages = ['es', 'en', 'pt'];
+        if (validLanguages.includes(data.preferredLanguage)) {
+          userUpdateData.preferredLanguage = data.preferredLanguage;
+        }
+      }
 
       const user = await tx.user.update({
         where: { id: userId },
@@ -398,6 +407,7 @@ export class ClientsService {
           firstName: true,
           lastName: true,
           phone: true,
+          preferredLanguage: true,
         },
       });
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { redactEmail } from '../utils/log-sanitizer';
 
 interface EmailOptions {
   to: string;
@@ -38,14 +39,14 @@ export class EmailService {
 
   private async send(options: EmailOptions): Promise<boolean> {
     if (!this.isConfigured) {
-      this.logger.warn(`[EMAIL NOT CONFIGURED] Would send to: ${options.to}`);
+      this.logger.warn(`[EMAIL NOT CONFIGURED] Would send to: ${redactEmail(options.to)}`);
       this.logger.warn(`[EMAIL NOT CONFIGURED] Subject: ${options.subject}`);
       this.logger.warn(`[EMAIL NOT CONFIGURED] Set RESEND_API_KEY in .env to enable emails`);
       return false; // Return false so callers know email wasn't actually sent
     }
 
     try {
-      this.logger.log(`Attempting to send email to ${options.to}...`);
+      this.logger.log(`Attempting to send email to ${redactEmail(options.to)}...`);
       this.logger.log(`From address: ${this.fromEmail}`);
       const { data, error } = await this.resend.emails.send({
         from: this.fromEmail,
@@ -60,11 +61,11 @@ export class EmailService {
         return false;
       }
 
-      this.logger.log(`Email sent successfully to ${options.to}: ${options.subject}`);
+      this.logger.log(`Email sent successfully to ${redactEmail(options.to)}: ${options.subject}`);
       this.logger.log(`Resend ID: ${data?.id}`);
       return true;
     } catch (error: any) {
-      this.logger.error(`Failed to send email to ${options.to}`);
+      this.logger.error(`Failed to send email to ${redactEmail(options.to)}`);
       this.logger.error(`From address used: ${this.fromEmail}`);
       this.logger.error(`Error details: ${JSON.stringify(error, null, 2)}`);
       return false;

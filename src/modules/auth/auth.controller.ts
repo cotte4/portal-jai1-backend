@@ -45,14 +45,21 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  async logout(@CurrentUser() user: any) {
-    return this.authService.logout(user.id);
+  async logout(
+    @CurrentUser() user: any,
+    @Body('refresh_token') refreshToken?: string,
+  ) {
+    // Pass the refresh token to revoke the specific session
+    // If not provided, all sessions will be revoked
+    return this.authService.logout(user.id, refreshToken);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshTokens(refreshTokenDto.refresh_token);
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto, @Req() req: any) {
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    return this.authService.refreshTokens(refreshTokenDto.refresh_token, ipAddress, userAgent);
   }
 
   @Post('forgot-password')
@@ -98,13 +105,38 @@ export class AuthController {
       const result = await this.authService.googleLogin(req.user);
       const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
 
-      // Redirect to frontend with tokens in URL params
-      const redirectUrl = `${frontendUrl}/auth/google/callback?access_token=${result.access_token}&refresh_token=${result.refresh_token}&user=${encodeURIComponent(JSON.stringify(result.user))}`;
+      // Create a short-lived, single-use authorization code
+      // This prevents tokens from being exposed in redirect URLs (security best practice)
+      const code = this.authService.createOAuthCode(
+        {
+          access_token: result.access_token,
+          refresh_token: result.refresh_token,
+          expires_in: result.expires_in,
+        },
+        result.user,
+      );
 
+      // Redirect with only the code - tokens are exchanged via POST
+      const redirectUrl = `${frontendUrl}/auth/google/callback?code=${code}`;
       res.redirect(redirectUrl);
     } catch (error) {
       const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
       res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
     }
+  }
+
+  @Post('google/exchange')
+  @HttpCode(HttpStatus.OK)
+  async exchangeGoogleCode(@Body('code') code: string) {
+    if (!code) {
+      throw new Error('Authorization code is required');
+    }
+    const { tokens, user } = this.authService.exchangeOAuthCode(code);
+    return {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_in: tokens.expires_in,
+      user,
+    };
   }
 }

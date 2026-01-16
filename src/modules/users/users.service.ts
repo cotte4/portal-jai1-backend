@@ -129,4 +129,97 @@ export class UsersService {
       },
     });
   }
+
+  // ============= REFRESH TOKEN MANAGEMENT =============
+
+  /**
+   * Store a new refresh token (hashed) in the database
+   */
+  async createRefreshToken(data: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+    deviceInfo?: string;
+    ipAddress?: string;
+  }) {
+    return this.prisma.refreshToken.create({
+      data: {
+        userId: data.userId,
+        tokenHash: data.tokenHash,
+        expiresAt: data.expiresAt,
+        deviceInfo: data.deviceInfo,
+        ipAddress: data.ipAddress,
+      },
+    });
+  }
+
+  /**
+   * Find a refresh token by its hash (for validation)
+   */
+  async findRefreshTokenByHash(tokenHash: string) {
+    return this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+  }
+
+  /**
+   * Revoke a specific refresh token
+   */
+  async revokeRefreshToken(tokenHash: string, replacedByTokenId?: string) {
+    return this.prisma.refreshToken.update({
+      where: { tokenHash },
+      data: {
+        isRevoked: true,
+        revokedAt: new Date(),
+        replacedByTokenId,
+      },
+    });
+  }
+
+  /**
+   * Revoke all refresh tokens for a user (used on logout-all or password change)
+   */
+  async revokeAllUserRefreshTokens(userId: string) {
+    return this.prisma.refreshToken.updateMany({
+      where: {
+        userId,
+        isRevoked: false,
+      },
+      data: {
+        isRevoked: true,
+        revokedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Revoke a single refresh token by its ID
+   */
+  async revokeRefreshTokenById(tokenId: string) {
+    return this.prisma.refreshToken.update({
+      where: { id: tokenId },
+      data: {
+        isRevoked: true,
+        revokedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Clean up expired tokens (run periodically via cron job)
+   */
+  async cleanupExpiredRefreshTokens() {
+    return this.prisma.refreshToken.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lt: new Date() } },
+          {
+            isRevoked: true,
+            revokedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // 7 days ago
+          },
+        ],
+      },
+    });
+  }
 }

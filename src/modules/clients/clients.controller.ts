@@ -66,6 +66,7 @@ export class ClientsController {
       firstName?: string;
       lastName?: string;
       dateOfBirth?: string;
+      preferredLanguage?: string;
       address?: {
         street?: string;
         city?: string;

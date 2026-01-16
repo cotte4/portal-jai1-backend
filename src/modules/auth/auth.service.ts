@@ -12,26 +12,37 @@ import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../../common/services';
 import { SupabaseService } from '../../config/supabase.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuditAction } from '@prisma/client';
+import { redactEmail, redactUserId } from '../../common/utils/log-sanitizer';
+import { getAuthConfig, AuthConfig } from '../../config/auth.config';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly PROFILE_PICTURES_BUCKET = 'profile-pictures';
+  private readonly authConfig: AuthConfig;
+
+  // Temporary storage for OAuth authorization codes (single-use, short-lived)
+  // In production, consider using Redis for multi-instance deployments
+  private oauthCodes = new Map<string, { tokens: any; user: any; expiresAt: number }>();
 
   constructor(
     private usersService: UsersService,
     private referralsService: ReferralsService,
     private auditLogsService: AuditLogsService,
+    private notificationsService: NotificationsService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailService: EmailService,
     private supabaseService: SupabaseService,
-  ) {}
+  ) {
+    this.authConfig = getAuthConfig(configService);
+  }
 
   /**
    * Get signed URL for profile picture if user has one
@@ -91,7 +102,7 @@ export class AuthService {
           registerDto.referral_code!,
         );
         this.logger.log(
-          `Referral created: ${referrerInfo.referrerName} referred ${user.email}`,
+          `Referral created for user ${redactUserId(user.id)}`,
         );
       } catch (err) {
         this.logger.error('Failed to create referral record', err);
@@ -103,6 +114,16 @@ export class AuthService {
     await this.usersService.updateLastLogin(user.id);
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
+
+    // Send welcome in-app notification (async, don't wait)
+    this.notificationsService
+      .createFromTemplate(
+        user.id,
+        'system',
+        'notifications.welcome',
+        { firstName: user.firstName },
+      )
+      .catch((err) => this.logger.error('Failed to send welcome notification', err));
 
     // TODO: Re-enable when needed
     // Send welcome email (async, don't wait)
@@ -184,6 +205,7 @@ export class AuthService {
       user.role,
       loginDto.rememberMe || false,
       user.tokenVersion,
+      { ipAddress, deviceInfo: userAgent },
     );
 
     // Get profile picture URL if exists
@@ -204,39 +226,120 @@ export class AuthService {
     };
   }
 
-  async logout(userId: string) {
-    // Invalidate all existing tokens by incrementing tokenVersion
-    await this.usersService.incrementTokenVersion(userId);
+  /**
+   * Logout - revoke the specific refresh token used in this session
+   * If no token provided, revokes all tokens for the user
+   */
+  async logout(userId: string, refreshToken?: string) {
+    if (refreshToken) {
+      // Revoke the specific refresh token
+      const tokenHash = this.hashToken(refreshToken);
+      try {
+        await this.usersService.revokeRefreshToken(tokenHash);
+        this.logger.log(`User ${userId} logged out - specific token revoked`);
+      } catch {
+        // Token might not exist in DB (old token before migration)
+        this.logger.warn(`Could not revoke token for user ${userId} - token not found in DB`);
+      }
+    } else {
+      // Revoke all refresh tokens for this user
+      await this.usersService.revokeAllUserRefreshTokens(userId);
+      this.logger.log(`User ${userId} logged out - all tokens revoked`);
+    }
 
-    this.logger.log(`User ${userId} logged out - all tokens invalidated`);
     return { message: 'Logged out successfully' };
   }
 
-  async refreshTokens(refreshToken: string) {
+  async refreshTokens(refreshToken: string, ipAddress?: string, userAgent?: string) {
     try {
+      // Step 1: Verify JWT signature and decode payload
       const payload = this.jwtService.verify(refreshToken, {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
 
+      // Step 2: Check if token exists in DB and is not revoked
+      const tokenHash = this.hashToken(refreshToken);
+      const storedToken = await this.usersService.findRefreshTokenByHash(tokenHash);
+
+      if (!storedToken) {
+        // Token not in DB - could be old token before rotation was implemented
+        // Fall back to user lookup for backwards compatibility
+        this.logger.warn(`Refresh token not found in DB for user ${redactEmail(payload.email)} - legacy token`);
+      } else if (storedToken.isRevoked) {
+        // SECURITY: Token was revoked - possible token theft!
+        // Revoke all tokens for this user as a precaution
+        this.logger.error(`Revoked refresh token used for user ${redactEmail(payload.email)} - possible token theft!`);
+        await this.usersService.revokeAllUserRefreshTokens(payload.sub);
+        throw new UnauthorizedException('Token has been revoked');
+      } else if (storedToken.expiresAt < new Date()) {
+        // Token expired in DB
+        throw new UnauthorizedException('Refresh token has expired');
+      }
+
+      // Step 3: Validate user
       const user = await this.usersService.findById(payload.sub);
       if (!user || !user.isActive) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      // Check if token version matches - if not, token has been invalidated by logout
+      // Check if token version matches - if not, token has been invalidated by password change
       if (payload.tokenVersion !== undefined && payload.tokenVersion !== user.tokenVersion) {
-        this.logger.warn(`Token version mismatch for user ${user.email} - token invalidated`);
+        this.logger.warn(`Token version mismatch for user ${redactEmail(user.email)} - token invalidated`);
         throw new UnauthorizedException('Token has been invalidated');
       }
 
-      // Preserve rememberMe preference from the original token
+      // Step 4: Rotate - revoke old token before generating new one
+      if (storedToken) {
+        // Generate new tokens first to get the new token ID
+        const rememberMe = payload.rememberMe || false;
+        const tokens = await this.generateTokens(
+          user.id,
+          user.email,
+          user.role,
+          rememberMe,
+          user.tokenVersion,
+          { ipAddress, deviceInfo: userAgent },
+        );
+
+        // Now revoke the old token (link to new token for audit trail)
+        const newTokenHash = this.hashToken(tokens.refresh_token);
+        const newStoredToken = await this.usersService.findRefreshTokenByHash(newTokenHash);
+        await this.usersService.revokeRefreshToken(tokenHash, newStoredToken?.id);
+
+        this.logger.log(`Refresh token rotated for user ${redactEmail(user.email)}`);
+
+        // Get profile picture URL if exists
+        const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
+
+        return {
+          user: {
+            id: user.id,
+            email: user.email,
+            first_name: user.firstName,
+            last_name: user.lastName,
+            phone: user.phone,
+            role: user.role,
+            created_at: user.createdAt,
+            profilePictureUrl,
+          },
+          ...tokens,
+        };
+      }
+
+      // Legacy path: token not in DB, just generate new tokens
       const rememberMe = payload.rememberMe || false;
-      const tokens = await this.generateTokens(user.id, user.email, user.role, rememberMe, user.tokenVersion);
+      const tokens = await this.generateTokens(
+        user.id,
+        user.email,
+        user.role,
+        rememberMe,
+        user.tokenVersion,
+        { ipAddress, deviceInfo: userAgent },
+      );
 
       // Get profile picture URL if exists
       const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
 
-      // Return user object along with tokens (frontend expects this)
       return {
         user: {
           id: user.id,
@@ -250,7 +353,10 @@ export class AuthService {
         },
         ...tokens,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
@@ -311,6 +417,8 @@ export class AuthService {
 
     // Invalidate all existing tokens (forces re-login on all devices)
     await this.usersService.incrementTokenVersion(user.id);
+    // Also revoke all stored refresh tokens
+    await this.usersService.revokeAllUserRefreshTokens(user.id);
 
     // Log password reset
     this.auditLogsService.log({
@@ -357,6 +465,8 @@ export class AuthService {
 
     // Invalidate all existing tokens (forces re-login on all devices)
     await this.usersService.incrementTokenVersion(user.id);
+    // Also revoke all stored refresh tokens
+    await this.usersService.revokeAllUserRefreshTokens(user.id);
 
     // Log password change
     this.auditLogsService.log({
@@ -402,6 +512,16 @@ export class AuthService {
 
       this.logger.log(`New user created via Google OAuth: ${user.email}`);
 
+      // Send welcome in-app notification (async, don't wait)
+      this.notificationsService
+        .createFromTemplate(
+          user.id,
+          'system',
+          'notifications.welcome',
+          { firstName: user.firstName },
+        )
+        .catch((err) => this.logger.error('Failed to send welcome notification', err));
+
       // TODO: Re-enable when needed
       // Send welcome email
       // this.emailService
@@ -425,7 +545,7 @@ export class AuthService {
     // Get profile picture URL if exists
     const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
 
-    this.logger.log(`Google OAuth login successful for: ${user.email}`);
+    this.logger.log(`Google OAuth login successful for: ${redactEmail(user.email)}`);
 
     return {
       user: {
@@ -442,35 +562,118 @@ export class AuthService {
     };
   }
 
+  /**
+   * Create a short-lived, single-use authorization code for OAuth flow
+   * This prevents tokens from being exposed in redirect URLs
+   */
+  createOAuthCode(tokens: { access_token: string; refresh_token: string; expires_in: number }, user: any): string {
+    // Clean up expired codes periodically
+    this.cleanupExpiredOAuthCodes();
+
+    // Generate a cryptographically secure random code
+    const code = crypto.randomBytes(32).toString('hex');
+
+    // Store with expiration
+    this.oauthCodes.set(code, {
+      tokens,
+      user,
+      expiresAt: Date.now() + this.authConfig.oauthCodeTtlMs,
+    });
+
+    this.logger.log(`Created OAuth code for user: ${user.email}`);
+    return code;
+  }
+
+  /**
+   * Exchange an authorization code for tokens
+   * Code is single-use and deleted after exchange
+   */
+  exchangeOAuthCode(code: string): { tokens: any; user: any } {
+    const stored = this.oauthCodes.get(code);
+
+    if (!stored) {
+      throw new BadRequestException('Invalid or expired authorization code');
+    }
+
+    // Check expiration
+    if (Date.now() > stored.expiresAt) {
+      this.oauthCodes.delete(code);
+      throw new BadRequestException('Authorization code has expired');
+    }
+
+    // Delete code (single-use)
+    this.oauthCodes.delete(code);
+
+    this.logger.log(`OAuth code exchanged for user: ${redactEmail(stored.user.email)}`);
+    return { tokens: stored.tokens, user: stored.user };
+  }
+
+  /**
+   * Clean up expired OAuth codes to prevent memory leaks
+   */
+  private cleanupExpiredOAuthCodes(): void {
+    const now = Date.now();
+    for (const [code, data] of this.oauthCodes.entries()) {
+      if (now > data.expiresAt) {
+        this.oauthCodes.delete(code);
+      }
+    }
+  }
+
   private async generateTokens(
     userId: string,
     email: string,
     role: string,
     rememberMe: boolean = false,
     tokenVersion: number = 1,
+    options?: { ipAddress?: string; deviceInfo?: string },
   ) {
     // Include rememberMe and tokenVersion in payload for validation and persistence
     const payload = { sub: userId, email, role, rememberMe, tokenVersion };
 
-    // Extended expiration for "Remember Me" option
-    const accessTokenExpiry = rememberMe ? '7d' : '15m';
-    const refreshTokenExpiry = rememberMe ? '30d' : '7d';
+    // Get expiration values from centralized config (using seconds for JWT compatibility)
+    const accessTokenExpirySeconds = rememberMe
+      ? this.authConfig.accessTokenExpirySecondsRememberMe
+      : this.authConfig.accessTokenExpirySeconds;
+    const refreshTokenExpirySeconds = rememberMe
+      ? this.authConfig.refreshTokenExpirySecondsRememberMe
+      : this.authConfig.refreshTokenExpirySeconds;
+    const refreshTokenExpiryMs = rememberMe
+      ? this.authConfig.refreshTokenExpiryMsRememberMe
+      : this.authConfig.refreshTokenExpiryMs;
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: accessTokenExpiry,
+      expiresIn: accessTokenExpirySeconds,
     });
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: refreshTokenExpiry,
+      expiresIn: refreshTokenExpirySeconds,
+    });
+
+    // Store hashed refresh token in database for rotation and revocation
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    await this.usersService.createRefreshToken({
+      userId,
+      tokenHash,
+      expiresAt: new Date(Date.now() + refreshTokenExpiryMs),
+      ipAddress: options?.ipAddress,
+      deviceInfo: options?.deviceInfo,
     });
 
     this.logger.log(
-      `Generated tokens for ${email} (rememberMe: ${rememberMe}, accessExpiry: ${accessTokenExpiry})`,
+      `Generated tokens for ${email} (rememberMe: ${rememberMe}, accessExpiry: ${accessTokenExpirySeconds}s)`,
     );
 
     return {
       access_token: accessToken,
       refresh_token: refreshToken,
-      expires_in: rememberMe ? 604800 : 900, // seconds (7 days or 15 min)
+      expires_in: accessTokenExpirySeconds,
     };
+  }
+
+  /**
+   * Hash a refresh token for storage/lookup
+   */
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 }

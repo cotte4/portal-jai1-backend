@@ -1,0 +1,101 @@
+{
+  "notifications": {
+    "welcome": {
+      "title": "¡Bienvenido a JAI1!",
+      "message": "Hola {{firstName}}, gracias por registrarte. Completa tu perfil y sube tus documentos para comenzar con tu declaración de impuestos."
+    },
+    "document_reviewed": {
+      "title": "Documento Revisado",
+      "message": "Tu {{documentType}} \"{{fileName}}\" ha sido revisado por nuestro equipo."
+    },
+    "docs_missing": {
+      "title": "Documentos pendientes",
+      "message": "Por favor sube los documentos faltantes para continuar con tu declaración de impuestos: {{missingDocs}}"
+    },
+    "ticket_response": {
+      "title": "Respuesta a tu ticket",
+      "message": "Has recibido una respuesta en tu ticket: {{subject}}"
+    },
+    "referral_new": {
+      "title": "Nuevo referido",
+      "message": "{{referredName}} se registró usando tu código de referido."
+    },
+    "referral_successful": {
+      "title": "Referido exitoso",
+      "message": "¡Felicitaciones! {{referredName}} completó su trámite. Recibirás tu descuento de ${{amount}} cuando obtengas tu reembolso."
+    },
+    "discount_applied": {
+      "title": "Descuento aplicado",
+      "message": "Se aplicó un descuento de ${{amount}} a tu cuenta por tu referido exitoso."
+    },
+    "problem_set": {
+      "title": "Necesitamos tu ayuda",
+      "message": "{{description}}"
+    },
+    "problem_resolved": {
+      "title": "Inconveniente resuelto",
+      "message": "El problema con tu trámite ha sido solucionado."
+    },
+    "alarm_verification_timeout": {
+      "title": "Acción requerida: Verificación pendiente",
+      "message": "Tu declaración {{track}} lleva {{days}} días en verificación. Por favor contacta a soporte si no has recibido instrucciones del IRS."
+    },
+    "alarm_letter_sent": {
+      "title": "Recordatorio: Carta enviada",
+      "message": "Se envió una carta relacionada con tu declaración {{track}} hace {{days}} días. Verifica si la has recibido y responde si es necesario."
+    },
+    "alarm_general": {
+      "title": "Actualización de tu trámite",
+      "message": "Hay una actualización importante sobre tu declaración {{track}}. Revisa el estado de tu trámite o contacta a soporte para más información."
+    },
+    "status_federal_filed": {
+      "title": "Declaración federal enviada",
+      "message": "Tu declaración federal ha sido enviada al IRS."
+    },
+    "status_federal_processing": {
+      "title": "Declaración federal en proceso",
+      "message": "El IRS está procesando tu declaración federal."
+    },
+    "status_federal_approved": {
+      "title": "Reembolso federal aprobado",
+      "message": "¡Tu reembolso federal ha sido aprobado! Fecha estimada de depósito: {{estimatedDate}}"
+    },
+    "status_federal_deposited": {
+      "title": "¡Reembolso federal depositado!",
+      "message": "Tu reembolso federal de ${{amount}} ha sido depositado en tu cuenta."
+    },
+    "status_state_filed": {
+      "title": "Declaración estatal enviada",
+      "message": "Tu declaración estatal ha sido enviada."
+    },
+    "status_state_processing": {
+      "title": "Declaración estatal en proceso",
+      "message": "Tu estado está procesando tu declaración."
+    },
+    "status_state_approved": {
+      "title": "Reembolso estatal aprobado",
+      "message": "¡Tu reembolso estatal ha sido aprobado! Fecha estimada de depósito: {{estimatedDate}}"
+    },
+    "status_state_deposited": {
+      "title": "¡Reembolso estatal depositado!",
+      "message": "Tu reembolso estatal de ${{amount}} ha sido depositado en tu cuenta."
+    },
+    "admin_document_uploaded": {
+      "title": "Nuevo documento subido",
+      "message": "{{clientName}} subió un nuevo documento: {{fileName}}"
+    },
+    "admin_new_registration": {
+      "title": "Nuevo cliente registrado",
+      "message": "{{clientName}} se registró en la plataforma."
+    }
+  },
+  "document_types": {
+    "w2": "W2",
+    "payment_proof": "comprobante de pago",
+    "other": "documento"
+  },
+  "tracks": {
+    "federal": "federal",
+    "state": "estatal"
+  }
+}

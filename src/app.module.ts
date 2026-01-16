@@ -13,6 +13,9 @@ import { SupabaseService } from './config/supabase.service';
 import { HttpExceptionFilter } from './common/filters';
 import { EncryptionService, EmailService, StoragePathService } from './common/services';
 
+// i18n
+import { I18nModule } from './i18n';
+
 // Modules
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -36,6 +39,7 @@ import { AlarmsModule } from './modules/alarms/alarms.module';
       envFilePath: '.env',
     }),
     ScheduleModule.forRoot(),
+    I18nModule,
     AuthModule,
     UsersModule,
     ClientsModule,
