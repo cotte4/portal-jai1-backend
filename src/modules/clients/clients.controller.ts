@@ -162,6 +162,16 @@ export class ClientsController {
     @Query('search') search?: string,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
+    // Advanced filters
+    @Query('hasProblem') hasProblem?: string,
+    @Query('federalStatus') federalStatus?: string,
+    @Query('stateStatus') stateStatus?: string,
+    @Query('caseStatus') caseStatus?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    // Sorting
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
   ) {
     // Validate limit to prevent DoS attacks
     const MAX_LIMIT = 1000;
@@ -172,20 +182,59 @@ export class ClientsController {
         ? DEFAULT_LIMIT
         : Math.min(parsedLimit, MAX_LIMIT);
 
+    // Parse boolean filter
+    const hasProblemBool = hasProblem === 'true' ? true : hasProblem === 'false' ? false : undefined;
+
+    // Validate sort order
+    const validSortOrder = sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc';
+
     return this.clientsService.findAll({
       status,
       search,
       cursor,
       limit: validatedLimit,
+      // Advanced filters
+      hasProblem: hasProblemBool,
+      federalStatus,
+      stateStatus,
+      caseStatus,
+      dateFrom,
+      dateTo,
+      // Sorting
+      sortBy,
+      sortOrder: validSortOrder,
     });
   }
 
   @Get('admin/clients/export')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
-  async exportToExcel(@Res({ passthrough: true }) res: Response) {
+  async exportToExcel(
+    @Res({ passthrough: true }) res: Response,
+    // Same filters as findAll
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('hasProblem') hasProblem?: string,
+    @Query('federalStatus') federalStatus?: string,
+    @Query('stateStatus') stateStatus?: string,
+    @Query('caseStatus') caseStatus?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    // Parse boolean filter
+    const hasProblemBool = hasProblem === 'true' ? true : hasProblem === 'false' ? false : undefined;
+
     // Use streaming export to handle large datasets without timeout
-    const stream = await this.clientsService.exportToExcelStream();
+    const stream = await this.clientsService.exportToExcelStream({
+      status,
+      search,
+      hasProblem: hasProblemBool,
+      federalStatus,
+      stateStatus,
+      caseStatus,
+      dateFrom,
+      dateTo,
+    });
     const filename = `clientes-${new Date().toISOString().split('T')[0]}.xlsx`;
 
     res.set({

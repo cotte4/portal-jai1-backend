@@ -576,21 +576,119 @@ export class ClientsService {
     search?: string;
     cursor?: string;
     limit: number;
+    // Advanced filters
+    hasProblem?: boolean;
+    federalStatus?: string;
+    stateStatus?: string;
+    caseStatus?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    // Sorting
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }) {
     const where: any = {};
 
+    // Advanced filter: Date range on profile createdAt
+    if (options.dateFrom || options.dateTo) {
+      where.createdAt = {};
+      if (options.dateFrom) {
+        const fromDate = new Date(options.dateFrom);
+        // Validate date is valid
+        if (!isNaN(fromDate.getTime())) {
+          where.createdAt.gte = fromDate;
+        }
+      }
+      if (options.dateTo) {
+        const toDate = new Date(options.dateTo);
+        // Validate date is valid
+        if (!isNaN(toDate.getTime())) {
+          // Add 1 day to include the entire "to" day
+          toDate.setDate(toDate.getDate() + 1);
+          where.createdAt.lt = toDate;
+        }
+      }
+      // Remove empty createdAt if no valid dates
+      if (Object.keys(where.createdAt).length === 0) {
+        delete where.createdAt;
+      }
+    }
+
+    // Advanced filter: Has Problem
+    if (options.hasProblem !== undefined) {
+      where.taxCases = {
+        ...where.taxCases,
+        some: {
+          ...where.taxCases?.some,
+          hasProblem: options.hasProblem,
+        },
+      };
+    }
+
+    // Advanced filter: Federal Status (v2)
+    if (options.federalStatus) {
+      where.taxCases = {
+        ...where.taxCases,
+        some: {
+          ...where.taxCases?.some,
+          federalStatusNew: options.federalStatus,
+        },
+      };
+    }
+
+    // Advanced filter: State Status (v2)
+    if (options.stateStatus) {
+      where.taxCases = {
+        ...where.taxCases,
+        some: {
+          ...where.taxCases?.some,
+          stateStatusNew: options.stateStatus,
+        },
+      };
+    }
+
+    // Advanced filter: Case Status
+    if (options.caseStatus) {
+      where.taxCases = {
+        ...where.taxCases,
+        some: {
+          ...where.taxCases?.some,
+          caseStatus: options.caseStatus,
+        },
+      };
+    }
+
     // Handle different filter types using new status fields
+    // IMPORTANT: Merge with existing taxCases filters from advanced filters
     if (options.status && options.status !== 'all') {
+      const existingTaxCaseFilters = where.taxCases?.some || {};
+
       if (options.status === 'group_pending') {
         // Pending: not filed yet, pre-filing statuses
-        where.OR = [
-          { taxCases: { none: {} } }, // No tax cases
-          { taxCases: { some: { taxesFiled: false } } },
-        ];
+        // Note: This filter uses OR, so we need to handle it specially
+        // If advanced filters are active, combine with AND
+        if (Object.keys(existingTaxCaseFilters).length > 0) {
+          where.AND = [
+            { taxCases: { some: existingTaxCaseFilters } },
+            {
+              OR: [
+                { taxCases: { none: {} } },
+                { taxCases: { some: { taxesFiled: false } } },
+              ],
+            },
+          ];
+          delete where.taxCases;
+        } else {
+          where.OR = [
+            { taxCases: { none: {} } }, // No tax cases
+            { taxCases: { some: { taxesFiled: false } } },
+          ];
+        }
       } else if (options.status === 'group_in_review') {
         // In Review: filed but not yet deposited
         where.taxCases = {
           some: {
+            ...existingTaxCaseFilters,
             taxesFiled: true,
             federalStatus: { in: ['processing', 'pending', 'filed'] },
           },
@@ -599,6 +697,7 @@ export class ClientsService {
         // Completed: deposited or approved
         where.taxCases = {
           some: {
+            ...existingTaxCaseFilters,
             OR: [
               { federalStatus: 'deposited' },
               { stateStatus: 'deposited' },
@@ -609,6 +708,7 @@ export class ClientsService {
         // Needs Attention: rejected or has problem
         where.taxCases = {
           some: {
+            ...existingTaxCaseFilters,
             OR: [
               { federalStatus: 'rejected' },
               { stateStatus: 'rejected' },
@@ -638,6 +738,22 @@ export class ClientsService {
       } else {
         where.user = searchCondition;
       }
+    }
+
+    // Build dynamic orderBy clause
+    const sortOrder = options.sortOrder || 'desc';
+    let orderBy: any = { createdAt: sortOrder }; // Default sort
+
+    if (options.sortBy) {
+      // Map frontend column names to Prisma fields
+      const sortFieldMap: Record<string, any> = {
+        createdAt: { createdAt: sortOrder },
+        name: { user: { firstName: sortOrder } },
+        email: { user: { email: sortOrder } },
+        // For taxCase fields, we sort by the profile field and rely on post-processing
+        // since Prisma doesn't support sorting by nested relation fields directly
+      };
+      orderBy = sortFieldMap[options.sortBy] || { createdAt: sortOrder };
     }
 
     const clients = await this.prisma.clientProfile.findMany({
@@ -689,7 +805,7 @@ export class ClientsService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
     });
 
     const hasMore = clients.length > options.limit;
@@ -1808,11 +1924,138 @@ export class ClientsService {
   }
 
   /**
+   * Build Prisma where clause for export filters (reused from findAll logic)
+   */
+  private buildExportWhereClause(options: {
+    status?: string;
+    search?: string;
+    hasProblem?: boolean;
+    federalStatus?: string;
+    stateStatus?: string;
+    caseStatus?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): any {
+    const where: any = {};
+
+    // Date range filter
+    if (options.dateFrom || options.dateTo) {
+      where.createdAt = {};
+      if (options.dateFrom) {
+        const fromDate = new Date(options.dateFrom);
+        if (!isNaN(fromDate.getTime())) {
+          where.createdAt.gte = fromDate;
+        }
+      }
+      if (options.dateTo) {
+        const toDate = new Date(options.dateTo);
+        if (!isNaN(toDate.getTime())) {
+          toDate.setDate(toDate.getDate() + 1);
+          where.createdAt.lt = toDate;
+        }
+      }
+      if (Object.keys(where.createdAt).length === 0) {
+        delete where.createdAt;
+      }
+    }
+
+    // Has Problem filter
+    if (options.hasProblem !== undefined) {
+      where.taxCases = {
+        ...where.taxCases,
+        some: { ...where.taxCases?.some, hasProblem: options.hasProblem },
+      };
+    }
+
+    // Federal Status filter
+    if (options.federalStatus) {
+      where.taxCases = {
+        ...where.taxCases,
+        some: { ...where.taxCases?.some, federalStatusNew: options.federalStatus },
+      };
+    }
+
+    // State Status filter
+    if (options.stateStatus) {
+      where.taxCases = {
+        ...where.taxCases,
+        some: { ...where.taxCases?.some, stateStatusNew: options.stateStatus },
+      };
+    }
+
+    // Case Status filter
+    if (options.caseStatus) {
+      where.taxCases = {
+        ...where.taxCases,
+        some: { ...where.taxCases?.some, caseStatus: options.caseStatus },
+      };
+    }
+
+    // Group status filters
+    if (options.status && options.status !== 'all') {
+      const existingTaxCaseFilters = where.taxCases?.some || {};
+
+      if (options.status === 'group_pending') {
+        if (Object.keys(existingTaxCaseFilters).length > 0) {
+          where.AND = [
+            { taxCases: { some: existingTaxCaseFilters } },
+            { OR: [{ taxCases: { none: {} } }, { taxCases: { some: { taxesFiled: false } } }] },
+          ];
+          delete where.taxCases;
+        } else {
+          where.OR = [{ taxCases: { none: {} } }, { taxCases: { some: { taxesFiled: false } } }];
+        }
+      } else if (options.status === 'group_in_review') {
+        where.taxCases = {
+          some: { ...existingTaxCaseFilters, taxesFiled: true, federalStatus: { in: ['processing', 'pending', 'filed'] } },
+        };
+      } else if (options.status === 'group_completed') {
+        where.taxCases = {
+          some: { ...existingTaxCaseFilters, OR: [{ federalStatus: 'deposited' }, { stateStatus: 'deposited' }] },
+        };
+      } else if (options.status === 'group_needs_attention') {
+        where.taxCases = {
+          some: { ...existingTaxCaseFilters, OR: [{ federalStatus: 'rejected' }, { stateStatus: 'rejected' }, { hasProblem: true }] },
+        };
+      }
+    }
+
+    // Search filter
+    if (options.search) {
+      const searchCondition = {
+        OR: [
+          { email: { contains: options.search, mode: 'insensitive' } },
+          { firstName: { contains: options.search, mode: 'insensitive' } },
+          { lastName: { contains: options.search, mode: 'insensitive' } },
+        ],
+      };
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { user: searchCondition }];
+        delete where.OR;
+      } else {
+        where.user = searchCondition;
+      }
+    }
+
+    return where;
+  }
+
+  /**
    * Export clients to Excel using streaming to handle large datasets.
    * Processes clients in batches to avoid memory issues and timeouts.
    * Returns a PassThrough stream that can be piped to the response.
+   * @param filters - Optional filters to apply (same as findAll)
    */
-  async exportToExcelStream(): Promise<PassThrough> {
+  async exportToExcelStream(filters?: {
+    status?: string;
+    search?: string;
+    hasProblem?: boolean;
+    federalStatus?: string;
+    stateStatus?: string;
+    caseStatus?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<PassThrough> {
     // Prevent concurrent exports (mutex pattern)
     if (this.isExportInProgress) {
       throw new BadRequestException(
@@ -1823,6 +2066,9 @@ export class ClientsService {
     this.isExportInProgress = true;
     const BATCH_SIZE = 500;
     const stream = new PassThrough();
+
+    // Build where clause from filters
+    const where = filters ? this.buildExportWhereClause(filters) : {};
 
     // Create streaming workbook writer
     const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
@@ -1881,8 +2127,9 @@ export class ClientsService {
         let processedCount = 0;
 
         while (true) {
-          // Fetch a batch of clients
+          // Fetch a batch of clients with filters applied
           const clients = await this.prisma.clientProfile.findMany({
+            where,
             take: BATCH_SIZE,
             skip: cursor ? 1 : 0, // Skip the cursor record itself
             cursor: cursor ? { id: cursor } : undefined,
