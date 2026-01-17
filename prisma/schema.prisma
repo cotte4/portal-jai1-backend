@@ -44,7 +44,11 @@ model User {
   discountsReceived     DiscountApplication[] @relation("DiscountUser")
   discountsApplied      DiscountApplication[] @relation("DiscountAppliedBy")
   alarmsResolved        AlarmHistory[]        @relation("AlarmResolver")
+  alarmThresholdsCreated AlarmThreshold[]     @relation("AlarmThresholdCreator")
   refreshTokens         RefreshToken[]
+  systemSettingsUpdated SystemSetting[]       @relation("SystemSettingUpdater")
+  auditLogsAsActor      AuditLog[]            @relation("AuditLogActor")
+  auditLogsAsTarget     AuditLog[]            @relation("AuditLogTarget")
 
   @@index([role])
   @@index([isActive])
@@ -65,12 +69,15 @@ model RefreshToken {
   // Optional: track which token replaced this one (for audit trail)
   replacedByTokenId String? @map("replaced_by_token_id") @db.Uuid
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedByToken RefreshToken? @relation("TokenReplacement", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
+  replacedTokens  RefreshToken[] @relation("TokenReplacement")
 
   @@index([userId])
   @@index([expiresAt])
   @@index([isRevoked])
   @@index([userId, isRevoked])
+  @@index([replacedByTokenId])
   @@map("refresh_tokens")
 }
 
@@ -396,8 +403,10 @@ model AlarmThreshold {
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   taxCase               TaxCase  @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+  createdBy             User?    @relation("AlarmThresholdCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([taxCaseId])
+  @@index([createdById])
   @@map("alarm_thresholds")
 }
 
@@ -580,6 +589,9 @@ model AuditLog {
   userAgent    String?     @map("user_agent")
   createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
+  user         User?       @relation("AuditLogActor", fields: [userId], references: [id], onDelete: SetNull)
+  targetUser   User?       @relation("AuditLogTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([targetUserId])
   @@index([action])
@@ -610,5 +622,8 @@ model SystemSetting {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   updatedBy   String?   @map("updated_by") @db.Uuid
 
+  updatedByUser User?   @relation("SystemSettingUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@index([updatedBy])
   @@map("system_settings")
 }
