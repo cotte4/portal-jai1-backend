@@ -604,8 +604,15 @@ export class AuthService {
     tokenVersion: number = 1,
     options?: { ipAddress?: string; deviceInfo?: string },
   ) {
-    // Include rememberMe and tokenVersion in payload for validation and persistence
-    const payload = { sub: userId, email, role, rememberMe, tokenVersion };
+    // Include rememberMe, tokenVersion, and jti for uniqueness
+    const payload = {
+      sub: userId,
+      email,
+      role,
+      rememberMe,
+      tokenVersion,
+      jti: crypto.randomUUID(), // Unique ID to ensure each token is distinct
+    };
 
     // Get expiration values from centralized config (using seconds for JWT compatibility)
     const accessTokenExpirySeconds = rememberMe
