@@ -125,24 +125,6 @@ export class AuthService {
       )
       .catch((err) => this.logger.error('Failed to send welcome notification', err));
 
-    // TODO: Re-enable when needed
-    // Send welcome email (async, don't wait)
-    // this.emailService
-    //   .sendWelcomeEmail(user.email, user.firstName)
-    //   .catch((err) => this.logger.error('Failed to send welcome email', err));
-
-    // Notify admin of new registration (async, don't wait)
-    // const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
-    // if (adminEmail) {
-    //   this.emailService
-    //     .sendNewClientNotification(
-    //       adminEmail,
-    //       `${user.firstName} ${user.lastName}`,
-    //       user.email,
-    //     )
-    //     .catch((err) => this.logger.error('Failed to send admin notification', err));
-    // }
-
     return {
       user: {
         id: user.id,
@@ -521,12 +503,6 @@ export class AuthService {
           { firstName: user.firstName },
         )
         .catch((err) => this.logger.error('Failed to send welcome notification', err));
-
-      // TODO: Re-enable when needed
-      // Send welcome email
-      // this.emailService
-      //   .sendWelcomeEmail(user.email, user.firstName)
-      //   .catch((err) => this.logger.error('Failed to send welcome email', err));
     } else {
       // Update googleId if not set
       if (!user.googleId) {

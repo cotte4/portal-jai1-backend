@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { EmailService } from '../../common/services';
 import { ConfigService } from '@nestjs/config';
 import { PreFilingStatus } from '@prisma/client';
 import { redactUserId, sanitizeMetadata } from '../../common/utils/log-sanitizer';
@@ -28,7 +27,6 @@ export class ProgressAutomationService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
-    private emailService: EmailService,
     private configService: ConfigService,
   ) {}
 
@@ -193,25 +191,6 @@ export class ProgressAutomationService {
           this.logger.error(`Failed to create notification for admin ${redactUserId(admin.id)}:`, error);
         }
       }
-
-      // TODO: Re-enable when needed
-      // Send email to admin (using configured ADMIN_EMAIL or first admin)
-      // const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
-      // const targetEmail = adminEmail || admins[0]?.email;
-
-      // if (targetEmail) {
-      //   try {
-      //     await this.emailService.sendNotificationEmail(
-      //       targetEmail,
-      //       'Admin',
-      //       title,
-      //       message,
-      //     );
-      //     this.logger.log(`Sent admin email to ${targetEmail}`);
-      //   } catch (error) {
-      //     this.logger.error(`Failed to send admin email:`, error);
-      //   }
-      // }
     } catch (error) {
       this.logger.error('Error notifying admins:', error);
     }

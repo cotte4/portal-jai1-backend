@@ -6,7 +6,6 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
-import { EmailService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
@@ -57,7 +56,6 @@ export class TicketsService {
 
   constructor(
     private prisma: PrismaService,
-    private emailService: EmailService,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -359,19 +357,6 @@ export class TicketsService {
         ).catch((err) => {
           this.logger.error(`Failed to create notification for ticket ${ticketId}`, err);
         });
-
-        // TODO: Re-enable when needed
-        // Send email notification (fire and forget with error handling)
-        // if (ticket.user.email && ticket.user.firstName) {
-        //   this.emailService.sendTicketResponseEmail(
-        //     ticket.user.email,
-        //     ticket.user.firstName,
-        //     ticket.subject,
-        //     createMessageDto.message,
-        //   ).catch((err: Error) => {
-        //     this.logger.error(`Failed to send email for ticket ${ticketId}`, err);
-        //   });
-        // }
       }
 
       this.logger.log(`Successfully added message to ticket ${ticketId}`);
