@@ -79,10 +79,12 @@ describe('ClientsService', () => {
         findMany: jest.fn(),
         upsert: jest.fn(),
         update: jest.fn(),
+        count: jest.fn(),
       },
       taxCase: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
+        findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -574,6 +576,456 @@ describe('ClientsService', () => {
       await expect(
         service.completeProfile('user-1', { ssn: '123-45-6789', is_draft: false }),
       ).resolves.not.toThrow();
+    });
+  });
+
+  describe('findOne', () => {
+    const mockClientWithDetails = {
+      ...mockClientProfile,
+      user: mockUser,
+      taxCases: [
+        {
+          ...mockTaxCase,
+          documents: [],
+          statusHistory: [],
+          federalStatusNew: 'in_process',
+          federalStatusNewChangedAt: new Date(),
+          stateStatusNew: 'in_process',
+          stateStatusNewChangedAt: new Date(),
+          caseStatus: 'in_progress',
+        },
+      ],
+    };
+
+    it('should return client details with decrypted data', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue(mockClientWithDetails);
+
+      const result = await service.findOne('profile-1');
+
+      expect(result.id).toBe('profile-1');
+      expect(result.user.email).toBe('john@example.com');
+      expect(result.profile).toBeDefined();
+      expect(encryption.decrypt).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException if client not found', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue(null);
+
+      await expect(service.findOne('invalid-id')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should return taxCases with alarms', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue(mockClientWithDetails);
+
+      const result = await service.findOne('profile-1');
+
+      expect(result.taxCases).toHaveLength(1);
+      expect(result.taxCases[0]).toHaveProperty('alarms');
+      expect(result.taxCases[0]).toHaveProperty('hasAlarm');
+    });
+
+    it('should collect documents from all tax cases', async () => {
+      const clientWithDocs = {
+        ...mockClientWithDetails,
+        taxCases: [
+          {
+            ...mockTaxCase,
+            documents: [{ id: 'doc-1', name: 'test.pdf' }],
+            statusHistory: [],
+            federalStatusNew: 'in_process',
+            stateStatusNew: 'in_process',
+          },
+        ],
+      };
+      prisma.clientProfile.findUnique.mockResolvedValue(clientWithDocs);
+
+      const result = await service.findOne('profile-1');
+
+      expect(result.documents).toHaveLength(1);
+      expect(result.documents[0].id).toBe('doc-1');
+    });
+
+    it('should handle null encrypted fields', async () => {
+      const clientNullFields = {
+        ...mockClientWithDetails,
+        ssn: null,
+        addressStreet: null,
+        turbotaxEmail: null,
+        turbotaxPassword: null,
+        irsUsername: null,
+        irsPassword: null,
+        stateUsername: null,
+        statePassword: null,
+      };
+      prisma.clientProfile.findUnique.mockResolvedValue(clientNullFields);
+
+      const result = await service.findOne('profile-1');
+
+      expect(result.profile.ssn).toBeNull();
+      expect(result.profile.address.street).toBeNull();
+    });
+  });
+
+  describe('markPaid', () => {
+    it('should mark payment as received', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientProfile,
+        taxCases: [mockTaxCase],
+      });
+      prisma.taxCase.update.mockResolvedValue({ ...mockTaxCase, paymentReceived: true });
+
+      const result = await service.markPaid('profile-1');
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith({
+        where: { id: mockTaxCase.id },
+        data: { paymentReceived: true },
+      });
+      expect(result.message).toBe('Payment marked as received');
+    });
+
+    it('should throw NotFoundException if client not found', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue(null);
+
+      await expect(service.markPaid('invalid-id')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw NotFoundException if no tax case exists', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientProfile,
+        taxCases: [],
+      });
+
+      await expect(service.markPaid('profile-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('updateAdminStep', () => {
+    beforeEach(() => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientProfile,
+        user: { ...mockUser, referralCode: null },
+        taxCases: [{ ...mockTaxCase, adminStep: 1 }],
+      });
+      prisma.$transaction.mockImplementation((arr) => Promise.all(arr));
+      prisma.taxCase.update.mockResolvedValue(mockTaxCase);
+      prisma.statusHistory = { create: jest.fn().mockResolvedValue({}) };
+      referralsService.generateCode = jest.fn().mockResolvedValue('REF123');
+      referralsService.updateReferralOnTaxFormSubmit = jest.fn().mockResolvedValue(undefined);
+    });
+
+    it('should update admin step successfully', async () => {
+      const result = await service.updateAdminStep('profile-1', 2, 'admin-1');
+
+      expect(result.message).toBe('Admin step updated successfully');
+      expect(result.step).toBe(2);
+    });
+
+    it('should throw BadRequestException for invalid step (< 1)', async () => {
+      await expect(
+        service.updateAdminStep('profile-1', 0, 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException for invalid step (> 5)', async () => {
+      await expect(
+        service.updateAdminStep('profile-1', 6, 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException if client not found', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.updateAdminStep('invalid-id', 2, 'admin-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should generate referral code when step >= 3 and user has no code', async () => {
+      await service.updateAdminStep('profile-1', 3, 'admin-1');
+
+      expect(referralsService.generateCode).toHaveBeenCalled();
+      expect(referralsService.updateReferralOnTaxFormSubmit).toHaveBeenCalled();
+    });
+
+    it('should not generate referral code when step < 3', async () => {
+      await service.updateAdminStep('profile-1', 2, 'admin-1');
+
+      expect(referralsService.generateCode).not.toHaveBeenCalled();
+    });
+
+    it('should not fail if referral code generation fails', async () => {
+      referralsService.generateCode.mockRejectedValue(new Error('Referral error'));
+
+      await expect(
+        service.updateAdminStep('profile-1', 3, 'admin-1'),
+      ).resolves.not.toThrow();
+    });
+  });
+
+  describe('setProblem', () => {
+    beforeEach(() => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientProfile,
+        user: { id: 'user-1', firstName: 'John' },
+        taxCases: [{ ...mockTaxCase, hasProblem: false, adminStep: 2 }],
+      });
+      prisma.taxCase.update.mockResolvedValue(mockTaxCase);
+    });
+
+    it('should mark problem on case', async () => {
+      const result = await service.setProblem('profile-1', {
+        hasProblem: true,
+        problemType: 'missing_documents',
+        problemDescription: 'Missing W2 form',
+      });
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith({
+        where: { id: mockTaxCase.id },
+        data: expect.objectContaining({
+          hasProblem: true,
+          problemType: 'missing_documents',
+          problemDescription: 'Missing W2 form',
+          problemStep: 2,
+        }),
+      });
+      expect(result.message).toBe('Problem marked on case');
+      expect(result.hasProblem).toBe(true);
+    });
+
+    it('should send notification when marking new problem', async () => {
+      await service.setProblem('profile-1', { hasProblem: true });
+
+      expect(notificationsService.create).toHaveBeenCalledWith(
+        'user-1',
+        'problem_alert',
+        expect.any(String),
+        expect.any(String),
+      );
+    });
+
+    it('should not send notification if already had problem', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientProfile,
+        user: { id: 'user-1', firstName: 'John' },
+        taxCases: [{ ...mockTaxCase, hasProblem: true }],
+      });
+
+      await service.setProblem('profile-1', { hasProblem: true });
+
+      expect(notificationsService.create).not.toHaveBeenCalled();
+    });
+
+    it('should resolve problem and send notification', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientProfile,
+        user: { id: 'user-1', firstName: 'John' },
+        taxCases: [{ ...mockTaxCase, hasProblem: true }],
+      });
+
+      const result = await service.setProblem('profile-1', { hasProblem: false });
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith({
+        where: { id: mockTaxCase.id },
+        data: expect.objectContaining({
+          hasProblem: false,
+          problemResolvedAt: expect.any(Date),
+          problemStep: null,
+          problemType: null,
+          problemDescription: null,
+        }),
+      });
+      expect(result.message).toBe('Problem resolved');
+      expect(notificationsService.create).toHaveBeenCalledWith(
+        'user-1',
+        'status_change',
+        expect.any(String),
+        expect.any(String),
+      );
+    });
+
+    it('should throw NotFoundException if client not found', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.setProblem('invalid-id', { hasProblem: true }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getPaymentsSummary', () => {
+    it('should return payments summary with calculations', async () => {
+      prisma.clientProfile.findMany.mockResolvedValue([
+        {
+          id: 'profile-1',
+          user: { firstName: 'John', lastName: 'Doe', email: 'john@test.com' },
+          taxCases: [
+            {
+              federalActualRefund: 1000,
+              stateActualRefund: 500,
+              federalDepositDate: new Date(),
+              stateDepositDate: null,
+              paymentReceived: true,
+              commissionPaid: false,
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.getPaymentsSummary();
+
+      expect(result.clients).toHaveLength(1);
+      expect(result.clientCount).toBe(1);
+      expect(result.clients[0].federalTaxes).toBe(1000);
+      expect(result.clients[0].stateTaxes).toBe(500);
+      expect(result.clients[0].totalTaxes).toBe(1500);
+      // 11% commission
+      expect(result.clients[0].totalCommission).toBe(165);
+      expect(result.clients[0].clientReceives).toBe(1335);
+      expect(result.totals.totalTaxes).toBe(1500);
+    });
+
+    it('should filter out clients without refund amounts', async () => {
+      prisma.clientProfile.findMany.mockResolvedValue([
+        {
+          id: 'profile-1',
+          user: { firstName: 'John', lastName: 'Doe', email: 'john@test.com' },
+          taxCases: [{ federalActualRefund: null, stateActualRefund: null }],
+        },
+        {
+          id: 'profile-2',
+          user: { firstName: 'Jane', lastName: 'Smith', email: 'jane@test.com' },
+          taxCases: [{ federalActualRefund: 500, stateActualRefund: 0 }],
+        },
+      ]);
+
+      const result = await service.getPaymentsSummary();
+
+      expect(result.clients).toHaveLength(1);
+      expect(result.clients[0].name).toBe('Jane Smith');
+    });
+
+    it('should handle empty client list', async () => {
+      prisma.clientProfile.findMany.mockResolvedValue([]);
+
+      const result = await service.getPaymentsSummary();
+
+      expect(result.clients).toHaveLength(0);
+      expect(result.clientCount).toBe(0);
+      expect(result.totals.totalTaxes).toBe(0);
+    });
+  });
+
+  describe('getSeasonStats', () => {
+    it('should return season statistics', async () => {
+      prisma.clientProfile.count.mockResolvedValue(10);
+      prisma.taxCase.findMany.mockResolvedValue([
+        {
+          federalActualRefund: 1000,
+          stateActualRefund: 500,
+          federalDepositDate: new Date(),
+          stateDepositDate: null,
+          estimatedRefund: 1400,
+          federalStatus: 'deposited',
+          stateStatus: 'processing',
+        },
+        {
+          federalActualRefund: null,
+          stateActualRefund: null,
+          federalDepositDate: null,
+          stateDepositDate: null,
+          estimatedRefund: 800,
+          federalStatus: 'processing',
+          stateStatus: 'processing',
+        },
+      ]);
+
+      const result = await service.getSeasonStats();
+
+      expect(result.totalClients).toBe(10);
+      expect(result.taxesCompletedPercent).toBeGreaterThanOrEqual(0);
+      expect(result).toHaveProperty('projectedEarnings');
+      expect(result).toHaveProperty('earningsToDate');
+    });
+
+    it('should handle no tax cases', async () => {
+      prisma.clientProfile.count.mockResolvedValue(0);
+      prisma.taxCase.findMany.mockResolvedValue([]);
+
+      const result = await service.getSeasonStats();
+
+      expect(result.totalClients).toBe(0);
+      expect(result.taxesCompletedPercent).toBe(0);
+    });
+  });
+
+  describe('sendClientNotification', () => {
+    beforeEach(() => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientProfile,
+        user: { ...mockUser, id: 'user-1' },
+      });
+      prisma.notification = { count: jest.fn().mockResolvedValue(0) };
+    });
+
+    it('should send notification successfully', async () => {
+      const result = await service.sendClientNotification('profile-1', {
+        title: 'Test Title',
+        message: 'Test Message',
+        sendEmail: false,
+      });
+
+      expect(notificationsService.create).toHaveBeenCalledWith(
+        'user-1',
+        'system',
+        'Test Title',
+        'Test Message',
+      );
+      expect(result.message).toBe('Notification sent successfully');
+    });
+
+    it('should throw NotFoundException if client not found', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.sendClientNotification('invalid-id', {
+          title: 'Test',
+          message: 'Test',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException when rate limit exceeded', async () => {
+      prisma.notification.count.mockResolvedValue(5);
+
+      await expect(
+        service.sendClientNotification('profile-1', {
+          title: 'Test',
+          message: 'Test',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should send email when sendEmail is true', async () => {
+      emailService.sendNotificationEmail = jest.fn().mockResolvedValue(true);
+
+      await service.sendClientNotification('profile-1', {
+        title: 'Test Title',
+        message: 'Test Message',
+        sendEmail: true,
+      });
+
+      expect(emailService.sendNotificationEmail).toHaveBeenCalledWith(
+        'john@example.com',
+        'John',
+        'Test Title',
+        'Test Message',
+      );
     });
   });
 });
