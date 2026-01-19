@@ -8,6 +8,7 @@ import {
   UseGuards,
   Req,
   Res,
+  Param,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
@@ -138,5 +139,20 @@ export class AuthController {
       expires_in: tokens.expires_in,
       user,
     };
+  }
+
+  // Email verification endpoints
+  @Get('verify-email/:token')
+  async verifyEmail(@Param('token') token: string) {
+    return this.authService.verifyEmail(token);
+  }
+
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  async resendVerification(@Body('email') email: string) {
+    if (!email) {
+      throw new Error('Email is required');
+    }
+    return this.authService.resendVerification(email);
   }
 }

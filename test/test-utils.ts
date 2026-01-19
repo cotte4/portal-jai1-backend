@@ -35,6 +35,9 @@ export function createMockUser(overrides: Partial<MockUser> = {}): MockUser {
     referralCode: null,
     referredByCode: null,
     referralCodeCreatedAt: null,
+    emailVerified: false,
+    verificationToken: null,
+    verificationTokenExpiresAt: null,
     ...overrides,
   };
 }
@@ -161,6 +164,10 @@ export function createMockUsersService() {
     findRefreshTokenByHash: jest.fn(),
     revokeRefreshToken: jest.fn(),
     revokeAllUserRefreshTokens: jest.fn(),
+    // Email verification methods
+    setVerificationToken: jest.fn(),
+    findByVerificationToken: jest.fn(),
+    markEmailVerified: jest.fn(),
   };
 }
 
@@ -219,6 +226,7 @@ export function createMockEmailService() {
     sendPasswordResetEmail: jest.fn().mockResolvedValue(true),
     sendWelcomeEmail: jest.fn().mockResolvedValue(true),
     sendNotificationEmail: jest.fn().mockResolvedValue(true),
+    sendVerificationEmail: jest.fn().mockResolvedValue(true),
   };
 }
 
@@ -279,6 +287,10 @@ export interface MockUser {
   referralCode: string | null;
   referredByCode: string | null;
   referralCodeCreatedAt: Date | null;
+  // Email verification fields
+  emailVerified: boolean;
+  verificationToken: string | null;
+  verificationTokenExpiresAt: Date | null;
 }
 
 export interface MockClientProfile {
@@ -348,6 +360,83 @@ export interface MockReferral {
   referredDiscount: any;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// ============= CONTROLLER MOCK FACTORIES =============
+
+/**
+ * Creates a mock AuthService for controller testing
+ */
+export function createMockAuthService() {
+  return {
+    register: jest.fn(),
+    login: jest.fn(),
+    logout: jest.fn(),
+    refreshTokens: jest.fn(),
+    forgotPassword: jest.fn(),
+    resetPassword: jest.fn(),
+    changePassword: jest.fn(),
+    googleLogin: jest.fn(),
+    createOAuthCode: jest.fn(),
+    exchangeOAuthCode: jest.fn(),
+  };
+}
+
+/**
+ * Creates a mock ClientsService for controller testing
+ */
+export function createMockClientsService() {
+  return {
+    getProfile: jest.fn(),
+    completeProfile: jest.fn(),
+    getDraft: jest.fn(),
+    updateUserInfo: jest.fn(),
+    uploadProfilePicture: jest.fn(),
+    deleteProfilePicture: jest.fn(),
+    getSeasonStats: jest.fn(),
+    getAllClientAccounts: jest.fn(),
+    getPaymentsSummary: jest.fn(),
+    getDelaysData: jest.fn(),
+    getClientsWithAlarms: jest.fn(),
+    findAll: jest.fn(),
+    exportToExcelStream: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    updateStatus: jest.fn(),
+    remove: jest.fn(),
+    markPaid: jest.fn(),
+    setProblem: jest.fn(),
+    sendClientNotification: jest.fn(),
+  };
+}
+
+/**
+ * Creates a mock DocumentsService for controller testing
+ */
+export function createMockDocumentsService() {
+  return {
+    upload: jest.fn(),
+    findByUserId: jest.fn(),
+    findByClientId: jest.fn(),
+    getDownloadUrl: jest.fn(),
+    remove: jest.fn(),
+  };
+}
+
+/**
+ * Creates a mock TicketsService for controller testing
+ */
+export function createMockTicketsService() {
+  return {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    addMessage: jest.fn(),
+    updateStatus: jest.fn(),
+    deleteTicket: jest.fn(),
+    deleteMessage: jest.fn(),
+    markMessagesAsRead: jest.fn(),
+  };
 }
 
 // ============= ASSERTION HELPERS =============

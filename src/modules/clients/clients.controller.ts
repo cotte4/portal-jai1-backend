@@ -23,6 +23,7 @@ import { ClientsService } from './clients.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { UpdateSensitiveProfileDto } from './dto/update-sensitive-profile.dto';
 import {
   UpdateStatusDto,
   SetProblemDto,
@@ -104,6 +105,15 @@ export class ClientsController {
   @UseGuards(JwtAuthGuard)
   async deleteProfilePicture(@CurrentUser() user: any) {
     return this.clientsService.deleteProfilePicture(user.id);
+  }
+
+  @Patch('profile/sensitive')
+  @UseGuards(JwtAuthGuard)
+  async updateSensitiveProfile(
+    @CurrentUser() user: any,
+    @Body() dto: UpdateSensitiveProfileDto,
+  ) {
+    return this.clientsService.updateSensitiveProfile(user.id, dto);
   }
 
   // Admin endpoints
@@ -275,6 +285,13 @@ export class ClientsController {
     @CurrentUser() user: any,
   ) {
     return this.clientsService.updateStatus(id, statusData, user.id);
+  }
+
+  @Get('admin/clients/:id/valid-transitions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  async getValidTransitions(@Param('id') id: string) {
+    return this.clientsService.getValidTransitions(id);
   }
 
   @Delete('admin/clients/:id')

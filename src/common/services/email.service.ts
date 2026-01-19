@@ -131,6 +131,64 @@ export class EmailService {
   }
 
   /**
+   * Send email verification email
+   */
+  async sendVerificationEmail(
+    to: string,
+    firstName: string,
+    verificationToken: string,
+  ): Promise<boolean> {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
+    const verificationLink = `${frontendUrl}/verify-email?token=${verificationToken}`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #B21B43; color: white; padding: 20px; text-align: center; }
+          .content { padding: 20px; background-color: #f9f9f9; }
+          .button { display: inline-block; background-color: #1D345D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }
+          .warning { background-color: #fff3cd; border: 1px solid #ffc107; padding: 10px; margin: 15px 0; border-radius: 4px; }
+          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Verifica tu Email</h1>
+          </div>
+          <div class="content">
+            <p>Hola <strong>${firstName}</strong>,</p>
+            <p>Gracias por registrarte en JAI1. Para completar tu registro y activar tu cuenta, por favor verifica tu direccion de email.</p>
+            <p>Haz clic en el siguiente boton para verificar tu cuenta:</p>
+            <p style="text-align: center;">
+              <a href="${verificationLink}" class="button">Verificar Email</a>
+            </p>
+            <div class="warning">
+              <strong>Importante:</strong> Este enlace expirara en 24 horas por seguridad.
+            </div>
+            <p>Si no creaste una cuenta en JAI1, puedes ignorar este correo.</p>
+          </div>
+          <div class="footer">
+            <p>El equipo JAI1</p>
+            <p style="font-size: 10px; color: #999;">Si el boton no funciona, copia y pega este enlace en tu navegador: ${verificationLink}</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.send({
+      to,
+      subject: 'Verifica tu email - JAI1',
+      html,
+    });
+  }
+
+  /**
    * Send custom notification email
    */
   async sendNotificationEmail(

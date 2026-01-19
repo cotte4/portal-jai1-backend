@@ -31,6 +31,12 @@ import {
   mapFederalStatusToClientDisplay,
   mapStateStatusToClientDisplay,
 } from '../../common/utils/status-mapping.util';
+import {
+  isValidTransition,
+  getValidNextStatuses,
+  createInvalidTransitionError,
+  StatusTransitionType,
+} from '../../common/utils/status-transitions.util';
 import * as ExcelJS from 'exceljs';
 import { PassThrough } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
@@ -494,6 +500,218 @@ export class ClientsService {
       address: result.address,
       dateOfBirth: result.dateOfBirth,
       message: 'User info updated successfully',
+    };
+  }
+
+  /**
+   * Update sensitive profile fields (SSN, bank info, TurboTax credentials)
+   * Only available for users who have already completed their profile
+   */
+  async updateSensitiveProfile(
+    userId: string,
+    data: {
+      ssn?: string;
+      bankName?: string;
+      bankRoutingNumber?: string;
+      bankAccountNumber?: string;
+      turbotaxEmail?: string;
+      turbotaxPassword?: string;
+    },
+  ) {
+    this.logger.log(`Updating sensitive profile for user ${userId}`);
+
+    // Verify user has a completed profile
+    const profile = await this.prisma.clientProfile.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        profileComplete: true,
+        isDraft: true,
+        ssn: true,
+        turbotaxEmail: true,
+        turbotaxPassword: true,
+        taxCases: {
+          select: {
+            id: true,
+            bankName: true,
+            bankRoutingNumber: true,
+            bankAccountNumber: true,
+          },
+          orderBy: { taxYear: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!profile) {
+      throw new BadRequestException('Profile not found. Please complete your profile first.');
+    }
+
+    if (!profile.profileComplete || profile.isDraft) {
+      throw new BadRequestException('Profile must be completed before editing sensitive fields.');
+    }
+
+    const taxCase = profile.taxCases[0];
+    if (!taxCase) {
+      throw new BadRequestException('No tax case found. Please complete your profile first.');
+    }
+
+    // Prepare update data with encryption
+    const profileUpdateData: any = {};
+    const taxCaseUpdateData: any = {};
+    const auditDetails: Record<string, any> = {};
+
+    // Handle SSN change
+    if (data.ssn !== undefined) {
+      // Normalize SSN (remove dashes if present)
+      const normalizedSSN = data.ssn.replace(/-/g, '');
+      profileUpdateData.ssn = this.encryption.encrypt(normalizedSSN);
+      auditDetails.ssnChanged = true;
+    }
+
+    // Handle TurboTax credentials
+    if (data.turbotaxEmail !== undefined) {
+      profileUpdateData.turbotaxEmail = data.turbotaxEmail
+        ? this.encryption.encrypt(data.turbotaxEmail)
+        : null;
+      auditDetails.turbotaxEmailChanged = true;
+    }
+
+    if (data.turbotaxPassword !== undefined) {
+      profileUpdateData.turbotaxPassword = data.turbotaxPassword
+        ? this.encryption.encrypt(data.turbotaxPassword)
+        : null;
+      auditDetails.turbotaxPasswordChanged = true;
+    }
+
+    // Handle bank info changes (stored in TaxCase)
+    if (data.bankName !== undefined) {
+      taxCaseUpdateData.bankName = data.bankName || null;
+      auditDetails.bankNameChanged = true;
+    }
+
+    if (data.bankRoutingNumber !== undefined) {
+      taxCaseUpdateData.bankRoutingNumber = data.bankRoutingNumber
+        ? this.encryption.encrypt(data.bankRoutingNumber)
+        : null;
+      auditDetails.bankRoutingChanged = true;
+    }
+
+    if (data.bankAccountNumber !== undefined) {
+      taxCaseUpdateData.bankAccountNumber = data.bankAccountNumber
+        ? this.encryption.encrypt(data.bankAccountNumber)
+        : null;
+      auditDetails.bankAccountChanged = true;
+    }
+
+    // Perform updates in transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Update ClientProfile if there are profile changes
+      let updatedProfile = profile;
+      if (Object.keys(profileUpdateData).length > 0) {
+        updatedProfile = await tx.clientProfile.update({
+          where: { id: profile.id },
+          data: profileUpdateData,
+          select: {
+            id: true,
+            ssn: true,
+            turbotaxEmail: true,
+            turbotaxPassword: true,
+            profileComplete: true,
+            isDraft: true,
+            taxCases: {
+              select: {
+                id: true,
+                bankName: true,
+                bankRoutingNumber: true,
+                bankAccountNumber: true,
+              },
+              orderBy: { taxYear: 'desc' },
+              take: 1,
+            },
+          },
+        });
+      }
+
+      // Update TaxCase if there are bank info changes
+      let updatedTaxCase = taxCase;
+      if (Object.keys(taxCaseUpdateData).length > 0) {
+        updatedTaxCase = await tx.taxCase.update({
+          where: { id: taxCase.id },
+          data: taxCaseUpdateData,
+          select: {
+            id: true,
+            bankName: true,
+            bankRoutingNumber: true,
+            bankAccountNumber: true,
+          },
+        });
+      }
+
+      return { profile: updatedProfile, taxCase: updatedTaxCase };
+    });
+
+    // Log audit events (run in background to not block response)
+    this.runBackgroundTask('audit-sensitive-profile-update', async () => {
+      // Log SSN change
+      if (auditDetails.ssnChanged) {
+        await this.auditLogsService.log({
+          action: AuditAction.SSN_CHANGE,
+          userId,
+          targetUserId: userId,
+          details: { timestamp: new Date().toISOString() },
+        });
+      }
+
+      // Log bank info changes
+      if (auditDetails.bankNameChanged || auditDetails.bankRoutingChanged || auditDetails.bankAccountChanged) {
+        await this.auditLogsService.log({
+          action: AuditAction.BANK_INFO_CHANGE,
+          userId,
+          targetUserId: userId,
+          details: {
+            fieldsChanged: Object.keys(auditDetails).filter(k => k.startsWith('bank')),
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+
+      // Log TurboTax credential changes
+      if (auditDetails.turbotaxEmailChanged || auditDetails.turbotaxPasswordChanged) {
+        await this.auditLogsService.log({
+          action: AuditAction.PROFILE_UPDATE,
+          userId,
+          targetUserId: userId,
+          details: {
+            fieldsChanged: ['turbotaxCredentials'],
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+    });
+
+    this.logger.log(`Sensitive profile updated for user ${userId}`);
+
+    // Return masked response
+    const updatedTaxCase = result.taxCase;
+    return {
+      profile: {
+        ssn: result.profile.ssn
+          ? this.encryption.maskSSN(result.profile.ssn)
+          : null,
+        turbotaxEmail: result.profile.turbotaxEmail ? '****@****.***' : null,
+        turbotaxPassword: result.profile.turbotaxPassword ? '********' : null,
+      },
+      bank: {
+        name: updatedTaxCase.bankName,
+        routingNumber: updatedTaxCase.bankRoutingNumber
+          ? this.encryption.maskRoutingNumber(updatedTaxCase.bankRoutingNumber)
+          : null,
+        accountNumber: updatedTaxCase.bankAccountNumber
+          ? this.encryption.maskBankAccount(updatedTaxCase.bankAccountNumber)
+          : null,
+      },
+      message: 'Sensitive profile updated successfully',
     };
   }
 
@@ -1375,6 +1593,45 @@ export class ClientsService {
       updateData.stateDepositDate = new Date(statusData.stateDepositDate);
     }
 
+    // ============= STATUS TRANSITION VALIDATION =============
+    // Capture previous new status values for validation
+    const previousCaseStatus = (taxCase as any).caseStatus;
+    const previousFederalStatusNew = (taxCase as any).federalStatusNew;
+    const previousStateStatusNew = (taxCase as any).stateStatusNew;
+
+    // Track if this is a forced override
+    const isForceOverride = statusData.forceTransition === true && statusData.overrideReason;
+
+    // Validate caseStatus transition
+    if (statusData.caseStatus && statusData.caseStatus !== previousCaseStatus) {
+      if (!isValidTransition('case', previousCaseStatus, statusData.caseStatus)) {
+        if (!isForceOverride) {
+          const error = createInvalidTransitionError('case', previousCaseStatus, statusData.caseStatus);
+          throw new BadRequestException(error);
+        }
+      }
+    }
+
+    // Validate federalStatusNew transition
+    if (statusData.federalStatusNew && statusData.federalStatusNew !== previousFederalStatusNew) {
+      if (!isValidTransition('federal', previousFederalStatusNew, statusData.federalStatusNew)) {
+        if (!isForceOverride) {
+          const error = createInvalidTransitionError('federal', previousFederalStatusNew, statusData.federalStatusNew);
+          throw new BadRequestException(error);
+        }
+      }
+    }
+
+    // Validate stateStatusNew transition
+    if (statusData.stateStatusNew && statusData.stateStatusNew !== previousStateStatusNew) {
+      if (!isValidTransition('state', previousStateStatusNew, statusData.stateStatusNew)) {
+        if (!isForceOverride) {
+          const error = createInvalidTransitionError('state', previousStateStatusNew, statusData.stateStatusNew);
+          throw new BadRequestException(error);
+        }
+      }
+    }
+
     // ============= NEW STATUS SYSTEM (v2) - DUAL WRITE =============
     // Update new caseStatus field
     if (statusData.caseStatus) {
@@ -1457,6 +1714,15 @@ export class ClientsService {
       statusChanges.push(`stateStatusNew: ${statusData.stateStatusNew || updateData.stateStatusNew}`);
     }
 
+    // Build the history comment - prepend override prefix if forced transition
+    let historyComment = statusData.comment || '';
+    if (isForceOverride) {
+      const overridePrefix = `[ADMIN OVERRIDE] Razon: ${statusData.overrideReason}`;
+      historyComment = historyComment
+        ? `${overridePrefix} | ${historyComment}`
+        : overridePrefix;
+    }
+
     await this.prisma.$transaction([
       this.prisma.taxCase.update({
         where: { id: taxCase.id },
@@ -1468,7 +1734,7 @@ export class ClientsService {
           previousStatus: previousStatusString,
           newStatus: statusChanges.join(', ') || 'status update',
           changedById,
-          comment: statusData.comment,
+          comment: historyComment || null,
         },
       }),
     ]);
@@ -1634,6 +1900,50 @@ export class ClientsService {
         notification.message,
       );
     }
+  }
+
+  /**
+   * Get valid status transitions for a client's tax case
+   * Returns the current statuses and their valid next transitions
+   */
+  async getValidTransitions(clientId: string) {
+    const client = await this.prisma.clientProfile.findUnique({
+      where: { id: clientId },
+      include: {
+        taxCases: {
+          orderBy: { taxYear: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            caseStatus: true,
+            federalStatusNew: true,
+            stateStatusNew: true,
+          },
+        },
+      },
+    });
+
+    if (!client || !client.taxCases[0]) {
+      throw new NotFoundException('Client or tax case not found');
+    }
+
+    const taxCase = client.taxCases[0];
+
+    return {
+      taxCaseId: taxCase.id,
+      caseStatus: {
+        current: taxCase.caseStatus,
+        validTransitions: getValidNextStatuses('case', taxCase.caseStatus),
+      },
+      federalStatusNew: {
+        current: taxCase.federalStatusNew,
+        validTransitions: getValidNextStatuses('federal', taxCase.federalStatusNew),
+      },
+      stateStatusNew: {
+        current: taxCase.stateStatusNew,
+        validTransitions: getValidNextStatuses('state', taxCase.stateStatusNew),
+      },
+    };
   }
 
   async remove(id: string) {

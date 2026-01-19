@@ -31,6 +31,9 @@ export class AuthService {
   // In production, consider using Redis for multi-instance deployments
   private oauthCodes = new Map<string, { tokens: any; user: any; expiresAt: number }>();
 
+  // Rate limiting for resend verification (email -> { count, resetAt })
+  private resendVerificationRateLimits = new Map<string, { count: number; resetAt: number }>();
+
   constructor(
     private usersService: UsersService,
     private referralsService: ReferralsService,
@@ -110,10 +113,24 @@ export class AuthService {
       }
     }
 
-    // Set lastLoginAt since registration counts as first login
-    await this.usersService.updateLastLogin(user.id);
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const hashedVerificationToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    await this.usersService.setVerificationToken(user.id, hashedVerificationToken, verificationExpiresAt);
+
+    // Send verification email (async, don't wait)
+    this.emailService
+      .sendVerificationEmail(user.email, user.firstName, verificationToken)
+      .then((success) => {
+        if (success) {
+          this.logger.log(`Verification email sent to: ${redactEmail(user.email)}`);
+        } else {
+          this.logger.error(`Failed to send verification email to: ${redactEmail(user.email)}`);
+        }
+      })
+      .catch((err) => this.logger.error('Failed to send verification email', err));
 
     // Send welcome in-app notification (async, don't wait)
     this.notificationsService
@@ -125,17 +142,16 @@ export class AuthService {
       )
       .catch((err) => this.logger.error('Failed to send welcome notification', err));
 
+    // Return without tokens - user must verify email first
     return {
+      message: 'Registration successful. Please verify your email.',
+      requiresVerification: true,
       user: {
         id: user.id,
         email: user.email,
         first_name: user.firstName,
         last_name: user.lastName,
-        phone: user.phone,
-        role: user.role,
-        created_at: user.createdAt,
       },
-      ...tokens,
     };
   }
 
@@ -166,6 +182,22 @@ export class AuthService {
         userAgent,
       });
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Check email verification for email/password users (not Google OAuth)
+    if (!user.googleId && !user.emailVerified) {
+      this.auditLogsService.log({
+        action: AuditAction.LOGIN_FAILED,
+        userId: user.id,
+        details: { reason: 'Email not verified' },
+        ipAddress,
+        userAgent,
+      });
+      throw new UnauthorizedException({
+        statusCode: 401,
+        message: 'Email not verified. Please check your inbox.',
+        error: 'EMAIL_NOT_VERIFIED',
+      });
     }
 
     if (!user.isActive) {
@@ -492,6 +524,9 @@ export class AuthService {
         googleId: googleUser.googleId,
       });
 
+      // Google users are automatically verified
+      await this.usersService.markEmailVerified(user.id);
+
       this.logger.log(`New user created via Google OAuth: ${user.email}`);
 
       // Send welcome in-app notification (async, don't wait)
@@ -504,9 +539,11 @@ export class AuthService {
         )
         .catch((err) => this.logger.error('Failed to send welcome notification', err));
     } else {
-      // Update googleId if not set
+      // Update googleId if not set (linking existing account)
       if (!user.googleId) {
         await this.usersService.updateGoogleId(user.id, googleUser.googleId);
+        // Also mark email as verified when linking Google account
+        await this.usersService.markEmailVerified(user.id);
       }
     }
 
@@ -658,5 +695,84 @@ export class AuthService {
    */
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  // ============= EMAIL VERIFICATION =============
+
+  /**
+   * Verify email with token
+   */
+  async verifyEmail(token: string) {
+    // Hash the incoming token to match against stored hash
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user by hashed verification token
+    const user = await this.usersService.findByVerificationToken(hashedToken);
+    if (!user) {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
+
+    // Mark email as verified
+    await this.usersService.markEmailVerified(user.id);
+
+    this.logger.log(`Email verified for user: ${redactEmail(user.email)}`);
+
+    return { message: 'Email verified successfully. You can now log in.' };
+  }
+
+  /**
+   * Resend verification email
+   */
+  async resendVerification(email: string) {
+    // Rate limiting: 3 attempts per 15 minutes per email
+    const now = Date.now();
+    const rateLimitKey = email.toLowerCase();
+    const rateLimit = this.resendVerificationRateLimits.get(rateLimitKey);
+
+    if (rateLimit) {
+      if (now < rateLimit.resetAt) {
+        if (rateLimit.count >= 3) {
+          this.logger.warn(`Rate limit exceeded for resend verification: ${redactEmail(email)}`);
+          // Return generic message - don't reveal rate limiting
+          return { message: 'If the email exists and is not verified, a verification link has been sent.' };
+        }
+        rateLimit.count++;
+      } else {
+        // Reset the rate limit window
+        this.resendVerificationRateLimits.set(rateLimitKey, { count: 1, resetAt: now + 15 * 60 * 1000 });
+      }
+    } else {
+      this.resendVerificationRateLimits.set(rateLimitKey, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    }
+
+    // Find user by email
+    const user = await this.usersService.findByEmail(email);
+
+    // Don't reveal if user exists or is already verified
+    if (!user || user.emailVerified) {
+      this.logger.log(`Resend verification requested for non-existent or verified email: ${redactEmail(email)}`);
+      return { message: 'If the email exists and is not verified, a verification link has been sent.' };
+    }
+
+    // Generate new verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const hashedVerificationToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await this.usersService.setVerificationToken(user.id, hashedVerificationToken, verificationExpiresAt);
+
+    // Send verification email
+    this.emailService
+      .sendVerificationEmail(user.email, user.firstName, verificationToken)
+      .then((success) => {
+        if (success) {
+          this.logger.log(`Verification email resent to: ${redactEmail(user.email)}`);
+        } else {
+          this.logger.error(`Failed to resend verification email to: ${redactEmail(user.email)}`);
+        }
+      })
+      .catch((err) => this.logger.error('Failed to resend verification email', err));
+
+    return { message: 'If the email exists and is not verified, a verification link has been sent.' };
   }
 }

@@ -222,4 +222,47 @@ export class UsersService {
       },
     });
   }
+
+  // ============= EMAIL VERIFICATION =============
+
+  /**
+   * Set verification token for a user (hashed)
+   */
+  async setVerificationToken(userId: string, tokenHash: string, expiresAt: Date) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        verificationToken: tokenHash,
+        verificationTokenExpiresAt: expiresAt,
+      },
+    });
+  }
+
+  /**
+   * Find user by verification token (must not be expired)
+   */
+  async findByVerificationToken(tokenHash: string) {
+    return this.prisma.user.findFirst({
+      where: {
+        verificationToken: tokenHash,
+        verificationTokenExpiresAt: {
+          gt: new Date(),
+        },
+      },
+    });
+  }
+
+  /**
+   * Mark user's email as verified and clear verification token
+   */
+  async markEmailVerified(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerified: true,
+        verificationToken: null,
+        verificationTokenExpiresAt: null,
+      },
+    });
+  }
 }

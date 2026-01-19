@@ -95,23 +95,21 @@ describe('AuthService', () => {
 
       usersService.findByEmail.mockResolvedValue(null); // Email doesn't exist
       usersService.create.mockResolvedValue(mockUser);
-      usersService.updateLastLogin.mockResolvedValue(undefined);
-      usersService.createRefreshToken.mockResolvedValue(undefined);
-      jwtService.sign.mockReturnValue('mock-jwt-token');
+      usersService.setVerificationToken.mockResolvedValue(undefined);
 
       // Act: Call the method
       const result = await authService.register(validRegisterDto);
 
-      // Assert: Verify results
+      // Assert: Verify results - now returns verification required, no tokens
       expect(result).toBeDefined();
+      expect(result.requiresVerification).toBe(true);
+      expect(result.message).toContain('verify');
       expect(result.user.email).toBe(validRegisterDto.email);
-      expect(result.access_token).toBe('mock-jwt-token');
-      expect(result.refresh_token).toBe('mock-jwt-token');
 
       // Verify the right methods were called
       expect(usersService.findByEmail).toHaveBeenCalledWith(validRegisterDto.email);
       expect(usersService.create).toHaveBeenCalled();
-      expect(usersService.updateLastLogin).toHaveBeenCalledWith(mockUser.id);
+      expect(usersService.setVerificationToken).toHaveBeenCalled();
     });
 
     it('should throw ConflictException if email already exists', async () => {
@@ -144,8 +142,7 @@ describe('AuthService', () => {
         expect(isValidHash).toBe(true);
         return createMockUser(data);
       });
-      usersService.updateLastLogin.mockResolvedValue(undefined);
-      usersService.createRefreshToken.mockResolvedValue(undefined);
+      usersService.setVerificationToken.mockResolvedValue(undefined);
 
       // Act
       await authService.register(validRegisterDto);
@@ -159,8 +156,7 @@ describe('AuthService', () => {
       const referralCode = 'VALID123';
       usersService.findByEmail.mockResolvedValue(null);
       usersService.create.mockResolvedValue(createMockUser({ id: 'new-user-id' }));
-      usersService.updateLastLogin.mockResolvedValue(undefined);
-      usersService.createRefreshToken.mockResolvedValue(undefined);
+      usersService.setVerificationToken.mockResolvedValue(undefined);
 
       referralsService.validateCode.mockResolvedValue({
         valid: true,
@@ -209,8 +205,7 @@ describe('AuthService', () => {
       const mockUser = createMockUser({ id: 'new-user-id', firstName: 'John' });
       usersService.findByEmail.mockResolvedValue(null);
       usersService.create.mockResolvedValue(mockUser);
-      usersService.updateLastLogin.mockResolvedValue(undefined);
-      usersService.createRefreshToken.mockResolvedValue(undefined);
+      usersService.setVerificationToken.mockResolvedValue(undefined);
 
       // Act
       await authService.register(validRegisterDto);
@@ -239,6 +234,7 @@ describe('AuthService', () => {
         email: validLoginDto.email,
         passwordHash: hashedPassword,
         isActive: true,
+        emailVerified: true,
       });
 
       usersService.findByEmail.mockResolvedValue(mockUser);
@@ -312,6 +308,7 @@ describe('AuthService', () => {
         email: validLoginDto.email,
         passwordHash: hashedPassword,
         isActive: false, // Deactivated
+        emailVerified: true,
       });
 
       usersService.findByEmail.mockResolvedValue(mockUser);
@@ -332,6 +329,7 @@ describe('AuthService', () => {
         email: validLoginDto.email,
         passwordHash: hashedPassword,
         isActive: true,
+        emailVerified: true,
       });
 
       usersService.findByEmail.mockResolvedValue(mockUser);

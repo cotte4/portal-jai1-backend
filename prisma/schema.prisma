@@ -25,6 +25,10 @@ model User {
   resetToken            String?         @map("reset_token")
   resetTokenExpiresAt   DateTime?       @map("reset_token_expires_at") @db.Timestamptz
   tokenVersion          Int             @default(1) @map("token_version")
+  // Email verification
+  emailVerified              Boolean   @default(false) @map("email_verified")
+  verificationToken          String?   @map("verification_token")
+  verificationTokenExpiresAt DateTime? @map("verification_token_expires_at") @db.Timestamptz
   // Language preference
   preferredLanguage     String          @default("es") @map("preferred_language") @db.VarChar(5)
   // Referral program fields
@@ -611,6 +615,10 @@ enum AuditAction {
   DISCOUNT_APPLIED
   // Auth (30-day retention)
   LOGIN_FAILED
+  // Profile updates (keep forever)
+  PROFILE_UPDATE
+  SSN_CHANGE
+  BANK_INFO_CHANGE
 }
 
 // ============= SYSTEM SETTINGS =============

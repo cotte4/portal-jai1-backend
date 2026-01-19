@@ -11,6 +11,7 @@ import {
   registerDecorator,
   ValidationOptions,
   Min,
+  MinLength,
   ValidateIf,
   MaxLength,
 } from 'class-validator';
@@ -143,6 +144,20 @@ export class UpdateStatusDto {
   @IsOptional()
   @IsEnum(StateStatusNew, { message: 'Invalid state status (new)' })
   stateStatusNew?: StateStatusNew;
+
+  // ============= FORCE TRANSITION OVERRIDE =============
+
+  // Allow admin to force an otherwise invalid status transition
+  @IsOptional()
+  @IsBoolean()
+  forceTransition?: boolean;
+
+  // Reason is required when forcing a transition (min 10 chars)
+  @ValidateIf((o) => o.forceTransition === true)
+  @IsString()
+  @MinLength(10, { message: 'Override reason must be at least 10 characters' })
+  @MaxLength(500, { message: 'Override reason must be less than 500 characters' })
+  overrideReason?: string;
 }
 
 // DEPRECATED: UpdateAdminStepDto removed - use internalStatus changes instead
