@@ -1028,4 +1028,422 @@ describe('ClientsService', () => {
       );
     });
   });
+
+  describe('updateStatus', () => {
+    const mockClientWithTaxCase = {
+      ...mockClientProfile,
+      user: {
+        id: 'user-1',
+        email: 'john@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
+        referralCode: null,
+      },
+      taxCases: [
+        {
+          id: 'taxcase-1',
+          federalStatus: 'processing',
+          stateStatus: 'processing',
+          preFilingStatus: null,
+          taxesFiled: false,
+          taxesFiledAt: null,
+          federalDepositDate: null,
+          stateDepositDate: null,
+          hasProblem: false,
+          caseStatus: 'in_progress',
+          federalStatusNew: 'in_process',
+          stateStatusNew: 'in_process',
+          federalActualRefund: null,
+          stateActualRefund: null,
+          taxYear: 2024,
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      prisma.clientProfile.findUnique.mockResolvedValue(mockClientWithTaxCase);
+      prisma.$transaction.mockImplementation((arr) => Promise.all(arr));
+      prisma.taxCase.update.mockResolvedValue(mockTaxCase);
+      prisma.statusHistory = { create: jest.fn().mockResolvedValue({}) };
+      referralsService.generateCode = jest.fn().mockResolvedValue('REF123');
+      referralsService.updateReferralOnTaxFormSubmit = jest.fn().mockResolvedValue(undefined);
+      referralsService.markReferralSuccessful = jest.fn().mockResolvedValue(undefined);
+    });
+
+    it('should update status successfully', async () => {
+      const result = await service.updateStatus(
+        'profile-1',
+        { federalStatus: 'accepted' },
+        'admin-1',
+      );
+
+      expect(result.message).toBe('Status updated successfully');
+      expect(prisma.taxCase.update).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException if client not found', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.updateStatus('invalid-id', { federalStatus: 'accepted' }, 'admin-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw NotFoundException if no tax case exists', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientProfile,
+        user: mockClientWithTaxCase.user,
+        taxCases: [],
+      });
+
+      await expect(
+        service.updateStatus('profile-1', { federalStatus: 'accepted' }, 'admin-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should update federal status and notify client', async () => {
+      await service.updateStatus(
+        'profile-1',
+        { federalStatus: 'approved' },
+        'admin-1',
+      );
+
+      expect(notificationsService.create).toHaveBeenCalledWith(
+        'user-1',
+        'status_change',
+        expect.any(String),
+        expect.any(String),
+      );
+    });
+
+    it('should update state status and notify client', async () => {
+      await service.updateStatus(
+        'profile-1',
+        { stateStatus: 'approved' },
+        'admin-1',
+      );
+
+      expect(notificationsService.create).toHaveBeenCalledWith(
+        'user-1',
+        'status_change',
+        expect.any(String),
+        expect.any(String),
+      );
+    });
+
+    it('should not notify when status unchanged', async () => {
+      await service.updateStatus(
+        'profile-1',
+        { federalStatus: 'processing' }, // Same as current
+        'admin-1',
+      );
+
+      // Should not call create for status change notification
+      expect(notificationsService.create).not.toHaveBeenCalled();
+    });
+
+    it('should update taxesFiled and set taxesFiledAt', async () => {
+      await service.updateStatus(
+        'profile-1',
+        { taxesFiled: true },
+        'admin-1',
+      );
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            taxesFiled: true,
+            taxesFiledAt: expect.any(Date),
+            preFilingStatus: 'documentation_complete',
+          }),
+        }),
+      );
+    });
+
+    it('should generate referral code when taxes newly filed', async () => {
+      await service.updateStatus(
+        'profile-1',
+        { taxesFiled: true },
+        'admin-1',
+      );
+
+      expect(referralsService.generateCode).toHaveBeenCalledWith('user-1');
+      expect(referralsService.updateReferralOnTaxFormSubmit).toHaveBeenCalledWith('user-1');
+    });
+
+    it('should not generate referral code if user already has one', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientWithTaxCase,
+        user: { ...mockClientWithTaxCase.user, referralCode: 'EXISTING' },
+      });
+
+      await service.updateStatus(
+        'profile-1',
+        { taxesFiled: true },
+        'admin-1',
+      );
+
+      expect(referralsService.generateCode).not.toHaveBeenCalled();
+    });
+
+    it('should mark referral successful on first deposit date', async () => {
+      await service.updateStatus(
+        'profile-1',
+        { federalDepositDate: '2024-03-15' },
+        'admin-1',
+      );
+
+      expect(referralsService.markReferralSuccessful).toHaveBeenCalledWith(
+        'user-1',
+        'taxcase-1',
+      );
+    });
+
+    it('should not mark referral if deposit date already exists', async () => {
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientWithTaxCase,
+        taxCases: [
+          {
+            ...mockClientWithTaxCase.taxCases[0],
+            federalDepositDate: new Date('2024-03-01'),
+          },
+        ],
+      });
+
+      await service.updateStatus(
+        'profile-1',
+        { stateDepositDate: '2024-03-15' },
+        'admin-1',
+      );
+
+      expect(referralsService.markReferralSuccessful).not.toHaveBeenCalled();
+    });
+
+    it('should handle federal and state comments', async () => {
+      await service.updateStatus(
+        'profile-1',
+        {
+          federalStatus: 'accepted',
+          federalComment: 'Federal accepted',
+          stateComment: 'State pending',
+        },
+        'admin-1',
+      );
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            federalLastComment: 'Federal accepted',
+            stateLastComment: 'State pending',
+          }),
+        }),
+      );
+    });
+
+    it('should handle estimated dates and actual refunds', async () => {
+      await service.updateStatus(
+        'profile-1',
+        {
+          federalEstimatedDate: '2024-04-15',
+          federalActualRefund: 1500,
+          stateEstimatedDate: '2024-05-01',
+          stateActualRefund: 500,
+        },
+        'admin-1',
+      );
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            federalEstimatedDate: expect.any(Date),
+            federalActualRefund: 1500,
+            stateEstimatedDate: expect.any(Date),
+            stateActualRefund: 500,
+          }),
+        }),
+      );
+    });
+
+    it('should log refund updates to audit log', async () => {
+      await service.updateStatus(
+        'profile-1',
+        { federalActualRefund: 1500 },
+        'admin-1',
+      );
+
+      expect(auditLogsService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'REFUND_UPDATE',
+          userId: 'admin-1',
+          targetUserId: 'user-1',
+        }),
+      );
+    });
+
+    it('should create status history entry', async () => {
+      await service.updateStatus(
+        'profile-1',
+        { federalStatus: 'accepted', comment: 'Processing complete' },
+        'admin-1',
+      );
+
+      expect(prisma.statusHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          taxCaseId: 'taxcase-1',
+          changedById: 'admin-1',
+          comment: 'Processing complete',
+        }),
+      });
+    });
+
+    it('should handle preFilingStatus updates', async () => {
+      await service.updateStatus(
+        'profile-1',
+        { preFilingStatus: 'documentation_complete' },
+        'admin-1',
+      );
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            preFilingStatus: 'documentation_complete',
+          }),
+        }),
+      );
+    });
+
+    it('should not fail if referral marking fails', async () => {
+      referralsService.markReferralSuccessful.mockRejectedValue(new Error('Referral error'));
+
+      await expect(
+        service.updateStatus(
+          'profile-1',
+          { federalDepositDate: '2024-03-15' },
+          'admin-1',
+        ),
+      ).resolves.not.toThrow();
+    });
+
+    it('should not fail if referral code generation fails', async () => {
+      referralsService.generateCode.mockRejectedValue(new Error('Code generation error'));
+
+      await expect(
+        service.updateStatus(
+          'profile-1',
+          { taxesFiled: true },
+          'admin-1',
+        ),
+      ).resolves.not.toThrow();
+    });
+
+    it('should update new status system fields (federalStatusNew)', async () => {
+      // Valid transition from 'in_process' to 'in_verification'
+      await service.updateStatus(
+        'profile-1',
+        { federalStatusNew: 'in_verification' },
+        'admin-1',
+      );
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            federalStatusNew: 'in_verification',
+            federalStatusNewChangedAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('should update new status system fields (stateStatusNew)', async () => {
+      // Valid transition from 'in_process' to 'check_in_transit'
+      await service.updateStatus(
+        'profile-1',
+        { stateStatusNew: 'check_in_transit' },
+        'admin-1',
+      );
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            stateStatusNew: 'check_in_transit',
+            stateStatusNewChangedAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('should update caseStatus field with valid transition', async () => {
+      // Mock client with awaiting_docs caseStatus (allows transition to preparing)
+      prisma.clientProfile.findUnique.mockResolvedValue({
+        ...mockClientWithTaxCase,
+        taxCases: [
+          {
+            ...mockClientWithTaxCase.taxCases[0],
+            caseStatus: 'awaiting_docs',
+          },
+        ],
+      });
+
+      await service.updateStatus(
+        'profile-1',
+        { caseStatus: 'preparing' },
+        'admin-1',
+      );
+
+      expect(prisma.taxCase.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            caseStatus: 'preparing',
+            caseStatusChangedAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('should throw BadRequestException for invalid status transition', async () => {
+      // Invalid transition from 'in_progress' to 'taxes_completed'
+      await expect(
+        service.updateStatus(
+          'profile-1',
+          { federalStatusNew: 'taxes_completed' },
+          'admin-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should handle force override with reason', async () => {
+      // Force an invalid transition (from in_process to taxes_completed)
+      await service.updateStatus(
+        'profile-1',
+        {
+          federalStatusNew: 'taxes_completed',
+          forceTransition: true,
+          overrideReason: 'Manual correction',
+          comment: 'Admin override',
+        },
+        'admin-1',
+      );
+
+      expect(prisma.statusHistory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          comment: expect.stringContaining('[ADMIN OVERRIDE]'),
+        }),
+      });
+    });
+
+    it('should allow force override to bypass transition validation', async () => {
+      // This would normally be invalid without force override
+      await expect(
+        service.updateStatus(
+          'profile-1',
+          {
+            federalStatusNew: 'taxes_completed',
+            forceTransition: true,
+            overrideReason: 'Emergency fix',
+          },
+          'admin-1',
+        ),
+      ).resolves.not.toThrow();
+    });
+  });
 });
