@@ -200,15 +200,28 @@ export class DocumentsService {
   }
 
   async findByUserId(userId: string) {
-    const clientProfile = await this.prisma.clientProfile.findUnique({
-      where: { userId },
+    // Single query with join instead of two separate queries
+    const documents = await this.prisma.document.findMany({
+      where: {
+        taxCase: {
+          clientProfile: { userId },
+        },
+      },
+      orderBy: { uploadedAt: 'desc' },
     });
 
-    if (!clientProfile) {
-      return [];
-    }
-
-    return this.findByClientId(clientProfile.id);
+    return documents.map((doc) => ({
+      id: doc.id,
+      taxCaseId: doc.taxCaseId,
+      fileName: doc.fileName,
+      type: doc.type,
+      isReviewed: doc.isReviewed,
+      uploadedAt: doc.uploadedAt,
+      storagePath: doc.storagePath,
+      mimeType: doc.mimeType,
+      fileSize: doc.fileSize,
+      taxYear: doc.taxYear,
+    }));
   }
 
   async findByClientId(clientProfileId: string) {

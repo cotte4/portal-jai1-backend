@@ -33,6 +33,36 @@ export class NotificationsService {
   }
 
   /**
+   * Batch create notifications for multiple users (avoids N+1 queries)
+   * @param userIds - Array of user IDs to notify
+   * @param type - Notification type
+   * @param title - Notification title
+   * @param message - Notification message
+   * @returns Number of notifications created
+   */
+  async createMany(
+    userIds: string[],
+    type: NotificationType,
+    title: string,
+    message: string,
+  ): Promise<{ count: number }> {
+    if (userIds.length === 0) {
+      return { count: 0 };
+    }
+
+    const result = await this.prisma.notification.createMany({
+      data: userIds.map((userId) => ({
+        userId,
+        type,
+        title,
+        message,
+      })),
+    });
+
+    return { count: result.count };
+  }
+
+  /**
    * Create a notification using i18n template
    * @param userId - Target user ID
    * @param type - Notification type

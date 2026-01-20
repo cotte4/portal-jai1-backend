@@ -165,32 +165,34 @@ export class ProgressAutomationService {
   }
 
   /**
-   * Notify all admin users via in-app notifications and email
+   * Notify all admin users via in-app notifications
+   * Uses batch insert (createMany) to avoid N+1 query pattern
    */
   private async notifyAdmins(title: string, message: string): Promise<void> {
     try {
-      // Get all admin users
+      // Get all admin user IDs
       const admins = await this.prisma.user.findMany({
         where: { role: 'admin' },
-        select: { id: true, email: true, firstName: true },
+        select: { id: true },
       });
 
-      this.logger.log(`Notifying ${admins.length} admin(s)`);
-
-      // Create in-app notifications for all admins
-      for (const admin of admins) {
-        try {
-          await this.notificationsService.create(
-            admin.id,
-            'system',
-            title,
-            message,
-          );
-          this.logger.log(`Created in-app notification for admin ${redactUserId(admin.id)}`);
-        } catch (error) {
-          this.logger.error(`Failed to create notification for admin ${redactUserId(admin.id)}:`, error);
-        }
+      if (admins.length === 0) {
+        this.logger.warn('No admin users found to notify');
+        return;
       }
+
+      const adminIds = admins.map((admin) => admin.id);
+      this.logger.log(`Notifying ${adminIds.length} admin(s) via batch insert`);
+
+      // Batch create notifications for all admins (single query instead of N queries)
+      const result = await this.notificationsService.createMany(
+        adminIds,
+        'system',
+        title,
+        message,
+      );
+
+      this.logger.log(`Created ${result.count} admin notifications in batch`);
     } catch (error) {
       this.logger.error('Error notifying admins:', error);
     }

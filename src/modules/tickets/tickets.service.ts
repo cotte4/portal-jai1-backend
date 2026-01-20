@@ -297,58 +297,104 @@ export class TicketsService {
     this.logger.log(`Adding message to ticket ${ticketId} by user ${userId}`);
 
     try {
-      // Fetch ticket with only needed user fields for access check and notifications
-      const ticket = await this.prisma.ticket.findUnique({
-        where: { id: ticketId },
-        select: {
-          id: true,
-          userId: true,
-          subject: true,
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              role: true,
+      // Use transaction to fetch, validate, create message and return full ticket atomically
+      // This avoids the redundant re-fetch after adding the message
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Fetch ticket with all data needed for response
+        const ticket = await tx.ticket.findUnique({
+          where: { id: ticketId, deletedAt: null },
+          select: {
+            id: true,
+            userId: true,
+            subject: true,
+            status: true,
+            unreadCount: true,
+            createdAt: true,
+            updatedAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+              },
+            },
+            messages: {
+              where: { deletedAt: null },
+              select: {
+                id: true,
+                message: true,
+                senderId: true,
+                isRead: true,
+                createdAt: true,
+                sender: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    role: true,
+                  },
+                },
+              },
+              orderBy: { createdAt: 'asc' },
             },
           },
-        },
-      });
+        });
 
-      if (!ticket) {
-        this.logger.warn(`Ticket ${ticketId} not found when adding message`);
-        throw new NotFoundException('Ticket not found');
-      }
+        if (!ticket) {
+          throw new NotFoundException('Ticket not found');
+        }
 
-      // Check access
-      if (userRole !== 'admin' && ticket.userId !== userId) {
-        this.logger.warn(`User ${userId} denied access to add message to ticket ${ticketId}`);
-        throw new ForbiddenException('Access denied');
-      }
+        // Check access
+        if (userRole !== 'admin' && ticket.userId !== userId) {
+          throw new ForbiddenException('Access denied');
+        }
 
-      // Use transaction to create message and update ticket atomically
-      await this.prisma.$transaction(async (tx) => {
-        await tx.ticketMessage.create({
+        // Create the new message
+        const newMessage = await tx.ticketMessage.create({
           data: {
             ticketId,
             senderId: userId,
             message: createMessageDto.message,
           },
+          select: {
+            id: true,
+            message: true,
+            senderId: true,
+            isRead: true,
+            createdAt: true,
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+              },
+            },
+          },
         });
 
         // Update ticket's updatedAt and increment unread count
-        await tx.ticket.update({
+        const updatedTicket = await tx.ticket.update({
           where: { id: ticketId },
           data: {
             updatedAt: new Date(),
             unreadCount: { increment: 1 },
           },
+          select: {
+            updatedAt: true,
+            unreadCount: true,
+          },
         });
+
+        return { ticket, newMessage, updatedTicket };
       });
 
-      // Send email and notification if admin is replying to a client's ticket
+      const { ticket, newMessage, updatedTicket } = result;
+
+      // Send notification if admin is replying to a client's ticket (fire and forget)
       if (userRole === 'admin' && ticket.user?.role === 'client') {
-        // Create in-app notification (fire and forget with error handling)
         this.notificationsService.create(
           ticket.userId,
           'message',
@@ -361,8 +407,57 @@ export class TicketsService {
 
       this.logger.log(`Successfully added message to ticket ${ticketId}`);
 
-      // Return the full ticket with all messages (frontend expects this)
-      return this.findOne(ticketId, userId, userRole);
+      // Build response from transaction data (no extra query needed)
+      return {
+        id: ticket.id,
+        userId: ticket.userId,
+        subject: ticket.subject,
+        status: ticket.status,
+        unreadCount: updatedTicket.unreadCount,
+        user: ticket.user ? {
+          id: ticket.user.id,
+          email: ticket.user.email,
+          firstName: ticket.user.firstName,
+          lastName: ticket.user.lastName,
+        } : undefined,
+        messages: [
+          ...ticket.messages.map((msg) => ({
+            id: msg.id,
+            ticketId: ticket.id,
+            message: msg.message,
+            senderId: msg.senderId,
+            isRead: msg.isRead,
+            sender: msg.sender
+              ? {
+                  id: msg.sender.id,
+                  firstName: msg.sender.firstName,
+                  lastName: msg.sender.lastName,
+                  role: msg.sender.role,
+                }
+              : null,
+            createdAt: msg.createdAt,
+          })),
+          // Add the new message
+          {
+            id: newMessage.id,
+            ticketId: ticket.id,
+            message: newMessage.message,
+            senderId: newMessage.senderId,
+            isRead: newMessage.isRead,
+            sender: newMessage.sender
+              ? {
+                  id: newMessage.sender.id,
+                  firstName: newMessage.sender.firstName,
+                  lastName: newMessage.sender.lastName,
+                  role: newMessage.sender.role,
+                }
+              : null,
+            createdAt: newMessage.createdAt,
+          },
+        ],
+        createdAt: ticket.createdAt,
+        updatedAt: updatedTicket.updatedAt,
+      };
     } catch (error) {
       // Re-throw known exceptions
       if (error instanceof NotFoundException || error instanceof ForbiddenException) {
