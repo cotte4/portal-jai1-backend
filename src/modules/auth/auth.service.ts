@@ -225,6 +225,9 @@ export class AuthService {
     // Get profile picture URL if exists
     const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
 
+    // Check if user has completed their profile (for onboarding redirect)
+    const hasProfile = await this.usersService.hasCompletedProfile(user.id);
+
     return {
       user: {
         id: user.id,
@@ -236,6 +239,7 @@ export class AuthService {
         created_at: user.createdAt,
         profilePictureUrl,
       },
+      hasProfile,
       ...tokens,
     };
   }
@@ -558,6 +562,9 @@ export class AuthService {
     // Get profile picture URL if exists
     const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
 
+    // Check if user has completed their profile (for onboarding redirect)
+    const hasProfile = await this.usersService.hasCompletedProfile(user.id);
+
     this.logger.log(`Google OAuth login successful for: ${redactEmail(user.email)}`);
 
     return {
@@ -570,6 +577,7 @@ export class AuthService {
         role: user.role,
         created_at: user.createdAt,
         profilePictureUrl,
+        hasProfile,
       },
       ...tokens,
     };

@@ -38,6 +38,14 @@ export class UsersService {
     });
   }
 
+  async hasCompletedProfile(userId: string): Promise<boolean> {
+    const profile = await this.prisma.clientProfile.findUnique({
+      where: { userId },
+      select: { profileComplete: true },
+    });
+    return profile?.profileComplete ?? false;
+  }
+
   async findById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },

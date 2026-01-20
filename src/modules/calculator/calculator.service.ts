@@ -78,10 +78,16 @@ export class CalculatorService {
     }
 
     // Upload file to Supabase Storage using centralized path service
+    // Use w2 folder (same as documents upload) for consistency across all W2 uploads
     let w2StoragePath: string | null = null;
     try {
       const taxYear = new Date().getFullYear();
-      w2StoragePath = this.storagePath.generateEstimatePath(userId, file.originalname, taxYear);
+      w2StoragePath = this.storagePath.generateDocumentPath({
+        userId,
+        taxYear,
+        documentType: 'w2',
+        originalFileName: file.originalname,
+      });
 
       await this.supabase.uploadFile(
         this.BUCKET_NAME,

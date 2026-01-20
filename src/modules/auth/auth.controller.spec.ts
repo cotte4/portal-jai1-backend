@@ -32,6 +32,7 @@ describe('AuthController', () => {
       created_at: new Date(),
       profilePictureUrl: null,
     },
+    hasProfile: false,
     access_token: 'mock-access-token',
     refresh_token: 'mock-refresh-token',
     expires_in: 900,
