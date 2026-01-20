@@ -13,7 +13,18 @@ async function createAdmin() {
   });
 
   if (existingAdmin) {
-    console.log('Admin user already exists');
+    console.log('Admin user already exists - updating password and email verification...');
+    await prisma.user.update({
+      where: { email: adminEmail },
+      data: {
+        passwordHash: await bcrypt.hash(adminPassword, 10),
+        emailVerified: true,
+        isActive: true,
+      },
+    });
+    console.log('Admin user updated successfully!');
+    console.log(`Email: ${adminEmail}`);
+    console.log(`Password: ${adminPassword}`);
     return;
   }
 
@@ -29,6 +40,7 @@ async function createAdmin() {
       lastName: 'User',
       role: UserRole.admin,
       isActive: true,
+      emailVerified: true, // Admin doesn't need email verification
     },
   });
 
