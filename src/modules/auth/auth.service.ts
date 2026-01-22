@@ -27,6 +27,12 @@ export class AuthService {
   private readonly PROFILE_PICTURES_BUCKET = 'profile-pictures';
   private readonly authConfig: AuthConfig;
 
+  // Pre-computed dummy hash for timing-safe login responses
+  // This prevents timing attacks that could enumerate valid emails
+  // Hash of a random string, computed once at class initialization
+  private readonly DUMMY_PASSWORD_HASH =
+    '$2b$10$dummyHashForTimingSafetyXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+
   // Temporary storage for OAuth authorization codes (single-use, short-lived)
   // In production, consider using Redis for multi-instance deployments
   private oauthCodes = new Map<string, { tokens: any; user: any; expiresAt: number }>();
@@ -67,7 +73,7 @@ export class AuthService {
   async register(registerDto: RegisterDto) {
     const existingUser = await this.usersService.findByEmail(registerDto.email);
     if (existingUser) {
-      throw new ConflictException('Email already registered');
+      throw new ConflictException('Este email ya está registrado. Por favor, iniciá sesión o usá otro email.');
     }
 
     // Validate referral code if provided
@@ -157,6 +163,15 @@ export class AuthService {
 
   async login(loginDto: LoginDto, ipAddress?: string, userAgent?: string) {
     const user = await this.usersService.findByEmail(loginDto.email);
+
+    // Timing-safe password verification
+    // Always perform bcrypt.compare to prevent timing attacks that could enumerate valid emails
+    const passwordToCompare = user?.passwordHash || this.DUMMY_PASSWORD_HASH;
+    const isPasswordValid = await bcrypt.compare(
+      loginDto.password,
+      passwordToCompare,
+    );
+
     if (!user) {
       // Log failed login attempt (unknown email)
       this.auditLogsService.log({
@@ -168,10 +183,6 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      loginDto.password,
-      user.passwordHash,
-    );
     if (!isPasswordValid) {
       // Log failed login attempt (wrong password)
       this.auditLogsService.log({
@@ -516,32 +527,13 @@ export class AuthService {
     let user = await this.usersService.findByEmail(googleUser.email);
 
     if (!user) {
-      // Create new user from Google data (no password needed)
-      const randomPassword = crypto.randomBytes(32).toString('hex');
-      const hashedPassword = await bcrypt.hash(randomPassword, 10);
-
-      user = await this.usersService.create({
-        email: googleUser.email,
-        passwordHash: hashedPassword,
-        firstName: googleUser.firstName || 'Usuario',
-        lastName: googleUser.lastName || 'Google',
-        googleId: googleUser.googleId,
+      // User not found - do not auto-create, require registration first
+      this.logger.log(`Google OAuth login attempted for non-existent email: ${redactEmail(googleUser.email)}`);
+      throw new UnauthorizedException({
+        statusCode: 401,
+        message: 'No account found with this email. Please register first.',
+        error: 'GOOGLE_NO_ACCOUNT',
       });
-
-      // Google users are automatically verified
-      await this.usersService.markEmailVerified(user.id);
-
-      this.logger.log(`New user created via Google OAuth: ${user.email}`);
-
-      // Send welcome in-app notification (async, don't wait)
-      this.notificationsService
-        .createFromTemplate(
-          user.id,
-          'system',
-          'notifications.welcome',
-          { firstName: user.firstName },
-        )
-        .catch((err) => this.logger.error('Failed to send welcome notification', err));
     } else {
       // Update googleId if not set (linking existing account)
       if (!user.googleId) {

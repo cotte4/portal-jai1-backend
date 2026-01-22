@@ -116,6 +116,12 @@ export class ClientsController {
     return this.clientsService.updateSensitiveProfile(user.id, dto);
   }
 
+  @Post('profile/mark-onboarding-complete')
+  @UseGuards(JwtAuthGuard)
+  async markOnboardingComplete(@CurrentUser() user: any) {
+    return this.clientsService.markOnboardingComplete(user.id);
+  }
+
   // Admin endpoints
   @Get('admin/stats/season')
   @UseGuards(JwtAuthGuard, RolesGuard)

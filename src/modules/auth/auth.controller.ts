@@ -124,9 +124,15 @@ export class AuthController {
       // Redirect with only the code - tokens are exchanged via POST
       const redirectUrl = `${frontendUrl}/auth/google/callback?code=${code}`;
       res.redirect(redirectUrl);
-    } catch (error) {
+    } catch (error: any) {
       const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
-      res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
+      // Check if this is a "no account found" error
+      const errorCode = error?.response?.error || error?.error || '';
+      if (errorCode === 'GOOGLE_NO_ACCOUNT') {
+        res.redirect(`${frontendUrl}/login?error=google_no_account`);
+      } else {
+        res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
+      }
     }
   }
 

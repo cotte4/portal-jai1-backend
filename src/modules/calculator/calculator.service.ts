@@ -10,6 +10,7 @@ import { SupabaseService } from '../../config/supabase.service';
 import { StoragePathService } from '../../common/services';
 import { redactUserId, redactFileName, redactStoragePath } from '../../common/utils/log-sanitizer';
 import OpenAI from 'openai';
+import { pdf } from 'pdf-to-img';
 
 interface OcrResult {
   box_2: string;
@@ -46,18 +47,30 @@ export class CalculatorService {
 
   async estimateRefund(userId: string, file: Express.Multer.File) {
     // Validate file type
-    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
     if (!allowedMimeTypes.includes(file.mimetype)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG and PNG images are allowed for W2 scanning.',
+        'Invalid file type. Only JPG, PNG images and PDF files are allowed for W2 scanning.',
       );
     }
 
-    // Convert file buffer to base64
-    const base64Image = file.buffer.toString('base64');
-    const mimeType = file.mimetype;
-
     this.logger.log(`Processing W2 OCR for user ${redactUserId(userId)}: ${redactFileName(file.originalname)} (${file.size} bytes)`);
+
+    // Convert file buffer to base64 (handle PDF conversion if needed)
+    let base64Image: string;
+    let mimeType: string;
+
+    if (file.mimetype === 'application/pdf') {
+      // Convert first page of PDF to PNG image
+      this.logger.log('Converting PDF to image for OCR processing...');
+      const { imageBuffer, imageMimeType } = await this.convertPdfToImage(file.buffer);
+      base64Image = imageBuffer.toString('base64');
+      mimeType = imageMimeType;
+      this.logger.log('PDF converted to image successfully');
+    } else {
+      base64Image = file.buffer.toString('base64');
+      mimeType = file.mimetype;
+    }
 
     // Call OpenAI Vision API with retry logic
     const { ocrResult, rawResponse } = await this.callOpenAIWithRetry(base64Image, mimeType);
@@ -227,6 +240,33 @@ EXAMPLE OF A GOOD OUTPUT:
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Convert PDF buffer to PNG image (first page only)
+   * Uses pdf-to-img library which is based on pdfjs-dist
+   */
+  private async convertPdfToImage(pdfBuffer: Buffer): Promise<{ imageBuffer: Buffer; imageMimeType: string }> {
+    try {
+      // pdf-to-img returns an async iterator of page images
+      const pdfDocument = await pdf(pdfBuffer, { scale: 2.0 }); // Higher scale for better OCR
+
+      // Get only the first page
+      for await (const image of pdfDocument) {
+        // The image is a Buffer containing PNG data
+        return {
+          imageBuffer: image,
+          imageMimeType: 'image/png',
+        };
+      }
+
+      throw new Error('PDF has no pages');
+    } catch (error: any) {
+      this.logger.error(`PDF conversion failed: ${error?.message || 'Unknown error'}`);
+      throw new BadRequestException(
+        'Failed to process PDF file. Please ensure the PDF is not corrupted or password-protected.',
+      );
+    }
   }
 
   async getEstimateHistory(userId: string) {

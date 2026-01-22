@@ -118,6 +118,8 @@ export class ClientsService {
             addressCity: true,
             addressState: true,
             addressZip: true,
+            turbotaxEmail: true,
+            turbotaxPassword: true,
             profileComplete: true,
             isDraft: true,
             taxCases: {
@@ -127,12 +129,22 @@ export class ClientsService {
                 bankName: true,
                 bankRoutingNumber: true,
                 bankAccountNumber: true,
+                paymentMethod: true,
                 workState: true,
                 employerName: true,
+                // Old status fields (for backward compatibility)
                 federalStatus: true,
                 stateStatus: true,
                 adminStep: true,
                 estimatedRefund: true,
+                // Phase indicator fields
+                taxesFiled: true,
+                taxesFiledAt: true,
+                preFilingStatus: true,
+                // Problem tracking
+                hasProblem: true,
+                problemType: true,
+                problemDescription: true,
                 // Federal/state tracking (source of truth)
                 federalActualRefund: true,
                 stateActualRefund: true,
@@ -140,7 +152,16 @@ export class ClientsService {
                 stateDepositDate: true,
                 federalEstimatedDate: true,
                 stateEstimatedDate: true,
+                federalStatusChangedAt: true,
+                stateStatusChangedAt: true,
                 statusUpdatedAt: true,
+                // NEW STATUS SYSTEM (v2)
+                caseStatus: true,
+                caseStatusChangedAt: true,
+                federalStatusNew: true,
+                federalStatusNewChangedAt: true,
+                stateStatusNew: true,
+                stateStatusNewChangedAt: true,
               },
               orderBy: { taxYear: 'desc' },
               take: 1,
@@ -211,19 +232,42 @@ export class ClientsService {
                     : null,
                 }
               : { name: null, routingNumber: null, accountNumber: null },
+            // Payment method for refund (bank_deposit or check)
+            paymentMethod: user.clientProfile.taxCases[0]?.paymentMethod || 'bank_deposit',
             workState: user.clientProfile.taxCases[0]?.workState || null,
             employerName: user.clientProfile.taxCases[0]?.employerName || null,
+            // TurboTax credentials (masked for security)
+            turbotaxEmail: user.clientProfile.turbotaxEmail
+              ? this.encryption.maskEmail(this.encryption.decrypt(user.clientProfile.turbotaxEmail))
+              : null,
+            turbotaxPassword: user.clientProfile.turbotaxPassword
+              ? '••••••••'
+              : null,
             profileComplete: user.clientProfile.profileComplete,
             isDraft: user.clientProfile.isDraft,
           }
         : null,
-      taxCase: user.clientProfile?.taxCases[0] || null,
+      taxCase: user.clientProfile?.taxCases[0]
+        ? {
+            ...user.clientProfile.taxCases[0],
+            // Convert Decimal to number to prevent string concatenation in frontend
+            federalActualRefund: user.clientProfile.taxCases[0].federalActualRefund
+              ? Number(user.clientProfile.taxCases[0].federalActualRefund)
+              : null,
+            stateActualRefund: user.clientProfile.taxCases[0].stateActualRefund
+              ? Number(user.clientProfile.taxCases[0].stateActualRefund)
+              : null,
+            estimatedRefund: user.clientProfile.taxCases[0].estimatedRefund
+              ? Number(user.clientProfile.taxCases[0].estimatedRefund)
+              : null,
+          }
+        : null,
     };
   }
 
   async completeProfile(userId: string, data: CompleteProfileDto) {
     this.logger.log(
-      `Saving profile for user ${userId}, isDraft: ${data.is_draft}`,
+      `Saving profile for user ${userId}, isDraft: ${data.is_draft}, paymentMethod: ${data.payment_method || 'bank_deposit'}`,
     );
 
     // Check if profile is already completed (not a draft)
@@ -235,6 +279,16 @@ export class ClientsService {
       throw new BadRequestException(
         'Profile already submitted. Contact support to make changes.',
       );
+    }
+
+    // Validate bank fields if payment method is bank_deposit (default) and not a draft
+    const paymentMethod = data.payment_method || 'bank_deposit';
+    if (!data.is_draft && paymentMethod === 'bank_deposit') {
+      if (!data.bank?.name || !data.bank?.routing_number || !data.bank?.account_number) {
+        throw new BadRequestException(
+          'Bank information is required for direct deposit. Please provide bank name, routing number, and account number.',
+        );
+      }
     }
 
     // Encrypt sensitive data before saving
@@ -311,6 +365,8 @@ export class ClientsService {
       }
 
       // Update TaxCase with bank/employer data (year-specific)
+      // Determine payment method (default to bank_deposit)
+      const paymentMethod = data.payment_method || 'bank_deposit';
       await tx.taxCase.update({
         where: { id: taxCase.id },
         data: {
@@ -319,6 +375,7 @@ export class ClientsService {
           bankAccountNumber: encryptedBankAccount,
           workState: data.work_state,
           employerName: data.employer_name,
+          paymentMethod: paymentMethod,
         },
       });
 
@@ -739,6 +796,7 @@ export class ClientsService {
             bankName: true,
             bankRoutingNumber: true,
             bankAccountNumber: true,
+            paymentMethod: true,
             workState: true,
             employerName: true,
           },
@@ -776,6 +834,8 @@ export class ClientsService {
           ? this.encryption.decrypt(taxCase.bankAccountNumber)
           : null,
       },
+      // Payment method for refund (bank_deposit or check)
+      paymentMethod: taxCase?.paymentMethod || 'bank_deposit',
       workState: taxCase?.workState || null,
       employerName: taxCase?.employerName || null,
       turbotaxEmail: profile.turbotaxEmail
@@ -786,6 +846,46 @@ export class ClientsService {
       isDraft: profile.isDraft,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
+    };
+  }
+
+  /**
+   * Mark onboarding as complete for a user.
+   * This creates a minimal ClientProfile with profileComplete=true if one doesn't exist,
+   * or updates the existing profile to mark onboarding as complete.
+   *
+   * This is called when user skips the full profile form during onboarding
+   * but should still be able to access the dashboard without seeing onboarding again.
+   */
+  async markOnboardingComplete(userId: string) {
+    this.logger.log(`Marking onboarding complete for user ${userId}`);
+
+    // Upsert profile - create if doesn't exist, or update if exists
+    const profile = await this.prisma.clientProfile.upsert({
+      where: { userId },
+      update: {
+        // Only update profileComplete if it's not already complete
+        // This preserves all existing data
+        profileComplete: true,
+      },
+      create: {
+        userId,
+        profileComplete: true,
+        isDraft: true, // Still a draft until they fill full profile
+      },
+      select: {
+        id: true,
+        profileComplete: true,
+        isDraft: true,
+      },
+    });
+
+    this.logger.log(`Onboarding marked complete for user ${userId}, profile id: ${profile.id}`);
+
+    return {
+      success: true,
+      profileComplete: profile.profileComplete,
+      message: 'Onboarding marked as complete',
     };
   }
 

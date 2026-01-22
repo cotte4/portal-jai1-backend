@@ -23,8 +23,8 @@ export class CalculatorController {
     FileInterceptor('w2File', {
       limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
       fileFilter: (req, file, callback) => {
-        if (!file.mimetype.match(/^image\/(jpeg|jpg|png)$/)) {
-          return callback(new Error('Only JPG and PNG images are allowed'), false);
+        if (!file.mimetype.match(/^(image\/(jpeg|jpg|png)|application\/pdf)$/)) {
+          return callback(new Error('Only JPG, PNG images and PDF files are allowed'), false);
         }
         callback(null, true);
       },

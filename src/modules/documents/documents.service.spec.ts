@@ -85,6 +85,7 @@ describe('DocumentsService', () => {
     prisma = {
       clientProfile: {
         findUnique: jest.fn(),
+        create: jest.fn(),
       },
       taxCase: {
         create: jest.fn(),
@@ -191,12 +192,34 @@ describe('DocumentsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException if client profile not found', async () => {
+    it('should auto-create client profile if not found', async () => {
+      const newProfile = {
+        id: 'new-profile-1',
+        userId: 'user-1',
+        isDraft: true,
+        profileComplete: false,
+        taxCases: [],
+      };
       prisma.clientProfile.findUnique.mockResolvedValue(null);
+      prisma.clientProfile.create.mockResolvedValue(newProfile);
+      prisma.taxCase.create.mockResolvedValue({
+        id: 'new-taxcase',
+        taxYear: 2024,
+        clientProfileId: 'new-profile-1',
+      });
 
-      await expect(
-        service.upload('user-1', mockFile, { type: 'w2' }),
-      ).rejects.toThrow(BadRequestException);
+      const result = await service.upload('user-1', mockFile, { type: 'w2' });
+
+      expect(prisma.clientProfile.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-1',
+          isDraft: true,
+          profileComplete: false,
+        },
+        include: { taxCases: { orderBy: { taxYear: 'desc' }, take: 1 } },
+      });
+      expect(prisma.taxCase.create).toHaveBeenCalled();
+      expect(result.document.id).toBe('doc-1');
     });
 
     it('should create tax case if not exists', async () => {
@@ -263,8 +286,8 @@ describe('DocumentsService', () => {
       expect(result[0].id).toBe('doc-1');
     });
 
-    it('should return empty array if no client profile', async () => {
-      prisma.clientProfile.findUnique.mockResolvedValue(null);
+    it('should return empty array if no documents exist', async () => {
+      prisma.document.findMany.mockResolvedValue([]);
 
       const result = await service.findByUserId('user-1');
 

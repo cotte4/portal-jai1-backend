@@ -182,4 +182,18 @@ export class EncryptionService {
     }
     return '****';
   }
+
+  /**
+   * Masks email for display: john.doe@example.com -> jo****@example.com
+   * Shows first 2 characters of local part, then **** and the full domain
+   */
+  maskEmail(email: string): string | null {
+    if (!email) return null;
+    const atIndex = email.indexOf('@');
+    if (atIndex <= 0) return '****@****.***';
+    const localPart = email.substring(0, atIndex);
+    const domain = email.substring(atIndex);
+    const visibleChars = Math.min(2, localPart.length);
+    return `${localPart.substring(0, visibleChars)}****${domain}`;
+  }
 }

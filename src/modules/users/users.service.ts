@@ -60,6 +60,7 @@ export class UsersService {
         googleId: true,
         profilePicturePath: true,
         tokenVersion: true,
+        referralOnboardingCompleted: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -272,5 +273,34 @@ export class UsersService {
         verificationTokenExpiresAt: null,
       },
     });
+  }
+
+  // ============= REFERRAL ONBOARDING =============
+
+  /**
+   * Mark referral onboarding as completed for a user
+   */
+  async completeReferralOnboarding(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        referralOnboardingCompleted: true,
+      },
+      select: {
+        id: true,
+        referralOnboardingCompleted: true,
+      },
+    });
+  }
+
+  /**
+   * Get referral onboarding status for a user
+   */
+  async getReferralOnboardingStatus(userId: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { referralOnboardingCompleted: true },
+    });
+    return user?.referralOnboardingCompleted ?? false;
   }
 }

@@ -7,6 +7,7 @@ import {
   Matches,
   MaxLength,
   ValidateIf,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -15,6 +16,13 @@ import { Type } from 'class-transformer';
  * When is_draft=true, most fields become optional to allow partial saves
  */
 const isNotDraft = (o: CompleteProfileDto) => o.is_draft !== true;
+
+/**
+ * Helper to check if bank fields should be required
+ * Bank fields are required only when NOT a draft AND payment_method is 'bank_deposit' (or not specified)
+ */
+const requiresBankInfo = (o: CompleteProfileDto) =>
+  o.is_draft !== true && o.payment_method !== 'check';
 
 class AddressDto {
   @IsOptional()
@@ -63,6 +71,13 @@ export class CompleteProfileDto {
   @IsBoolean()
   is_draft?: boolean;
 
+  // Payment method: 'bank_deposit' (default) or 'check'
+  // When 'check', bank fields are not required
+  @IsOptional()
+  @IsString()
+  @IsIn(['bank_deposit', 'check'], { message: 'Payment method must be bank_deposit or check' })
+  payment_method?: 'bank_deposit' | 'check';
+
   // Required only when NOT a draft (final submission)
   @ValidateIf(isNotDraft)
   @IsString()
@@ -83,6 +98,8 @@ export class CompleteProfileDto {
   @Type(() => AddressDto)
   address?: AddressDto;
 
+  // Bank info is optional at DTO level
+  // Required only when payment_method is 'bank_deposit' (validated in service)
   @IsOptional()
   @ValidateNested()
   @Type(() => BankDto)
@@ -109,8 +126,12 @@ export class CompleteProfileDto {
   @MaxLength(200, { message: 'TurboTax password must be less than 200 characters' })
   turbotax_password?: string;
 
-  @IsOptional()
+  // Phone is required for final submission
+  @ValidateIf(isNotDraft)
   @IsString()
+  @Matches(/^\+\d{9,18}$/, {
+    message: 'Phone must be in E.164 format (e.g., +54911XXXXXXXX)'
+  })
   @MaxLength(30, { message: 'Phone must be less than 30 characters' })
   phone?: string;
 }

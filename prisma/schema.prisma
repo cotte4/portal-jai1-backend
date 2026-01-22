@@ -35,6 +35,8 @@ model User {
   referralCode          String?         @unique @map("referral_code")
   referredByCode        String?         @map("referred_by_code")
   referralCodeCreatedAt DateTime?       @map("referral_code_created_at") @db.Timestamptz
+  // Referral onboarding flag
+  referralOnboardingCompleted Boolean   @default(false) @map("referral_onboarding_completed")
   // Relations
   clientProfile         ClientProfile?
   notifications         Notification[]
@@ -171,6 +173,8 @@ model TaxCase {
   bankName           String?         @map("bank_name")
   bankRoutingNumber  String?         @map("bank_routing_number")
   bankAccountNumber  String?         @map("bank_account_number")
+  // Payment method: how user wants to receive refund (bank_deposit or check)
+  paymentMethod      PaymentMethod   @default(bank_deposit) @map("payment_method")
   statusUpdatedAt    DateTime        @default(now()) @map("status_updated_at") @db.Timestamptz
   // Admin step control: 1=Registration, 2=W2 Uploaded, 3=Tax Form Complete, 4=IRS Review, 5=Finalized
   adminStep          Int?            @map("admin_step")
@@ -313,6 +317,12 @@ model Notification {
 enum UserRole {
   client
   admin
+}
+
+// Payment method for refund: bank deposit or check
+enum PaymentMethod {
+  bank_deposit
+  check
 }
 
 enum TaxStatus {

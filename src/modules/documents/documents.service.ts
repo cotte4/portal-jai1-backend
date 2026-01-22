@@ -48,14 +48,24 @@ export class DocumentsService {
       );
     }
 
-    // Get user's client profile and tax case
-    const clientProfile = await this.prisma.clientProfile.findUnique({
+    // Get or create user's client profile and tax case
+    // This allows users to upload documents even if they haven't completed "Mi declaracion" yet
+    let clientProfile = await this.prisma.clientProfile.findUnique({
       where: { userId },
       include: { taxCases: { orderBy: { taxYear: 'desc' }, take: 1 } },
     });
 
+    // Auto-create client profile if it doesn't exist (allows document upload before completing tax form)
     if (!clientProfile) {
-      throw new BadRequestException('Client profile not found');
+      this.logger.log(`Auto-creating client profile for user ${userId} during document upload`);
+      clientProfile = await this.prisma.clientProfile.create({
+        data: {
+          userId,
+          isDraft: true,
+          profileComplete: false,
+        },
+        include: { taxCases: { orderBy: { taxYear: 'desc' }, take: 1 } },
+      });
     }
 
     let taxCase = clientProfile.taxCases[0];

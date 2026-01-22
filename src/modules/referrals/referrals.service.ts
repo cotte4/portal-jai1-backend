@@ -368,16 +368,15 @@ export class ReferralsService {
     });
 
     // Notify referrer of successful referral
-    const successfulCount = await this.getSuccessfulReferralCount(
-      referral.referrerId,
-    );
-    const discountPercent = this.calculateDiscount(successfulCount);
+    // Use total count for discount calculation
+    const totalCount = await this.getTotalReferralCount(referral.referrerId);
+    const discountPercent = this.calculateDiscount(totalCount);
 
     await this.notificationsService.create(
       referral.referrerId,
       'status_change',
       'Referido exitoso',
-      `Tu referido completó sus taxes. Ahora tienes ${successfulCount} referido(s) exitoso(s) y ${discountPercent}% de descuento en tu próxima comisión.`,
+      `Tu referido completó sus taxes. Ahora tienes ${totalCount} referido(s) y ${discountPercent}% de descuento en tu próxima comisión.`,
     );
   }
 
@@ -389,6 +388,18 @@ export class ReferralsService {
       where: {
         referrerId: userId,
         status: 'successful',
+      },
+    });
+  }
+
+  /**
+   * Get count of ALL referrals for a user (regardless of status)
+   * Used for discount calculations, progress, and tier unlocking
+   */
+  async getTotalReferralCount(userId: string): Promise<number> {
+    return this.prisma.referral.count({
+      where: {
+        referrerId: userId,
       },
     });
   }
@@ -522,28 +533,27 @@ export class ReferralsService {
 
   /**
    * Get user's discount info
+   * Now uses TOTAL referrals (not just successful) for discount/progress calculations
    */
   async getMyDiscount(userId: string) {
+    const totalCount = await this.getTotalReferralCount(userId);
     const successfulCount = await this.getSuccessfulReferralCount(userId);
-    const pendingCount = await this.prisma.referral.count({
-      where: {
-        referrerId: userId,
-        status: { not: 'successful' },
-      },
-    });
+    const pendingCount = totalCount - successfulCount;
 
-    const currentDiscountPercent = this.calculateDiscount(successfulCount);
+    // Discount is now calculated based on TOTAL referrals
+    const currentDiscountPercent = this.calculateDiscount(totalCount);
 
-    // Find next tier
+    // Find next tier based on TOTAL referrals
     let nextTierAt = 0;
     for (const tier of DISCOUNT_TIERS) {
-      if (successfulCount < tier.min) {
+      if (totalCount < tier.min) {
         nextTierAt = tier.min;
         break;
       }
     }
 
     return {
+      totalReferrals: totalCount,
       successfulReferrals: successfulCount,
       pendingReferrals: pendingCount,
       currentDiscountPercent,
@@ -554,16 +564,16 @@ export class ReferralsService {
 
   /**
    * Get global leaderboard
+   * Now ranks users by TOTAL referrals (not just successful)
    */
   async getLeaderboard(limit = 10) {
     const currentYear = new Date().getFullYear();
 
-    // Get users with successful referrals, ordered by count
+    // Get users with ANY referrals, ordered by count (not just successful)
     const leaderboard = await this.prisma.referral.groupBy({
       by: ['referrerId'],
       where: {
-        status: 'successful',
-        completedAt: {
+        createdAt: {
           gte: new Date(`${currentYear}-01-01`),
         },
       },
@@ -618,7 +628,7 @@ export class ReferralsService {
             ? `${user.firstName} ${user.lastName?.charAt(0) || ''}.`
             : 'Usuario',
           profilePicturePath: profilePictureUrl,
-          successfulReferrals: entry._count.id,
+          totalReferrals: entry._count.id,
           currentTier: this.calculateTier(entry._count.id),
         };
       }),
@@ -720,7 +730,7 @@ export class ReferralsService {
 
   /**
    * Admin: Get referral summary - aggregated by referrer
-   * Shows each referrer with their successful referral count and discount earned
+   * Shows each referrer with their TOTAL referral count and discount earned
    * Supports cursor-based pagination for large datasets
    */
   async getReferralSummary(options: {
@@ -729,11 +739,10 @@ export class ReferralsService {
   } = {}) {
     const limit = options.limit || 50;
 
-    // Get all referrers with successful referral counts
+    // Get all referrers with TOTAL referral counts (not just successful)
     const referrerStats = await this.prisma.referral.groupBy({
       by: ['referrerId'],
       _count: { id: true },
-      where: { status: 'successful' },
     });
 
     const referrerIds = referrerStats.map((r) => r.referrerId);
@@ -752,7 +761,7 @@ export class ReferralsService {
 
     const userMap = new Map(users.map((u) => [u.id, u]));
 
-    // Build results with discount calculation
+    // Build results with discount calculation based on total referrals
     const allResults = referrerStats.map((stat) => {
       const user = userMap.get(stat.referrerId);
       const count = stat._count.id;
@@ -763,7 +772,7 @@ export class ReferralsService {
         name: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
         email: user?.email || '',
         referralCode: user?.referralCode || '',
-        successfulReferrals: count,
+        totalReferrals: count,
         discountPercent,
         tier: this.calculateTier(count),
       };
@@ -771,8 +780,8 @@ export class ReferralsService {
 
     // Sort by referral count descending, then by name for stable ordering
     allResults.sort((a, b) => {
-      if (b.successfulReferrals !== a.successfulReferrals) {
-        return b.successfulReferrals - a.successfulReferrals;
+      if (b.totalReferrals !== a.totalReferrals) {
+        return b.totalReferrals - a.totalReferrals;
       }
       return a.name.localeCompare(b.name);
     });
