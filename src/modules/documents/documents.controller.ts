@@ -36,6 +36,10 @@ export class DocumentsController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 25 * 1024 * 1024 }), // 25MB
+          new FileTypeValidator({
+            fileType:
+              /^(image\/(jpeg|jpg|png|gif|webp)|application\/pdf|application\/(msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document)|application\/(vnd\.ms-excel|vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet))$/,
+          }),
         ],
       }),
     )

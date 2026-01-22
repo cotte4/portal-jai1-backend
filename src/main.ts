@@ -6,12 +6,21 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);
+
+  // Security headers (HSTS, X-Content-Type-Options, X-Frame-Options, etc.)
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // Disable CSP for now (can cause issues with some frontends)
+      crossOriginEmbedderPolicy: false, // Disable for iframe compatibility
+    }),
+  );
 
   // Enable gzip compression (30-50% smaller responses)
   app.use(
@@ -35,10 +44,10 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: '*',
+    origin: configService.get<string>('FRONTEND_URL') || 'http://localhost:4200',
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    credentials: false,
+    credentials: true,
   });
 
   // Global prefix for all routes

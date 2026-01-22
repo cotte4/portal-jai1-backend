@@ -2462,19 +2462,19 @@ export class ClientsService {
           for (const client of clients) {
             const taxCase = client.taxCases[0];
 
-            // Decrypt sensitive data for admin export
-            const decryptedSSN = client.ssn
-              ? this.encryption.decrypt(client.ssn)
+            // Mask sensitive data for export (security fix: never export plaintext)
+            const maskedSSN = client.ssn
+              ? this.encryption.maskSSN(client.ssn) || ''
               : '';
             const decryptedStreet = client.addressStreet
               ? this.encryption.decrypt(client.addressStreet)
               : '';
-            // Bank data is now stored per TaxCase (year-specific)
-            const decryptedRouting = taxCase?.bankRoutingNumber
-              ? this.encryption.decrypt(taxCase.bankRoutingNumber)
+            // Bank data is now stored per TaxCase (year-specific) - mask for security
+            const maskedRouting = taxCase?.bankRoutingNumber
+              ? this.encryption.maskRoutingNumber(taxCase.bankRoutingNumber) || ''
               : '';
-            const decryptedAccount = taxCase?.bankAccountNumber
-              ? this.encryption.decrypt(taxCase.bankAccountNumber)
+            const maskedAccount = taxCase?.bankAccountNumber
+              ? this.encryption.maskBankAccount(taxCase.bankAccountNumber) || ''
               : '';
 
             const fullAddress = [
@@ -2491,7 +2491,7 @@ export class ClientsService {
               name: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim(),
               email: client.user.email,
               phone: client.user.phone || '',
-              ssn: decryptedSSN,
+              ssn: maskedSSN,
               dob: client.dateOfBirth
                 ? client.dateOfBirth.toISOString().split('T')[0]
                 : '',
@@ -2499,8 +2499,8 @@ export class ClientsService {
               workState: taxCase?.workState || '',
               employer: taxCase?.employerName || '',
               bank: taxCase?.bankName || '',
-              routing: decryptedRouting,
-              account: decryptedAccount,
+              routing: maskedRouting,
+              account: maskedAccount,
               taxesFiled: (taxCase as any)?.taxesFiled ? 'Sí' : 'No',
               federalStatus: taxCase?.federalStatus || '',
               stateStatus: taxCase?.stateStatus || '',
@@ -2604,19 +2604,19 @@ export class ClientsService {
     for (const client of clients) {
       const taxCase = client.taxCases[0];
 
-      // Decrypt sensitive data for admin export
-      const decryptedSSN = client.ssn
-        ? this.encryption.decrypt(client.ssn)
+      // Mask sensitive data for export (security fix: never export plaintext)
+      const maskedSSN = client.ssn
+        ? this.encryption.maskSSN(client.ssn) || ''
         : '';
       const decryptedStreet = client.addressStreet
         ? this.encryption.decrypt(client.addressStreet)
         : '';
-      // Bank data is now stored per TaxCase (year-specific)
-      const decryptedRouting = taxCase?.bankRoutingNumber
-        ? this.encryption.decrypt(taxCase.bankRoutingNumber)
+      // Bank data is now stored per TaxCase (year-specific) - mask for security
+      const maskedRouting = taxCase?.bankRoutingNumber
+        ? this.encryption.maskRoutingNumber(taxCase.bankRoutingNumber) || ''
         : '';
-      const decryptedAccount = taxCase?.bankAccountNumber
-        ? this.encryption.decrypt(taxCase.bankAccountNumber)
+      const maskedAccount = taxCase?.bankAccountNumber
+        ? this.encryption.maskBankAccount(taxCase.bankAccountNumber) || ''
         : '';
 
       const fullAddress = [
@@ -2632,7 +2632,7 @@ export class ClientsService {
         name: `${client.user.firstName} ${client.user.lastName}`,
         email: client.user.email,
         phone: client.user.phone || '',
-        ssn: decryptedSSN,
+        ssn: maskedSSN,
         dob: client.dateOfBirth
           ? client.dateOfBirth.toISOString().split('T')[0]
           : '',
@@ -2640,8 +2640,8 @@ export class ClientsService {
         workState: taxCase?.workState || '',
         employer: taxCase?.employerName || '',
         bank: taxCase?.bankName || '',
-        routing: decryptedRouting,
-        account: decryptedAccount,
+        routing: maskedRouting,
+        account: maskedAccount,
         taxesFiled: (taxCase as any)?.taxesFiled ? 'Sí' : 'No',
         federalStatus: taxCase?.federalStatus || '',
         stateStatus: taxCase?.stateStatus || '',
