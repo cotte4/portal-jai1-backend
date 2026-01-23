@@ -19,43 +19,61 @@ export class ChatbotController {
 
   @Post()
   async chat(@Body() body: ChatRequest) {
-    console.log('Chatbot request received, forwarding to:', this.webhookUrl);
+    console.log('Chatbot request received');
+    console.log('N8N_WEBHOOK_URL env:', process.env.N8N_WEBHOOK_URL);
+    console.log('Using webhook URL:', this.webhookUrl);
+    console.log('Message:', body.message);
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 55000);
+
+      const requestBody = JSON.stringify({
+        message: body.message,
+        history: body.history || [],
+      });
+      console.log('Request body:', requestBody);
 
       const response = await fetch(this.webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: body.message,
-          history: body.history || [],
-        }),
+        body: requestBody,
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
       console.log('n8n response status:', response.status);
+      console.log('n8n response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('n8n error response:', errorText);
-        throw new Error(`n8n responded with status ${response.status}: ${errorText}`);
+      // Clone the response to read it twice if needed
+      const responseClone = response.clone();
+
+      let responseText: string;
+      try {
+        responseText = await response.text();
+      } catch (textError) {
+        console.error('Error reading response text:', textError);
+        responseText = await responseClone.json().then(j => JSON.stringify(j)).catch(() => '');
       }
 
-      const responseText = await response.text();
+      console.log('n8n response text length:', responseText?.length);
       console.log('n8n response text:', responseText);
+
+      if (!response.ok) {
+        throw new Error(`n8n responded with status ${response.status}: ${responseText}`);
+      }
 
       if (!responseText) {
         throw new Error('Empty response from n8n');
       }
 
       const data = JSON.parse(responseText);
+      console.log('Parsed response:', data);
       return { response: data.response || 'No response from assistant' };
     } catch (error) {
       console.error('Chatbot error:', error.message || error);
+      console.error('Full error:', error);
       return { response: 'Lo siento, el asistente no está disponible en este momento.', error: true };
     }
   }
