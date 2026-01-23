@@ -43,8 +43,9 @@ async function bootstrap() {
   );
 
   // Enable CORS
+  const isDev = configService.get<string>('NODE_ENV') !== 'production';
   app.enableCors({
-    origin: configService.get<string>('FRONTEND_URL') || 'http://localhost:4200',
+    origin: isDev ? true : configService.get<string>('FRONTEND_URL'),
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,

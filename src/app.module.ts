@@ -31,6 +31,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { HealthModule } from './modules/health/health.module';
 import { StorageCleanupModule } from './modules/storage-cleanup/storage-cleanup.module';
 import { AlarmsModule } from './modules/alarms/alarms.module';
+import { ChatbotModule } from './modules/chatbot/chatbot.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { AlarmsModule } from './modules/alarms/alarms.module';
     HealthModule,
     StorageCleanupModule,
     AlarmsModule,
+    ChatbotModule,
   ],
   controllers: [],
   providers: [
