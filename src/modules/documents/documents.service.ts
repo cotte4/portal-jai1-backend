@@ -188,6 +188,9 @@ export class DocumentsService {
 
       // Check if all required documents are now complete
       await this.progressAutomation.checkAllDocsComplete(taxCase.id, userId);
+
+      // Check if documentation is complete and auto-transition to "preparing" status
+      await this.progressAutomation.checkDocumentationCompleteAndTransition(taxCase.id, userId);
     } catch (error) {
       // Don't fail the upload if progress automation fails
       this.logger.error('Progress automation error (non-fatal):', error);

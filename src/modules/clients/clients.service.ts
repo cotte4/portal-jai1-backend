@@ -409,6 +409,13 @@ export class ClientsService {
             metadata: { clientName },
           });
           this.logger.log(`Emitted PROFILE_COMPLETED event for user ${userId}`);
+
+          // Check if documentation is complete and auto-transition to "preparing" status
+          // This handles the case where user uploads docs first, then submits declaration
+          await this.progressAutomation.checkDocumentationCompleteAndTransition(
+            result.taxCase.id,
+            userId,
+          );
         },
       );
     }
@@ -856,6 +863,9 @@ export class ClientsService {
    *
    * This is called when user skips the full profile form during onboarding
    * but should still be able to access the dashboard without seeing onboarding again.
+   *
+   * If user completed the calculator during onboarding, this method also syncs
+   * the estimated refund from W2Estimate to TaxCase so it displays in Dashboard and Seguimiento.
    */
   async markOnboardingComplete(userId: string) {
     this.logger.log(`Marking onboarding complete for user ${userId}`);
@@ -881,6 +891,49 @@ export class ClientsService {
     });
 
     this.logger.log(`Onboarding marked complete for user ${userId}, profile id: ${profile.id}`);
+
+    // Check if user has a W2 estimate from calculator
+    const latestEstimate = await this.prisma.w2Estimate.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        estimatedRefund: true,
+        id: true,
+      },
+    });
+
+    // If estimate exists, sync it to TaxCase
+    if (latestEstimate) {
+      this.logger.log(`Found W2 estimate ${latestEstimate.id} for user ${userId}, syncing to TaxCase`);
+
+      // Get or create TaxCase for current year
+      const currentYear = new Date().getFullYear();
+      let taxCase = await this.prisma.taxCase.findFirst({
+        where: {
+          clientProfileId: profile.id,
+          taxYear: currentYear
+        },
+      });
+
+      if (!taxCase) {
+        // Create TaxCase if it doesn't exist
+        taxCase = await this.prisma.taxCase.create({
+          data: {
+            clientProfileId: profile.id,
+            taxYear: currentYear,
+            estimatedRefund: latestEstimate.estimatedRefund,
+          },
+        });
+        this.logger.log(`Created TaxCase with estimated refund for user ${userId}`);
+      } else {
+        // Update existing TaxCase with estimated refund
+        await this.prisma.taxCase.update({
+          where: { id: taxCase.id },
+          data: { estimatedRefund: latestEstimate.estimatedRefund },
+        });
+        this.logger.log(`Updated TaxCase ${taxCase.id} with estimated refund for user ${userId}`);
+      }
+    }
 
     return {
       success: true,
@@ -1589,6 +1642,20 @@ export class ClientsService {
 
     const taxCase = client.taxCases[0];
 
+    // === DEBUG LOGGING: Log received status update ===
+    this.logger.log(`[updateStatus] Received status update for client ${id}:`, {
+      federalStatusNew: statusData.federalStatusNew,
+      stateStatusNew: statusData.stateStatusNew,
+      caseStatus: statusData.caseStatus,
+      federalStatus: statusData.federalStatus,
+      stateStatus: statusData.stateStatus,
+      currentTaxCaseStatuses: {
+        federalStatusNew: (taxCase as any).federalStatusNew,
+        stateStatusNew: (taxCase as any).stateStatusNew,
+        caseStatus: (taxCase as any).caseStatus,
+      },
+    });
+
     // Capture previous status BEFORE the update (for audit trail)
     const previousFederalStatus = taxCase.federalStatus;
     const previousStateStatus = taxCase.stateStatus;
@@ -1823,6 +1890,19 @@ export class ClientsService {
         : overridePrefix;
     }
 
+    // === DEBUG LOGGING: Log final updateData before database transaction ===
+    this.logger.log(`[updateStatus] Final updateData for taxCase ${taxCase.id}:`, {
+      federalStatusNew: updateData.federalStatusNew,
+      stateStatusNew: updateData.stateStatusNew,
+      caseStatus: updateData.caseStatus,
+      federalStatusNewChangedAt: updateData.federalStatusNewChangedAt,
+      stateStatusNewChangedAt: updateData.stateStatusNewChangedAt,
+      caseStatusChangedAt: updateData.caseStatusChangedAt,
+      statusUpdatedAt: updateData.statusUpdatedAt,
+      historyComment,
+      statusChanges: statusChanges.join(', '),
+    });
+
     await this.prisma.$transaction([
       this.prisma.taxCase.update({
         where: { id: taxCase.id },
@@ -1838,6 +1918,9 @@ export class ClientsService {
         },
       }),
     ]);
+
+    // === DEBUG LOGGING: Log successful update ===
+    this.logger.log(`[updateStatus] Successfully updated taxCase ${taxCase.id} in database`);
 
     // Notify for federal status change
     if (federalStatus && federalStatus !== previousFederalStatus) {

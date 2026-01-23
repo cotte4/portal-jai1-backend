@@ -95,6 +95,24 @@ export class ReferralsController {
   }
 
   /**
+   * PROTECTED: Mark referral onboarding as complete
+   */
+  @Post('mark-onboarding-complete')
+  @UseGuards(JwtAuthGuard)
+  async markReferralOnboardingComplete(@CurrentUser() user: any) {
+    return this.referralsService.markReferralOnboardingComplete(user.id);
+  }
+
+  /**
+   * PROTECTED: Get referral onboarding status
+   */
+  @Get('onboarding-status')
+  @UseGuards(JwtAuthGuard)
+  async getReferralOnboardingStatus(@CurrentUser() user: any) {
+    return this.referralsService.getReferralOnboardingStatus(user.id);
+  }
+
+  /**
    * ADMIN: Get all referrals
    */
   @Get('admin')

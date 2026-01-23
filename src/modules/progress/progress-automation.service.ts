@@ -265,6 +265,82 @@ export class ProgressAutomationService {
   }
 
   /**
+   * Check if documentation is complete and auto-transition to "preparing" status
+   *
+   * Completion conditions:
+   * - At least 1 W2 uploaded
+   * - Payment proof uploaded
+   * - "Mi declaración" submitted (profileComplete = true, isDraft = false)
+   *
+   * If all conditions are met, automatically update caseStatus to 'preparing'
+   */
+  async checkDocumentationCompleteAndTransition(taxCaseId: string, userId: string): Promise<void> {
+    this.logger.log(`=== CHECKING DOCUMENTATION COMPLETION for TaxCase ${taxCaseId} ===`);
+
+    const taxCase = await this.prisma.taxCase.findUnique({
+      where: { id: taxCaseId },
+      include: {
+        clientProfile: true,
+        documents: true,
+      },
+    });
+
+    if (!taxCase) {
+      this.logger.warn(`TaxCase ${taxCaseId} not found`);
+      return;
+    }
+
+    // Check all three conditions
+    const hasW2 = taxCase.documents.some((d) => d.type === 'w2');
+    const hasPaymentProof = taxCase.documents.some((d) => d.type === 'payment_proof');
+    const declarationSubmitted = taxCase.clientProfile.profileComplete && !taxCase.clientProfile.isDraft;
+
+    this.logger.log(`Documentation check: hasW2=${hasW2}, hasPaymentProof=${hasPaymentProof}, declarationSubmitted=${declarationSubmitted}`);
+    this.logger.log(`Current caseStatus: ${taxCase.caseStatus}`);
+
+    // If all conditions met AND current status is awaiting_docs, auto-transition to preparing
+    if (hasW2 && hasPaymentProof && declarationSubmitted) {
+      if (taxCase.caseStatus === 'awaiting_docs') {
+        this.logger.log(`✓ All documentation complete - auto-transitioning to 'preparing' status`);
+
+        // Update case status to 'preparing'
+        await this.prisma.taxCase.update({
+          where: { id: taxCaseId },
+          data: {
+            caseStatus: 'preparing',
+            caseStatusChangedAt: new Date(),
+            statusUpdatedAt: new Date(),
+          },
+        });
+
+        // Add to status history with automatic transition marker
+        await this.prisma.statusHistory.create({
+          data: {
+            taxCaseId,
+            previousStatus: 'awaiting_docs',
+            newStatus: 'preparing',
+            comment: 'Automatic transition: All required documents uploaded and declaration submitted',
+            changedById: null, // null = automatic system change
+          },
+        });
+
+        // Notify admins
+        const clientName = await this.getClientName(userId);
+        await this.notifyAdmins(
+          'Documentación Completa - Preparando Declaración',
+          `El cliente ${clientName} ha completado toda la documentación requerida. El estado cambió automáticamente a "Preparando declaración".`,
+        );
+
+        this.logger.log(`✓ Successfully auto-transitioned TaxCase ${taxCaseId} to 'preparing' status`);
+      } else {
+        this.logger.log(`Documentation complete but current status is '${taxCase.caseStatus}' (not 'awaiting_docs') - no auto-transition`);
+      }
+    } else {
+      this.logger.log(`Documentation incomplete - no auto-transition performed`);
+    }
+  }
+
+  /**
    * Get client's full name
    */
   async getClientName(userId: string): Promise<string> {

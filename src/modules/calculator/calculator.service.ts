@@ -139,6 +139,10 @@ export class CalculatorService {
 
     this.logger.log(`W2 estimate created: ${estimate.id} (confidence: ${ocrConfidence})`);
 
+    // Sync estimated refund to TaxCase for cross-component consistency
+    // This ensures Dashboard and Seguimiento always show the same value
+    await this.syncEstimateToTaxCase(userId, estimatedRefund);
+
     return {
       box2Federal,
       box17State,
@@ -327,5 +331,56 @@ EXAMPLE OF A GOOD OUTPUT:
       where: { userId },
     });
     return count > 0;
+  }
+
+  /**
+   * Sync estimated refund from W2Estimate to TaxCase
+   * This ensures both Dashboard (Inicio) and Seguimiento show the same value
+   * Dashboard reads from W2Estimate, Seguimiento reads from TaxCase
+   */
+  private async syncEstimateToTaxCase(userId: string, estimatedRefund: number): Promise<void> {
+    try {
+      // Get user's client profile
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { clientProfile: true },
+      });
+
+      if (!user?.clientProfile) {
+        this.logger.warn(`User ${userId} has no client profile, skipping TaxCase sync`);
+        return;
+      }
+
+      // Get or create TaxCase for current year
+      const currentYear = new Date().getFullYear();
+      let taxCase = await this.prisma.taxCase.findFirst({
+        where: {
+          clientProfileId: user.clientProfile.id,
+          taxYear: currentYear,
+        },
+      });
+
+      if (!taxCase) {
+        // Create TaxCase if it doesn't exist
+        taxCase = await this.prisma.taxCase.create({
+          data: {
+            clientProfileId: user.clientProfile.id,
+            taxYear: currentYear,
+            estimatedRefund,
+          },
+        });
+        this.logger.log(`Created TaxCase ${taxCase.id} with estimated refund $${estimatedRefund}`);
+      } else {
+        // Update existing TaxCase with new estimated refund
+        await this.prisma.taxCase.update({
+          where: { id: taxCase.id },
+          data: { estimatedRefund },
+        });
+        this.logger.log(`Updated TaxCase ${taxCase.id} with estimated refund $${estimatedRefund}`);
+      }
+    } catch (error) {
+      // Non-fatal error - estimate is still saved in W2Estimate table
+      this.logger.error(`Failed to sync estimate to TaxCase for user ${userId}:`, error);
+    }
   }
 }

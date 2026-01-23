@@ -951,6 +951,40 @@ export class ReferralsService {
   }
 
   /**
+   * Mark referral onboarding as complete for a user
+   */
+  async markReferralOnboardingComplete(userId: string): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { referralOnboardingCompleted: true },
+    });
+
+    return {
+      success: true,
+      message: 'Referral onboarding marked as complete',
+    };
+  }
+
+  /**
+   * Check if user has completed referral onboarding
+   */
+  async getReferralOnboardingStatus(userId: string): Promise<{
+    completed: boolean;
+  }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { referralOnboardingCompleted: true },
+    });
+
+    return {
+      completed: user?.referralOnboardingCompleted ?? false,
+    };
+  }
+
+  /**
    * Cron job: Expire old pending referrals
    * Runs daily at 3:00 AM to mark referrals older than 180 days as expired
    */
