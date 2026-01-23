@@ -19,7 +19,12 @@ export class ChatbotController {
 
   @Post()
   async chat(@Body() body: ChatRequest) {
+    console.log('Chatbot request received, forwarding to:', this.webhookUrl);
+
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout
+
       const response = await fetch(this.webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,16 +32,30 @@ export class ChatbotController {
           message: body.message,
           history: body.history || [],
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
+      console.log('n8n response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`n8n responded with status ${response.status}`);
+        const errorText = await response.text();
+        console.error('n8n error response:', errorText);
+        throw new Error(`n8n responded with status ${response.status}: ${errorText}`);
       }
 
-      const data = await response.json();
+      const responseText = await response.text();
+      console.log('n8n response text:', responseText);
+
+      if (!responseText) {
+        throw new Error('Empty response from n8n');
+      }
+
+      const data = JSON.parse(responseText);
       return { response: data.response || 'No response from assistant' };
     } catch (error) {
-      console.error('Chatbot error:', error);
+      console.error('Chatbot error:', error.message || error);
       return { response: 'Lo siento, el asistente no está disponible en este momento.', error: true };
     }
   }
