@@ -99,7 +99,7 @@ export class NotificationsController {
   ) {
     const notification = await this.notificationsService.create(
       user.id,
-      'GENERAL',
+      'system',
       title || 'Test Notification',
       message || 'This is a test notification sent via WebSocket',
     );

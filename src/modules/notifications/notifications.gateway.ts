@@ -72,12 +72,13 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
       if (!this.userSockets.has(userId)) {
         this.userSockets.set(userId, new Set());
       }
-      this.userSockets.get(userId).add(client.id);
+      const userSocketSet = this.userSockets.get(userId)!;
+      userSocketSet.add(client.id);
 
       // Store userId in socket data for easy access
       client.data.userId = userId;
 
-      this.logger.log(`Client connected: ${client.id} (user: ${userId}, total connections: ${this.userSockets.get(userId).size})`);
+      this.logger.log(`Client connected: ${client.id} (user: ${userId}, total connections: ${userSocketSet.size})`);
 
       // Send connection success event
       client.emit('connected', { userId, socketId: client.id });
@@ -96,7 +97,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     const userId = client.data.userId;
 
     if (userId && this.userSockets.has(userId)) {
-      const userSocketSet = this.userSockets.get(userId);
+      const userSocketSet = this.userSockets.get(userId)!;
       userSocketSet.delete(client.id);
 
       // Remove user entry if no more sockets
@@ -185,6 +186,6 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
    */
   isUserConnected(userId: string): boolean {
     const socketIds = this.userSockets.get(userId);
-    return socketIds && socketIds.size > 0;
+    return !!(socketIds && socketIds.size > 0);
   }
 }

@@ -392,7 +392,7 @@ export class ReferralsService {
       'notifications.referral_successful',
       {
         firstName: referrer?.firstName || 'Cliente',
-        referredName: await this.getReferredName(referral.referredId),
+        referredName: await this.getReferredName(referral.referredUserId),
         amount: REFERRED_BONUS.toString(),
       },
     );
@@ -951,18 +951,13 @@ export class ReferralsService {
     });
 
     // Notify user
-    const user = await this.prisma.user.findUnique({
-      where: { id: clientId },
-      select: { firstName: true },
-    });
-
     const discountAmount = dto.discountAmount || 0;
     await this.notificationsService.createFromTemplate(
       clientId,
       'status_change',
       'notifications.discount_applied',
       {
-        firstName: user?.firstName || 'Cliente',
+        firstName: user.firstName || 'Cliente',
         amount: discountAmount.toString(),
       },
     );

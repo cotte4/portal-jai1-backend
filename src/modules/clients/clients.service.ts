@@ -1702,8 +1702,6 @@ export class ClientsService {
       federalStatusNew: statusData.federalStatusNew,
       stateStatusNew: statusData.stateStatusNew,
       caseStatus: statusData.caseStatus,
-      federalStatus: statusData.federalStatus,
-      stateStatus: statusData.stateStatus,
       currentTaxCaseStatuses: {
         federalStatusNew: (taxCase as any).federalStatusNew,
         stateStatusNew: (taxCase as any).stateStatusNew,
