@@ -16,6 +16,7 @@ import {
   MaxFileSizeValidator,
   FileTypeValidator,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { UserRole } from '@prisma/client';
@@ -126,6 +127,7 @@ export class ClientsController {
   @Get('admin/stats/season')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
   async getSeasonStats() {
     return this.clientsService.getSeasonStats();
   }
@@ -133,6 +135,7 @@ export class ClientsController {
   @Get('admin/accounts')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
+  @Throttle({ default: { limit: 50, ttl: 60000 } })
   async getAllClientAccounts(
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
@@ -149,18 +152,65 @@ export class ClientsController {
     return this.clientsService.getAllClientAccounts({ cursor, limit: validatedLimit });
   }
 
+  @Get('admin/clients/:id/credentials')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  async getClientCredentials(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    // TODO: Add IP address and user agent from request headers if needed
+  ) {
+    return this.clientsService.getClientCredentials(id, user.id);
+  }
+
   @Get('admin/payments')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
-  async getPaymentsSummary() {
-    return this.clientsService.getPaymentsSummary();
+  @Throttle({ default: { limit: 50, ttl: 60000 } })
+  async getPaymentsSummary(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    // Validate limit to prevent DoS attacks
+    const MAX_LIMIT = 500;
+    const DEFAULT_LIMIT = 50;
+    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
+    const validatedLimit =
+      isNaN(parsedLimit) || parsedLimit < 1
+        ? DEFAULT_LIMIT
+        : Math.min(parsedLimit, MAX_LIMIT);
+
+    return this.clientsService.getPaymentsSummary({ cursor, limit: validatedLimit });
   }
 
   @Get('admin/delays')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
-  async getDelaysData() {
-    return this.clientsService.getDelaysData();
+  @Throttle({ default: { limit: 50, ttl: 60000 } })
+  async getDelaysData(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('status') status?: string,
+  ) {
+    // Validate limit to prevent DoS attacks
+    const MAX_LIMIT = 500;
+    const DEFAULT_LIMIT = 50;
+    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
+    const validatedLimit =
+      isNaN(parsedLimit) || parsedLimit < 1
+        ? DEFAULT_LIMIT
+        : Math.min(parsedLimit, MAX_LIMIT);
+
+    return this.clientsService.getDelaysData({
+      cursor,
+      limit: validatedLimit,
+      dateFrom,
+      dateTo,
+      status,
+    });
   }
 
   @Get('admin/alarms')
@@ -173,6 +223,7 @@ export class ClientsController {
   @Get('admin/clients')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
   async findAll(
     @Query('status') status?: string,
     @Query('search') search?: string,

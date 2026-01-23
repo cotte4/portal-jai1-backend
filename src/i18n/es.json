@@ -1,92 +1,112 @@
 {
   "notifications": {
     "welcome": {
-      "title": "¡Bienvenido a JAI1!",
-      "message": "Hola {{firstName}}, gracias por registrarte. Completa tu perfil y sube tus documentos para comenzar con tu declaración de impuestos."
+      "title": "¡Bienvenido a JAI1, {{firstName}}!",
+      "message": "Estamos listos para ayudarte con tu declaración de impuestos. Completa tu perfil y sube tus documentos para comenzar."
     },
     "document_reviewed": {
-      "title": "Documento Revisado",
-      "message": "Tu {{documentType}} \"{{fileName}}\" ha sido revisado por nuestro equipo."
+      "title": "Revisamos tu documento",
+      "message": "{{firstName}}, ya revisamos tu {{documentType}} \"{{fileName}}\". Todo en orden, seguimos avanzando con tu trámite."
     },
     "docs_missing": {
-      "title": "Documentos pendientes",
-      "message": "Por favor sube los documentos faltantes para continuar con tu declaración de impuestos: {{missingDocs}}"
+      "title": "{{firstName}}, necesitamos algunos documentos",
+      "message": "Para continuar con tu declaración, sube estos documentos: {{missingDocs}}. Ve a la sección Documentos para cargarlos."
     },
     "ticket_response": {
-      "title": "Respuesta a tu ticket",
-      "message": "Has recibido una respuesta en tu ticket: {{subject}}"
+      "title": "Tienes una respuesta de soporte",
+      "message": "{{firstName}}, respondimos tu consulta sobre: {{subject}}. Revisa el mensaje completo en la sección Mensajes."
     },
     "referral_new": {
-      "title": "Nuevo referido",
-      "message": "{{referredName}} se registró usando tu código de referido."
+      "title": "¡Alguien usó tu código de referido!",
+      "message": "{{referredName}} se acaba de registrar con tu código. Cuando complete su trámite, obtendrás tu descuento."
     },
     "referral_successful": {
-      "title": "Referido exitoso",
-      "message": "¡Felicitaciones! {{referredName}} completó su trámite. Recibirás tu descuento de ${{amount}} cuando obtengas tu reembolso."
+      "title": "¡Tu referido fue exitoso!",
+      "message": "{{firstName}}, {{referredName}} completó su declaración. Ya tienes disponible ${{amount}} de descuento para tu próximo reembolso."
     },
     "discount_applied": {
-      "title": "Descuento aplicado",
-      "message": "Se aplicó un descuento de ${{amount}} a tu cuenta por tu referido exitoso."
+      "title": "Descuento aplicado: ${{amount}}",
+      "message": "{{firstName}}, aplicamos tu descuento de ${{amount}} por referido exitoso. Se descontará automáticamente de tu próximo pago."
     },
     "problem_set": {
-      "title": "Necesitamos tu ayuda",
-      "message": "{{description}}"
+      "title": "{{firstName}}, necesitamos tu atención",
+      "message": "{{description}}. Ve a Mensajes para resolver esto con nuestro equipo."
     },
     "problem_resolved": {
-      "title": "Inconveniente resuelto",
-      "message": "El problema con tu trámite ha sido solucionado."
+      "title": "Problema resuelto",
+      "message": "{{firstName}}, el inconveniente con tu trámite ya está solucionado. Continuamos trabajando en tu caso."
     },
     "alarm_verification_timeout": {
-      "title": "Acción requerida: Verificación pendiente",
-      "message": "Tu declaración {{track}} lleva {{days}} días en verificación. Por favor contacta a soporte si no has recibido instrucciones del IRS."
+      "title": "Actualización sobre tu verificación",
+      "message": "{{firstName}}, tu declaración {{track}} lleva {{days}} días en verificación. Ve a Mensajes para revisar los próximos pasos con nuestro equipo."
     },
     "alarm_letter_sent": {
-      "title": "Recordatorio: Carta enviada",
-      "message": "Se envió una carta relacionada con tu declaración {{track}} hace {{days}} días. Verifica si la has recibido y responde si es necesario."
+      "title": "Recordatorio: revisa tu correo",
+      "message": "Hace {{days}} días se envió una carta sobre tu declaración {{track}}. Si la recibiste, contáctanos en Mensajes para guiarte en la respuesta."
     },
     "alarm_general": {
-      "title": "Actualización de tu trámite",
-      "message": "Hay una actualización importante sobre tu declaración {{track}}. Revisa el estado de tu trámite o contacta a soporte para más información."
+      "title": "Hay novedades en tu trámite",
+      "message": "{{firstName}}, tenemos una actualización importante sobre tu declaración {{track}}. Revisa tu estado en Seguimiento o escríbenos en Mensajes."
     },
     "status_federal_filed": {
-      "title": "Declaración federal enviada",
-      "message": "Tu declaración federal ha sido enviada al IRS."
+      "title": "Declaración federal enviada al IRS",
+      "message": "{{firstName}}, ya enviamos tu declaración federal. El IRS comenzará a procesarla en los próximos días."
     },
     "status_federal_processing": {
-      "title": "Declaración federal en proceso",
-      "message": "El IRS está procesando tu declaración federal."
+      "title": "El IRS está procesando tu declaración",
+      "message": "{{firstName}}, tu declaración federal está siendo procesada. Te avisaremos cuando haya novedades."
     },
     "status_federal_approved": {
-      "title": "Reembolso federal aprobado",
-      "message": "¡Tu reembolso federal ha sido aprobado! Fecha estimada de depósito: {{estimatedDate}}"
+      "title": "¡Tu reembolso federal fue aprobado!",
+      "message": "{{firstName}}, el IRS aprobó tu reembolso federal. Fecha estimada de depósito: {{estimatedDate}}"
     },
     "status_federal_deposited": {
       "title": "¡Reembolso federal depositado!",
-      "message": "Tu reembolso federal de ${{amount}} ha sido depositado en tu cuenta."
+      "message": "{{firstName}}, tu reembolso federal de ${{amount}} ya está en tu cuenta. ¡Felicitaciones!"
+    },
+    "status_federal_rejected": {
+      "title": "Declaración federal rechazada",
+      "message": "{{firstName}}, tu declaración federal fue rechazada por el IRS. Contacta a soporte para más información."
     },
     "status_state_filed": {
       "title": "Declaración estatal enviada",
-      "message": "Tu declaración estatal ha sido enviada."
+      "message": "{{firstName}}, enviamos tu declaración estatal. Ahora solo queda esperar el procesamiento."
     },
     "status_state_processing": {
-      "title": "Declaración estatal en proceso",
-      "message": "Tu estado está procesando tu declaración."
+      "title": "Procesando tu declaración estatal",
+      "message": "{{firstName}}, tu estado está revisando tu declaración. Te mantendremos informado sobre el avance."
     },
     "status_state_approved": {
-      "title": "Reembolso estatal aprobado",
-      "message": "¡Tu reembolso estatal ha sido aprobado! Fecha estimada de depósito: {{estimatedDate}}"
+      "title": "¡Reembolso estatal aprobado!",
+      "message": "{{firstName}}, aprobaron tu reembolso estatal. Fecha estimada de depósito: {{estimatedDate}}"
     },
     "status_state_deposited": {
       "title": "¡Reembolso estatal depositado!",
-      "message": "Tu reembolso estatal de ${{amount}} ha sido depositado en tu cuenta."
+      "message": "{{firstName}}, tu reembolso estatal de ${{amount}} ya está disponible en tu cuenta. ¡Excelente!"
+    },
+    "status_state_rejected": {
+      "title": "Declaración estatal rechazada",
+      "message": "{{firstName}}, tu declaración estatal fue rechazada. Contacta a soporte para más información."
+    },
+    "status_federal_deposit_pending": {
+      "title": "¡Reembolso federal aprobado! Esperando depósito",
+      "message": "{{firstName}}, tu reembolso federal fue aprobado y está en camino a tu cuenta bancaria. Te notificaremos cuando se deposite."
+    },
+    "status_state_deposit_pending": {
+      "title": "¡Reembolso estatal aprobado! Esperando depósito",
+      "message": "{{firstName}}, tu reembolso estatal fue aprobado y está en camino a tu cuenta bancaria. Te notificaremos cuando se deposite."
     },
     "admin_document_uploaded": {
-      "title": "Nuevo documento subido",
-      "message": "{{clientName}} subió un nuevo documento: {{fileName}}"
+      "title": "Nuevo documento",
+      "message": "{{clientName}}: {{fileName}}"
     },
     "admin_new_registration": {
-      "title": "Nuevo cliente registrado",
-      "message": "{{clientName}} se registró en la plataforma."
+      "title": "Nuevo registro",
+      "message": "{{clientName}} se registró"
+    },
+    "admin_custom_message": {
+      "title": "{{title}}",
+      "message": "{{message}}"
     }
   },
   "document_types": {

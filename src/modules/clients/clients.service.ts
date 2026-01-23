@@ -21,9 +21,6 @@ import {
 import {
   calculateAlarms,
   StatusAlarm,
-  deriveCaseStatusFromOldSystem,
-  mapOldToNewFederalStatus,
-  mapOldToNewStateStatus,
   getCaseStatusLabel,
   getFederalStatusNewLabel,
   getStateStatusNewLabel,
@@ -98,6 +95,78 @@ export class ClientsService {
     });
   }
 
+  /**
+   * Updates computed status fields (isReadyToPresent, isIncomplete) for a client profile.
+   * Call this whenever documents are added/removed or profile completion status changes.
+   *
+   * A client is "ready to present" if:
+   * 1. profileComplete = true
+   * 2. isDraft = false
+   * 3. Has at least one W2 document in their most recent tax case
+   */
+  async updateComputedStatusFields(clientProfileId: string): Promise<void> {
+    try {
+      // Get the client profile with their most recent tax case and documents
+      const clientProfile = await this.prisma.clientProfile.findUnique({
+        where: { id: clientProfileId },
+        include: {
+          taxCases: {
+            orderBy: { taxYear: 'desc' },
+            take: 1,
+            include: {
+              documents: {
+                where: { type: 'w2' },
+                select: { id: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!clientProfile) {
+        this.logger.warn(`Client profile ${clientProfileId} not found for computed status update`);
+        return;
+      }
+
+      const taxCase = clientProfile.taxCases[0];
+      const hasW2 = taxCase?.documents && taxCase.documents.length > 0;
+
+      // Calculate isReadyToPresent: profileComplete AND NOT isDraft AND has W2
+      const isReadyToPresent =
+        clientProfile.profileComplete &&
+        !clientProfile.isDraft &&
+        hasW2;
+
+      // isIncomplete is the inverse of isReadyToPresent
+      const isIncomplete = !isReadyToPresent;
+
+      // Only update if values changed to avoid unnecessary writes
+      if (
+        clientProfile.isReadyToPresent !== isReadyToPresent ||
+        clientProfile.isIncomplete !== isIncomplete
+      ) {
+        await this.prisma.clientProfile.update({
+          where: { id: clientProfileId },
+          data: {
+            isReadyToPresent,
+            isIncomplete,
+          },
+        });
+
+        this.logger.log(
+          `Updated computed status fields for client ${clientProfileId}: ` +
+          `isReadyToPresent=${isReadyToPresent}, isIncomplete=${isIncomplete}`
+        );
+      }
+    } catch (error) {
+      // Log but don't throw - this is a background optimization task
+      this.logger.error(
+        `Failed to update computed status fields for client ${clientProfileId}:`,
+        error
+      );
+    }
+  }
+
   async getProfile(userId: string) {
     // Optimized: Use select instead of include for better query performance
     const user = await this.prisma.user.findUnique({
@@ -132,15 +201,11 @@ export class ClientsService {
                 paymentMethod: true,
                 workState: true,
                 employerName: true,
-                // Old status fields (for backward compatibility)
-                federalStatus: true,
-                stateStatus: true,
                 adminStep: true,
                 estimatedRefund: true,
                 // Phase indicator fields
                 taxesFiled: true,
                 taxesFiledAt: true,
-                preFilingStatus: true,
                 // Problem tracking
                 hasProblem: true,
                 problemType: true,
@@ -386,6 +451,10 @@ export class ClientsService {
       `Profile saved successfully for user ${userId}, id: ${result.profile.id}`,
     );
 
+    // === Update computed status fields ===
+    // Update isReadyToPresent and isIncomplete based on profile completion and documents
+    await this.updateComputedStatusFields(result.profile.id);
+
     // === PROGRESS AUTOMATION: Emit event when profile is completed (not draft) ===
     // Run in background with timeout and proper error handling to avoid blocking the response
     if (!data.is_draft) {
@@ -552,6 +621,11 @@ export class ClientsService {
     });
 
     this.logger.log(`User info updated for ${userId}`);
+
+    // Invalidate language cache if language was updated
+    if (data.preferredLanguage !== undefined) {
+      this.notificationsService.invalidateLanguageCache(userId);
+    }
 
     return {
       user: {
@@ -1044,7 +1118,8 @@ export class ClientsService {
             {
               OR: [
                 { taxCases: { none: {} } },
-                { taxCases: { some: { taxesFiled: false } } },
+                { taxCases: { some: { caseStatus: { not: 'taxes_filed' } } } },
+                { taxCases: { some: { caseStatus: null } } },
               ],
             },
           ];
@@ -1052,43 +1127,49 @@ export class ClientsService {
         } else {
           where.OR = [
             { taxCases: { none: {} } }, // No tax cases
-            { taxCases: { some: { taxesFiled: false } } },
+            { taxCases: { some: { caseStatus: { not: 'taxes_filed' } } } },
+            { taxCases: { some: { caseStatus: null } } },
           ];
         }
       } else if (options.status === 'group_in_review') {
-        // In Review: filed but not yet deposited
+        // In Review: filed but not yet deposited (v2 status)
         where.taxCases = {
           some: {
             ...existingTaxCaseFilters,
-            taxesFiled: true,
-            federalStatus: { in: ['processing', 'pending', 'filed'] },
+            caseStatus: 'taxes_filed',
+            federalStatusNew: { in: ['in_process', 'deposit_pending', 'check_in_transit'] },
           },
         };
       } else if (options.status === 'group_completed') {
-        // Completed: deposited or approved
+        // Completed: deposited or approved (v2 status)
         where.taxCases = {
           some: {
             ...existingTaxCaseFilters,
             OR: [
-              { federalStatus: 'deposited' },
-              { stateStatus: 'deposited' },
+              { federalStatusNew: 'taxes_completed' },
+              { stateStatusNew: 'taxes_completed' },
             ],
           },
         };
       } else if (options.status === 'group_needs_attention') {
-        // Needs Attention: rejected or has problem
+        // Needs Attention: issues or has problem (v2 status)
         where.taxCases = {
           some: {
             ...existingTaxCaseFilters,
             OR: [
-              { federalStatus: 'rejected' },
-              { stateStatus: 'rejected' },
+              { federalStatusNew: 'issues' },
+              { stateStatusNew: 'issues' },
               { hasProblem: true },
             ],
           },
         };
+      } else if (options.status === 'ready_to_present') {
+        // Ready to present: use computed database field
+        where.isReadyToPresent = true;
+      } else if (options.status === 'incomplete') {
+        // Incomplete: use computed database field
+        where.isIncomplete = true;
       }
-      // Note: ready_to_present and incomplete are computed filters handled post-query
     }
 
     if (options.search) {
@@ -1147,9 +1228,6 @@ export class ClientsService {
             id: true,
             taxesFiled: true,
             taxesFiledAt: true,
-            preFilingStatus: true,
-            federalStatus: true,
-            stateStatus: true,
             federalLastComment: true,
             stateLastComment: true,
             federalActualRefund: true,
@@ -1180,32 +1258,25 @@ export class ClientsService {
     });
 
     const hasMore = clients.length > options.limit;
-    let results = hasMore ? clients.slice(0, -1) : clients;
+    const results = hasMore ? clients.slice(0, -1) : clients;
 
-    // Post-query filtering for computed filters (ready_to_present, incomplete)
-    // These require checking document presence which can't be done efficiently in Prisma query
-    if (
-      options.status === 'ready_to_present' ||
-      options.status === 'incomplete'
-    ) {
-      // For these filters, we need to fetch more and filter post-query
-      // This is less efficient but necessary for computed fields
-      const mappedResults = results.map((client) => {
-        const taxCase = client.taxCases[0];
-        const hasW2 = taxCase?.documents?.some((d) => d.type === 'w2') || false;
-        const isReadyToPresent =
-          client.profileComplete && !client.isDraft && hasW2;
-        return { client, isReadyToPresent };
-      });
-
-      if (options.status === 'ready_to_present') {
-        results = mappedResults
-          .filter((r) => r.isReadyToPresent)
-          .map((r) => r.client);
+    // BATCH ALARM CALCULATION - Process all clients at once to avoid N+1 problem
+    // Step 1: Collect all tax cases that need alarm calculation
+    const alarmsMap = new Map<string, StatusAlarm[]>();
+    for (const client of results) {
+      const taxCase = client.taxCases[0];
+      if (taxCase) {
+        // Step 2: Calculate alarms for this tax case
+        const alarms = calculateAlarms(
+          taxCase.federalStatusNew,
+          taxCase.federalStatusNewChangedAt,
+          taxCase.stateStatusNew,
+          taxCase.stateStatusNewChangedAt,
+        );
+        // Step 3: Store in map with clientId as key
+        alarmsMap.set(client.id, alarms);
       } else {
-        results = mappedResults
-          .filter((r) => !r.isReadyToPresent)
-          .map((r) => r.client);
+        alarmsMap.set(client.id, []);
       }
     }
 
@@ -1273,15 +1344,8 @@ export class ClientsService {
           lastReviewDate = federalReview || stateReview || null;
         }
 
-        // Calculate alarms for this client (new status system)
-        const alarms: StatusAlarm[] = taxCase
-          ? calculateAlarms(
-              taxCase.federalStatusNew,
-              taxCase.federalStatusNewChangedAt,
-              taxCase.stateStatusNew,
-              taxCase.stateStatusNewChangedAt,
-            )
-          : [];
+        // Step 4: Retrieve pre-calculated alarms from map (no N+1!)
+        const alarms: StatusAlarm[] = alarmsMap.get(client.id) || [];
 
         return {
           id: client.id,
@@ -1293,13 +1357,10 @@ export class ClientsService {
           },
           // SSN (decrypted for admin view)
           ssn: client.ssn ? this.encryption.decrypt(client.ssn) : null,
-          // Phase-based status fields (OLD SYSTEM - kept for backward compatibility)
-          taxesFiled: taxCase?.taxesFiled || false,
-          taxesFiledAt: taxCase?.taxesFiledAt || null,
-          preFilingStatus: taxCase?.preFilingStatus || null,
-          federalStatus: taxCase?.federalStatus || null,
-          stateStatus: taxCase?.stateStatus || null,
-          // NEW STATUS SYSTEM (v2)
+          // STATUS SYSTEM (v2) - derived fields for backward compatibility
+          // taxesFiled is derived from caseStatus === 'taxes_filed'
+          // taxesFiledAt is derived from caseStatusChangedAt when taxes are filed
+          // STATUS SYSTEM (v2)
           caseStatus: taxCase?.caseStatus || null,
           caseStatusChangedAt: taxCase?.caseStatusChangedAt || null,
           federalStatusNew: taxCase?.federalStatusNew || null,
@@ -1457,14 +1518,8 @@ export class ClientsService {
           id: tc.id,
           clientProfileId: tc.clientProfileId,
           taxYear: tc.taxYear,
-          // Phase-based status fields (OLD SYSTEM - kept for backward compatibility)
-          taxesFiled: (tc as any).taxesFiled || false,
-          taxesFiledAt: (tc as any).taxesFiledAt,
-          preFilingStatus: (tc as any).preFilingStatus,
-          // Federal/State status (OLD)
-          federalStatus: tc.federalStatus,
-          stateStatus: tc.stateStatus,
-          // NEW STATUS SYSTEM (v2)
+          // STATUS SYSTEM (v2) - taxesFiled/taxesFiledAt now derived from caseStatus
+          // STATUS SYSTEM (v2)
           caseStatus: (tc as any).caseStatus,
           caseStatusChangedAt: (tc as any).caseStatusChangedAt,
           federalStatusNew: (tc as any).federalStatusNew,
@@ -1657,30 +1712,22 @@ export class ClientsService {
     });
 
     // Capture previous status BEFORE the update (for audit trail)
-    const previousFederalStatus = taxCase.federalStatus;
-    const previousStateStatus = taxCase.stateStatus;
-    const previousPreFilingStatus = taxCase.preFilingStatus;
-    const previousTaxesFiled = (taxCase as any).taxesFiled;
+    const previousCaseStatus = (taxCase as any).caseStatus;
+    const previousFederalStatusNew = (taxCase as any).federalStatusNew;
+    const previousStateStatusNew = (taxCase as any).stateStatusNew;
 
     // Build previous status string for StatusHistory
     const previousStatusParts: string[] = [];
-    if (previousTaxesFiled !== undefined) {
-      previousStatusParts.push(`taxesFiled: ${previousTaxesFiled}`);
+    if (previousCaseStatus) {
+      previousStatusParts.push(`caseStatus: ${previousCaseStatus}`);
     }
-    if (previousPreFilingStatus) {
-      previousStatusParts.push(`preFiling: ${previousPreFilingStatus}`);
+    if (previousFederalStatusNew) {
+      previousStatusParts.push(`federalStatus: ${previousFederalStatusNew}`);
     }
-    if (previousFederalStatus) {
-      previousStatusParts.push(`federal: ${previousFederalStatus}`);
-    }
-    if (previousStateStatus) {
-      previousStatusParts.push(`state: ${previousStateStatus}`);
+    if (previousStateStatusNew) {
+      previousStatusParts.push(`stateStatus: ${previousStateStatusNew}`);
     }
     const previousStatusString = previousStatusParts.join(', ') || null;
-
-    // Get status values from DTO
-    const federalStatus = statusData.federalStatus;
-    const stateStatus = statusData.stateStatus;
 
     // Build update data dynamically
     const updateData: any = {
@@ -1688,45 +1735,6 @@ export class ClientsService {
     };
 
     const now = new Date();
-
-    // Handle preFilingStatus
-    if (statusData.preFilingStatus) {
-      updateData.preFilingStatus = statusData.preFilingStatus;
-    }
-
-    // Handle taxesFiled flag (mark as filed)
-    if (statusData.taxesFiled !== undefined) {
-      updateData.taxesFiled = statusData.taxesFiled;
-      if (statusData.taxesFiled && statusData.taxesFiledAt) {
-        updateData.taxesFiledAt = new Date(statusData.taxesFiledAt);
-      } else if (statusData.taxesFiled && !(taxCase as any).taxesFiledAt) {
-        updateData.taxesFiledAt = now;
-      }
-      // When marking as filed, ensure preFilingStatus is documentation_complete
-      if (statusData.taxesFiled) {
-        updateData.preFilingStatus = 'documentation_complete';
-      }
-    }
-
-    // Handle federal/state status
-    if (federalStatus) {
-      updateData.federalStatus = federalStatus;
-      // Track status change date
-      if (federalStatus !== previousFederalStatus) {
-        updateData.federalStatusChangedAt = now;
-      } else {
-        updateData.federalLastReviewedAt = now;
-      }
-    }
-    if (stateStatus) {
-      updateData.stateStatus = stateStatus;
-      // Track status change date
-      if (stateStatus !== previousStateStatus) {
-        updateData.stateStatusChangedAt = now;
-      } else {
-        updateData.stateLastReviewedAt = now;
-      }
-    }
 
     // Handle federal/state comments
     if (statusData.federalComment) {
@@ -1761,11 +1769,6 @@ export class ClientsService {
     }
 
     // ============= STATUS TRANSITION VALIDATION =============
-    // Capture previous new status values for validation
-    const previousCaseStatus = (taxCase as any).caseStatus;
-    const previousFederalStatusNew = (taxCase as any).federalStatusNew;
-    const previousStateStatusNew = (taxCase as any).stateStatusNew;
-
     // Track if this is a forced override
     const isForceOverride = statusData.forceTransition === true && statusData.overrideReason;
 
@@ -1799,53 +1802,32 @@ export class ClientsService {
       }
     }
 
-    // ============= NEW STATUS SYSTEM (v2) - DUAL WRITE =============
-    // Update new caseStatus field
+    // ============= STATUS UPDATES =============
+    // Update caseStatus field
     if (statusData.caseStatus) {
       updateData.caseStatus = statusData.caseStatus;
-      updateData.caseStatusChangedAt = now;
-    } else {
-      // Derive caseStatus from old system fields if not explicitly provided
-      // This ensures new fields are always populated during transition
-      const newCaseStatus = deriveCaseStatusFromOldSystem(
-        statusData.taxesFiled !== undefined ? statusData.taxesFiled : (taxCase as any).taxesFiled,
-        statusData.preFilingStatus || (taxCase as any).preFilingStatus,
-        taxCase.hasProblem,
-      );
-      if (newCaseStatus && newCaseStatus !== (taxCase as any).caseStatus) {
-        updateData.caseStatus = newCaseStatus;
+      if (statusData.caseStatus !== previousCaseStatus) {
         updateData.caseStatusChangedAt = now;
       }
+      // When caseStatus changes to taxes_filed, also set taxesFiled flag (for referral code generation)
+      if (statusData.caseStatus === 'taxes_filed' && !(taxCase as any).taxesFiled) {
+        updateData.taxesFiled = true;
+        updateData.taxesFiledAt = now;
+      }
     }
 
-    // Update new federalStatusNew field
+    // Update federalStatusNew field
     if (statusData.federalStatusNew) {
-      const prevFederalStatusNew = (taxCase as any).federalStatusNew;
       updateData.federalStatusNew = statusData.federalStatusNew;
-      if (statusData.federalStatusNew !== prevFederalStatusNew) {
-        updateData.federalStatusNewChangedAt = now;
-      }
-    } else if (federalStatus) {
-      // Dual-write: map old federalStatus to new federalStatusNew
-      const mappedFederalStatus = mapOldToNewFederalStatus(federalStatus);
-      if (mappedFederalStatus && mappedFederalStatus !== (taxCase as any).federalStatusNew) {
-        updateData.federalStatusNew = mappedFederalStatus;
+      if (statusData.federalStatusNew !== previousFederalStatusNew) {
         updateData.federalStatusNewChangedAt = now;
       }
     }
 
-    // Update new stateStatusNew field
+    // Update stateStatusNew field
     if (statusData.stateStatusNew) {
-      const prevStateStatusNew = (taxCase as any).stateStatusNew;
       updateData.stateStatusNew = statusData.stateStatusNew;
-      if (statusData.stateStatusNew !== prevStateStatusNew) {
-        updateData.stateStatusNewChangedAt = now;
-      }
-    } else if (stateStatus) {
-      // Dual-write: map old stateStatus to new stateStatusNew
-      const mappedStateStatus = mapOldToNewStateStatus(stateStatus);
-      if (mappedStateStatus && mappedStateStatus !== (taxCase as any).stateStatusNew) {
-        updateData.stateStatusNew = mappedStateStatus;
+      if (statusData.stateStatusNew !== previousStateStatusNew) {
         updateData.stateStatusNewChangedAt = now;
       }
     }
@@ -1858,27 +1840,14 @@ export class ClientsService {
 
     // Build status change description for history
     const statusChanges: string[] = [];
-    if (statusData.preFilingStatus) {
-      statusChanges.push(`preFilingStatus: ${statusData.preFilingStatus}`);
-    }
-    if (federalStatus) {
-      statusChanges.push(`federal: ${federalStatus}`);
-    }
-    if (stateStatus) {
-      statusChanges.push(`state: ${stateStatus}`);
-    }
-    if (statusData.taxesFiled !== undefined) {
-      statusChanges.push(`taxesFiled: ${statusData.taxesFiled}`);
-    }
-    // NEW STATUS SYSTEM (v2) - add to history log
     if (updateData.caseStatus) {
       statusChanges.push(`caseStatus: ${updateData.caseStatus}`);
     }
-    if (statusData.federalStatusNew || updateData.federalStatusNew) {
-      statusChanges.push(`federalStatusNew: ${statusData.federalStatusNew || updateData.federalStatusNew}`);
+    if (statusData.federalStatusNew) {
+      statusChanges.push(`federalStatus: ${statusData.federalStatusNew}`);
     }
-    if (statusData.stateStatusNew || updateData.stateStatusNew) {
-      statusChanges.push(`stateStatusNew: ${statusData.stateStatusNew || updateData.stateStatusNew}`);
+    if (statusData.stateStatusNew) {
+      statusChanges.push(`stateStatus: ${statusData.stateStatusNew}`);
     }
 
     // Build the history comment - prepend override prefix if forced transition
@@ -1923,23 +1892,23 @@ export class ClientsService {
     this.logger.log(`[updateStatus] Successfully updated taxCase ${taxCase.id} in database`);
 
     // Notify for federal status change
-    if (federalStatus && federalStatus !== previousFederalStatus) {
-      await this.notifyFederalStatusChange(
+    if (statusData.federalStatusNew && statusData.federalStatusNew !== previousFederalStatusNew) {
+      await this.notifyFederalStatusChangeV2(
         client.user.id,
         client.user.email,
         client.user.firstName,
-        federalStatus,
+        statusData.federalStatusNew,
         statusData.federalActualRefund,
       );
     }
 
     // Notify for state status change
-    if (stateStatus && stateStatus !== previousStateStatus) {
-      await this.notifyStateStatusChange(
+    if (statusData.stateStatusNew && statusData.stateStatusNew !== previousStateStatusNew) {
+      await this.notifyStateStatusChangeV2(
         client.user.id,
         client.user.email,
         client.user.firstName,
-        stateStatus,
+        statusData.stateStatusNew,
         statusData.stateActualRefund,
       );
     }
@@ -1960,9 +1929,9 @@ export class ClientsService {
       }
     }
 
-    // Generate referral code when taxesFiled changes to true
+    // Generate referral code when caseStatus changes to taxes_filed
     const isNewlyFiled =
-      statusData.taxesFiled === true && !(taxCase as any).taxesFiled;
+      statusData.caseStatus === 'taxes_filed' && previousCaseStatus !== 'taxes_filed';
     if (isNewlyFiled && !client.user.referralCode) {
       try {
         const code = await this.referralsService.generateCode(client.user.id);
@@ -2003,84 +1972,84 @@ export class ClientsService {
     return { message: 'Status updated successfully' };
   }
 
-  private async notifyFederalStatusChange(
+  /**
+   * Notify client about federal status change using v2 status values
+   */
+  private async notifyFederalStatusChangeV2(
     userId: string,
     email: string,
     firstName: string,
     status: string,
     refundAmount?: number,
   ) {
-    const notifications: Record<string, { title: string; message: string }> = {
-      processing: {
-        title: 'Declaración Federal en Proceso',
-        message: 'El IRS está procesando tu declaración federal.',
-      },
-      approved: {
-        title: '¡Declaración Federal Aprobada!',
-        message:
-          'Tu declaración federal ha sido aprobada por el IRS. Pronto recibirás tu reembolso.',
-      },
-      rejected: {
-        title: 'Declaración Federal Rechazada',
-        message:
-          'Tu declaración federal fue rechazada por el IRS. Contacta a soporte para más información.',
-      },
-      deposited: {
-        title: '¡Reembolso Federal Depositado!',
-        message: refundAmount
-          ? `Tu reembolso federal de $${refundAmount.toLocaleString()} ha sido depositado en tu cuenta.`
-          : 'Tu reembolso federal ha sido depositado en tu cuenta.',
-      },
+    // Map v2 status values to notification templates
+    const templateMap: Record<string, string> = {
+      in_process: 'notifications.status_federal_processing',
+      deposit_pending: 'notifications.status_federal_deposit_pending',
+      check_in_transit: 'notifications.status_federal_approved',
+      issues: 'notifications.status_federal_rejected',
+      taxes_sent: 'notifications.status_federal_approved',
+      taxes_completed: 'notifications.status_federal_deposited',
     };
 
-    const notification = notifications[status];
-    if (notification) {
-      await this.notificationsService.create(
+    const templateKey = templateMap[status];
+    if (templateKey) {
+      const variables: Record<string, string | number> = { firstName };
+
+      if (status === 'taxes_completed' && refundAmount) {
+        variables.amount = refundAmount.toLocaleString();
+      }
+
+      if (status === 'deposit_pending' || status === 'check_in_transit' || status === 'taxes_sent') {
+        variables.estimatedDate = 'próximamente';
+      }
+
+      await this.notificationsService.createFromTemplate(
         userId,
         'status_change',
-        notification.title,
-        notification.message,
+        templateKey,
+        variables,
       );
     }
   }
 
-  private async notifyStateStatusChange(
+  /**
+   * Notify client about state status change using v2 status values
+   */
+  private async notifyStateStatusChangeV2(
     userId: string,
     email: string,
     firstName: string,
     status: string,
     refundAmount?: number,
   ) {
-    const notifications: Record<string, { title: string; message: string }> = {
-      processing: {
-        title: 'Declaración Estatal en Proceso',
-        message: 'El estado está procesando tu declaración estatal.',
-      },
-      approved: {
-        title: '¡Declaración Estatal Aprobada!',
-        message:
-          'Tu declaración estatal ha sido aprobada. Pronto recibirás tu reembolso.',
-      },
-      rejected: {
-        title: 'Declaración Estatal Rechazada',
-        message:
-          'Tu declaración estatal fue rechazada. Contacta a soporte para más información.',
-      },
-      deposited: {
-        title: '¡Reembolso Estatal Depositado!',
-        message: refundAmount
-          ? `Tu reembolso estatal de $${refundAmount.toLocaleString()} ha sido depositado en tu cuenta.`
-          : 'Tu reembolso estatal ha sido depositado en tu cuenta.',
-      },
+    // Map v2 status values to notification templates
+    const templateMap: Record<string, string> = {
+      in_process: 'notifications.status_state_processing',
+      deposit_pending: 'notifications.status_state_deposit_pending',
+      check_in_transit: 'notifications.status_state_approved',
+      issues: 'notifications.status_state_rejected',
+      taxes_sent: 'notifications.status_state_approved',
+      taxes_completed: 'notifications.status_state_deposited',
     };
 
-    const notification = notifications[status];
-    if (notification) {
-      await this.notificationsService.create(
+    const templateKey = templateMap[status];
+    if (templateKey) {
+      const variables: Record<string, string | number> = { firstName };
+
+      if (status === 'taxes_completed' && refundAmount) {
+        variables.amount = refundAmount.toLocaleString();
+      }
+
+      if (status === 'deposit_pending' || status === 'check_in_transit' || status === 'taxes_sent') {
+        variables.estimatedDate = 'próximamente';
+      }
+
+      await this.notificationsService.createFromTemplate(
         userId,
         'status_change',
-        notification.title,
-        notification.message,
+        templateKey,
+        variables,
       );
     }
   }
@@ -2318,22 +2287,27 @@ export class ClientsService {
 
     // Auto-notify client when problem is marked (not when resolved, and not if already had problem)
     if (problemData.hasProblem && !wasAlreadyProblem) {
-      await this.notificationsService.create(
+      await this.notificationsService.createFromTemplate(
         client.user.id,
         'problem_alert',
-        'Necesitamos tu ayuda',
-        'Hay un inconveniente con tu trámite. Por favor contacta a soporte para resolverlo.',
+        'notifications.problem_set',
+        {
+          firstName: client.user.firstName,
+          description: problemData.problemDescription || 'Hay un inconveniente con tu trámite',
+        },
       );
       this.logger.log(`Problem notification sent to user ${client.user.id}`);
     }
 
     // Notify when problem is resolved
     if (!problemData.hasProblem && wasAlreadyProblem) {
-      await this.notificationsService.create(
+      await this.notificationsService.createFromTemplate(
         client.user.id,
         'status_change',
-        'Inconveniente resuelto',
-        '¡El inconveniente con tu trámite ha sido resuelto! Tu proceso continúa normalmente.',
+        'notifications.problem_resolved',
+        {
+          firstName: client.user.firstName,
+        },
       );
       this.logger.log(
         `Problem resolved notification sent to user ${client.user.id}`,
@@ -2377,11 +2351,15 @@ export class ClientsService {
     }
 
     // Create in-app notification
-    await this.notificationsService.create(
+    await this.notificationsService.createFromTemplate(
       client.user.id,
       'system',
-      notifyData.title,
-      notifyData.message,
+      'notifications.admin_custom_message',
+      {
+        firstName: client.user.firstName,
+        title: notifyData.title,
+        message: notifyData.message,
+      },
     );
 
     // Send email if requested
@@ -2489,26 +2467,28 @@ export class ClientsService {
       const existingTaxCaseFilters = where.taxCases?.some || {};
 
       if (options.status === 'group_pending') {
+        // V2: Use caseStatus instead of taxesFiled
         if (Object.keys(existingTaxCaseFilters).length > 0) {
           where.AND = [
             { taxCases: { some: existingTaxCaseFilters } },
-            { OR: [{ taxCases: { none: {} } }, { taxCases: { some: { taxesFiled: false } } }] },
+            { OR: [{ taxCases: { none: {} } }, { taxCases: { some: { caseStatus: { not: 'taxes_filed' } } } }, { taxCases: { some: { caseStatus: null } } }] },
           ];
           delete where.taxCases;
         } else {
-          where.OR = [{ taxCases: { none: {} } }, { taxCases: { some: { taxesFiled: false } } }];
+          where.OR = [{ taxCases: { none: {} } }, { taxCases: { some: { caseStatus: { not: 'taxes_filed' } } } }, { taxCases: { some: { caseStatus: null } } }];
         }
       } else if (options.status === 'group_in_review') {
+        // V2: Use caseStatus instead of taxesFiled
         where.taxCases = {
-          some: { ...existingTaxCaseFilters, taxesFiled: true, federalStatus: { in: ['processing', 'pending', 'filed'] } },
+          some: { ...existingTaxCaseFilters, caseStatus: 'taxes_filed', federalStatusNew: { in: ['in_process', 'deposit_pending', 'check_in_transit'] } },
         };
       } else if (options.status === 'group_completed') {
         where.taxCases = {
-          some: { ...existingTaxCaseFilters, OR: [{ federalStatus: 'deposited' }, { stateStatus: 'deposited' }] },
+          some: { ...existingTaxCaseFilters, OR: [{ federalStatusNew: 'taxes_completed' }, { stateStatusNew: 'taxes_completed' }] },
         };
       } else if (options.status === 'group_needs_attention') {
         where.taxCases = {
-          some: { ...existingTaxCaseFilters, OR: [{ federalStatus: 'rejected' }, { stateStatus: 'rejected' }, { hasProblem: true }] },
+          some: { ...existingTaxCaseFilters, OR: [{ federalStatusNew: 'issues' }, { stateStatusNew: 'issues' }, { hasProblem: true }] },
         };
       }
     }
@@ -2684,9 +2664,9 @@ export class ClientsService {
               bank: taxCase?.bankName || '',
               routing: maskedRouting,
               account: maskedAccount,
-              taxesFiled: (taxCase as any)?.taxesFiled ? 'Sí' : 'No',
-              federalStatus: taxCase?.federalStatus || '',
-              stateStatus: taxCase?.stateStatus || '',
+              taxesFiled: (taxCase as any)?.caseStatus === 'taxes_filed' ? 'Sí' : 'No',
+              federalStatus: (taxCase as any)?.federalStatusNew || '',
+              stateStatus: (taxCase as any)?.stateStatusNew || '',
               estimatedRefund: taxCase?.estimatedRefund?.toString() || '',
               paymentReceived: taxCase?.paymentReceived ? 'Sí' : 'No',
               createdAt: client.createdAt.toISOString().split('T')[0],
@@ -2825,9 +2805,9 @@ export class ClientsService {
         bank: taxCase?.bankName || '',
         routing: maskedRouting,
         account: maskedAccount,
-        taxesFiled: (taxCase as any)?.taxesFiled ? 'Sí' : 'No',
-        federalStatus: taxCase?.federalStatus || '',
-        stateStatus: taxCase?.stateStatus || '',
+        taxesFiled: (taxCase as any)?.caseStatus === 'taxes_filed' ? 'Sí' : 'No',
+        federalStatus: (taxCase as any)?.federalStatusNew || '',
+        stateStatus: (taxCase as any)?.stateStatusNew || '',
         estimatedRefund: taxCase?.estimatedRefund?.toString() || '',
         paymentReceived: taxCase?.paymentReceived ? 'Sí' : 'No',
         createdAt: client.createdAt.toISOString().split('T')[0],
@@ -2955,8 +2935,10 @@ export class ClientsService {
   }
 
   /**
-   * Get all client accounts with decrypted credentials for admin view
+   * Get all client accounts with MASKED credentials for admin view
    * Returns name, email, and all credential fields (turbotax, IRS, state)
+   * Passwords are masked with '••••••••' for security
+   * Use getClientCredentials() to reveal individual client credentials with audit logging
    * Supports cursor-based pagination for large datasets
    */
   async getAllClientAccounts(options: { cursor?: string; limit: number }) {
@@ -2972,11 +2954,86 @@ export class ClientsService {
     const hasMore = clients.length > options.limit;
     const results = hasMore ? clients.slice(0, -1) : clients;
 
+    const MASKED = '••••••••';
+
     return {
       accounts: results.map((client) => ({
         id: client.id,
         name: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim(),
         email: client.user.email,
+        // Show usernames/emails in plaintext, but mask all passwords
+        turbotaxEmail: client.turbotaxEmail
+          ? this.encryption.decrypt(client.turbotaxEmail)
+          : null,
+        turbotaxPassword: client.turbotaxPassword ? MASKED : null,
+        irsUsername: client.irsUsername
+          ? this.encryption.decrypt(client.irsUsername)
+          : null,
+        irsPassword: client.irsPassword ? MASKED : null,
+        stateUsername: client.stateUsername
+          ? this.encryption.decrypt(client.stateUsername)
+          : null,
+        statePassword: client.statePassword ? MASKED : null,
+      })),
+      nextCursor: hasMore ? results[results.length - 1]?.id : null,
+      hasMore,
+    };
+  }
+
+  /**
+   * Get unmasked credentials for a SINGLE client (SECURITY: with audit logging)
+   * This endpoint reveals sensitive credentials and logs the access for compliance
+   *
+   * @param clientId - Client profile ID to retrieve credentials for
+   * @param adminUserId - Admin user ID performing the access (for audit log)
+   * @param ipAddress - IP address of the admin (optional, for audit log)
+   * @param userAgent - User agent of the admin (optional, for audit log)
+   * @returns Unmasked credentials with access metadata
+   */
+  async getClientCredentials(
+    clientId: string,
+    adminUserId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const client = await this.prisma.clientProfile.findUnique({
+      where: { id: clientId },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+
+    if (!client) {
+      throw new NotFoundException('Cliente no encontrado');
+    }
+
+    // Log credentials access for audit trail (CRITICAL for security compliance)
+    await this.auditLogsService.log({
+      action: AuditAction.CREDENTIALS_ACCESS,
+      userId: adminUserId,
+      targetUserId: client.userId,
+      details: {
+        clientId: client.id,
+        clientName: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim(),
+        accessedFields: {
+          turbotax: !!(client.turbotaxEmail || client.turbotaxPassword),
+          irs: !!(client.irsUsername || client.irsPassword),
+          state: !!(client.stateUsername || client.statePassword),
+        },
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    const now = new Date().toISOString();
+
+    return {
+      revealedAt: now,
+      revealedBy: adminUserId,
+      clientId: client.id,
+      clientName: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim(),
+      clientEmail: client.user.email,
+      credentials: {
         turbotaxEmail: client.turbotaxEmail
           ? this.encryption.decrypt(client.turbotaxEmail)
           : null,
@@ -2995,20 +3052,32 @@ export class ClientsService {
         statePassword: client.statePassword
           ? this.encryption.decrypt(client.statePassword)
           : null,
-      })),
-      nextCursor: hasMore ? results[results.length - 1]?.id : null,
-      hasMore,
+      },
     };
   }
 
   /**
    * Get payments summary for admin bank payments view
-   * Returns all clients with their federal/state refunds and calculated commissions
+   * Returns clients with their federal/state refunds and calculated commissions
+   * OPTIMIZED: Uses cursor pagination to prevent memory issues with large datasets
    */
-  async getPaymentsSummary() {
+  async getPaymentsSummary(options: { cursor?: string; limit: number }) {
     const COMMISSION_RATE = 0.11; // 11%
 
+    // Fetch clients with pagination (limit + 1 to check if there's more)
     const clients = await this.prisma.clientProfile.findMany({
+      take: options.limit + 1,
+      cursor: options.cursor ? { id: options.cursor } : undefined,
+      where: {
+        taxCases: {
+          some: {
+            OR: [
+              { federalActualRefund: { not: null } },
+              { stateActualRefund: { not: null } },
+            ],
+          },
+        },
+      },
       include: {
         user: { select: { firstName: true, lastName: true, email: true } },
         taxCases: {
@@ -3027,92 +3096,141 @@ export class ClientsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Filter to only include clients with at least one refund amount
-    const paymentsData = clients
-      .filter((client) => {
-        const tc = client.taxCases[0];
-        return tc && (tc.federalActualRefund || tc.stateActualRefund);
-      })
-      .map((client) => {
-        const tc = client.taxCases[0];
-        const federalTaxes = Number(tc.federalActualRefund || 0);
-        const stateTaxes = Number(tc.stateActualRefund || 0);
-        const totalTaxes = federalTaxes + stateTaxes;
-        const federalCommission = Math.round(federalTaxes * COMMISSION_RATE * 100) / 100;
-        const stateCommission = Math.round(stateTaxes * COMMISSION_RATE * 100) / 100;
-        const totalCommission = Math.round(totalTaxes * COMMISSION_RATE * 100) / 100;
-        const clientReceives = Math.round((totalTaxes - totalCommission) * 100) / 100;
+    const hasMore = clients.length > options.limit;
+    const results = hasMore ? clients.slice(0, -1) : clients;
 
-        return {
-          id: client.id,
-          name: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim() || 'Sin Nombre',
-          email: client.user.email,
-          federalTaxes,
-          stateTaxes,
-          totalTaxes,
-          federalCommission,
-          stateCommission,
-          totalCommission,
-          clientReceives,
-          federalDepositDate: tc.federalDepositDate,
-          stateDepositDate: tc.stateDepositDate,
-          paymentReceived: tc.paymentReceived,
-          commissionPaid: tc.commissionPaid,
-        };
-      });
+    // Map to payments data
+    const paymentsData = results.map((client) => {
+      const tc = client.taxCases[0];
+      const federalTaxes = Number(tc?.federalActualRefund || 0);
+      const stateTaxes = Number(tc?.stateActualRefund || 0);
+      const totalTaxes = federalTaxes + stateTaxes;
+      const federalCommission = Math.round(federalTaxes * COMMISSION_RATE * 100) / 100;
+      const stateCommission = Math.round(stateTaxes * COMMISSION_RATE * 100) / 100;
+      const totalCommission = Math.round(totalTaxes * COMMISSION_RATE * 100) / 100;
+      const clientReceives = Math.round((totalTaxes - totalCommission) * 100) / 100;
 
-    // Calculate totals
-    const totals = paymentsData.reduce(
-      (acc, client) => ({
-        federalTaxes: acc.federalTaxes + client.federalTaxes,
-        stateTaxes: acc.stateTaxes + client.stateTaxes,
-        totalTaxes: acc.totalTaxes + client.totalTaxes,
-        federalCommission: acc.federalCommission + client.federalCommission,
-        stateCommission: acc.stateCommission + client.stateCommission,
-        totalCommission: acc.totalCommission + client.totalCommission,
-        clientReceives: acc.clientReceives + client.clientReceives,
-      }),
-      {
-        federalTaxes: 0,
-        stateTaxes: 0,
-        totalTaxes: 0,
-        federalCommission: 0,
-        stateCommission: 0,
-        totalCommission: 0,
-        clientReceives: 0,
-      },
-    );
-
-    // Round totals
-    Object.keys(totals).forEach((key) => {
-      totals[key as keyof typeof totals] = Math.round(totals[key as keyof typeof totals] * 100) / 100;
+      return {
+        id: client.id,
+        name: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim() || 'Sin Nombre',
+        email: client.user.email,
+        federalTaxes,
+        stateTaxes,
+        totalTaxes,
+        federalCommission,
+        stateCommission,
+        totalCommission,
+        clientReceives,
+        federalDepositDate: tc?.federalDepositDate,
+        stateDepositDate: tc?.stateDepositDate,
+        paymentReceived: tc?.paymentReceived,
+        commissionPaid: tc?.commissionPaid,
+      };
     });
+
+    // Calculate totals using database aggregation (separate query for accuracy)
+    const aggregates = await this.prisma.taxCase.aggregate({
+      where: {
+        clientProfile: {
+          taxCases: {
+            some: {
+              OR: [
+                { federalActualRefund: { not: null } },
+                { stateActualRefund: { not: null } },
+              ],
+            },
+          },
+        },
+      },
+      _sum: {
+        federalActualRefund: true,
+        stateActualRefund: true,
+      },
+    });
+
+    const totalFederal = Number(aggregates._sum.federalActualRefund || 0);
+    const totalState = Number(aggregates._sum.stateActualRefund || 0);
+    const totalTaxes = totalFederal + totalState;
+    const totalFederalCommission = totalFederal * COMMISSION_RATE;
+    const totalStateCommission = totalState * COMMISSION_RATE;
+    const totalCommission = totalTaxes * COMMISSION_RATE;
+    const totalClientReceives = totalTaxes - totalCommission;
+
+    const totals = {
+      federalTaxes: Math.round(totalFederal * 100) / 100,
+      stateTaxes: Math.round(totalState * 100) / 100,
+      totalTaxes: Math.round(totalTaxes * 100) / 100,
+      federalCommission: Math.round(totalFederalCommission * 100) / 100,
+      stateCommission: Math.round(totalStateCommission * 100) / 100,
+      totalCommission: Math.round(totalCommission * 100) / 100,
+      clientReceives: Math.round(totalClientReceives * 100) / 100,
+    };
 
     return {
       clients: paymentsData,
+      nextCursor: hasMore ? results[results.length - 1]?.id : null,
+      hasMore,
       totals,
-      clientCount: paymentsData.length,
     };
   }
 
   /**
    * Get delays data for admin delays view
    * Shows timing metrics: documentation complete, filing, deposit dates, and calculated delays
+   * OPTIMIZED: Uses cursor pagination and filters to prevent memory issues with large datasets
    */
-  async getDelaysData() {
+  async getDelaysData(options: {
+    cursor?: string;
+    limit: number;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string;
+  }) {
+    // Build where clause with filters (V2: use caseStatus instead of taxesFiled)
+    const where: any = {
+      taxCases: {
+        some: {
+          caseStatus: 'taxes_filed', // Only clients with filed taxes (V2)
+        },
+      },
+    };
+
+    // Add date range filter if provided (V2: use caseStatusChangedAt)
+    if (options.dateFrom || options.dateTo) {
+      where.taxCases.some.caseStatusChangedAt = {};
+      if (options.dateFrom) {
+        where.taxCases.some.caseStatusChangedAt.gte = new Date(options.dateFrom);
+      }
+      if (options.dateTo) {
+        where.taxCases.some.caseStatusChangedAt.lte = new Date(options.dateTo);
+      }
+    }
+
+    // Add status filter if provided (v2 status)
+    if (options.status) {
+      where.taxCases.some.OR = [
+        { federalStatusNew: options.status },
+        { stateStatusNew: options.status },
+      ];
+    }
+
+    // Fetch clients with pagination (limit + 1 to check if there's more)
     const clients = await this.prisma.clientProfile.findMany({
+      take: options.limit + 1,
+      cursor: options.cursor ? { id: options.cursor } : undefined,
+      where,
       include: {
         user: { select: { firstName: true, lastName: true } },
         taxCases: {
+          where: { caseStatus: 'taxes_filed' },
           orderBy: { taxYear: 'desc' },
           take: 1,
           select: {
             id: true,
-            taxesFiled: true,
-            taxesFiledAt: true,
-            preFilingStatus: true,
-            federalStatus: true,
-            stateStatus: true,
+            caseStatus: true,
+            caseStatusChangedAt: true,
+            federalStatusNew: true,
+            stateStatusNew: true,
             federalDepositDate: true,
             stateDepositDate: true,
             problemType: true,
@@ -3126,6 +3244,9 @@ export class ClientsService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const hasMore = clients.length > options.limit;
+    const results = hasMore ? clients.slice(0, -1) : clients;
+
     // Helper to calculate days between two dates
     const daysBetween = (start: Date | null, end: Date | null): number | null => {
       if (!start || !end) return null;
@@ -3133,11 +3254,12 @@ export class ClientsService {
       return Math.round(diffMs / (1000 * 60 * 60 * 24));
     };
 
-    const delaysData = clients
-      .filter((client) => client.taxCases[0]?.taxesFiled) // Only show clients with filed taxes
+    const delaysData = results
+      .filter((client) => client.taxCases[0]) // Ensure tax case exists
       .map((client) => {
         const tc = client.taxCases[0];
-        const taxesFiledAt = tc.taxesFiledAt ? new Date(tc.taxesFiledAt) : null;
+        // V2: derive taxesFiledAt from caseStatusChangedAt when caseStatus is taxes_filed
+        const taxesFiledAt = tc.caseStatusChangedAt ? new Date(tc.caseStatusChangedAt) : null;
         const federalDepositDate = tc.federalDepositDate ? new Date(tc.federalDepositDate) : null;
         const stateDepositDate = tc.stateDepositDate ? new Date(tc.stateDepositDate) : null;
 
@@ -3150,9 +3272,7 @@ export class ClientsService {
               h.comment?.toLowerCase().includes('verif'),
           );
 
-        // Documentation complete date - we use updatedAt of profile as proxy
-        // (Ideally we'd track when preFilingStatus became documentation_complete)
-        // For now, we use taxesFiledAt as the documentation was complete before filing
+        // Documentation complete date - we use taxesFiledAt as the documentation was complete before filing
         const documentationCompleteDate = taxesFiledAt; // Approximation
 
         return {
@@ -3165,67 +3285,106 @@ export class ClientsService {
           wentThroughVerification,
           federalDelayDays: daysBetween(taxesFiledAt, federalDepositDate),
           stateDelayDays: daysBetween(taxesFiledAt, stateDepositDate),
-          federalStatus: tc.federalStatus,
-          stateStatus: tc.stateStatus,
+          federalStatus: tc.federalStatusNew,
+          stateStatus: tc.stateStatusNew,
         };
       });
 
     return {
       clients: delaysData,
-      clientCount: delaysData.length,
+      nextCursor: hasMore ? results[results.length - 1]?.id : null,
+      hasMore,
     };
   }
 
   /**
    * Get season summary stats for admin dashboard
    * Returns total clients, taxes completed %, projected earnings, and earnings to date
+   * OPTIMIZED: Uses database aggregations instead of full-table scans
    */
   async getSeasonStats() {
     const COMMISSION_RATE = 0.11; // 11%
 
-    const [totalClients, taxCases] = await Promise.all([
+    // Use parallel aggregate queries for maximum performance
+    const [
+      totalClients,
+      totalTaxCases,
+      completedCases,
+      depositedCases,
+      actualRefundAggregates,
+      estimatedRefundAggregates,
+    ] = await Promise.all([
+      // Total clients count
       this.prisma.clientProfile.count(),
-      this.prisma.taxCase.findMany({
-        select: {
+
+      // Total tax cases count
+      this.prisma.taxCase.count(),
+
+      // Count completed cases (v2 status = taxes_completed)
+      this.prisma.taxCase.count({
+        where: {
+          OR: [
+            { federalStatusNew: 'taxes_completed' },
+            { stateStatusNew: 'taxes_completed' },
+          ],
+        },
+      }),
+
+      // Count cases with deposit dates
+      this.prisma.taxCase.count({
+        where: {
+          OR: [
+            { federalDepositDate: { not: null } },
+            { stateDepositDate: { not: null } },
+          ],
+        },
+      }),
+
+      // Sum of actual refunds for deposited cases (earnings to date)
+      this.prisma.taxCase.aggregate({
+        where: {
+          OR: [
+            { federalDepositDate: { not: null } },
+            { stateDepositDate: { not: null } },
+          ],
+        },
+        _sum: {
           federalActualRefund: true,
           stateActualRefund: true,
-          federalDepositDate: true,
-          stateDepositDate: true,
+        },
+      }),
+
+      // Sum of estimated refunds for all cases (projected earnings)
+      this.prisma.taxCase.aggregate({
+        _sum: {
           estimatedRefund: true,
-          federalStatus: true,
-          stateStatus: true,
+          federalActualRefund: true,
+          stateActualRefund: true,
         },
       }),
     ]);
 
-    let taxesCompletedCount = 0;
-    let projectedEarnings = 0;
-    let earningsToDate = 0;
+    // Calculate completed count (max of status-based or date-based)
+    const taxesCompletedCount = Math.max(completedCases, depositedCases);
 
-    for (const tc of taxCases) {
-      const isDeposited = tc.federalDepositDate || tc.stateDepositDate;
-      const isCompleted = tc.federalStatus === 'deposited' || tc.stateStatus === 'deposited';
-      if (isDeposited || isCompleted) {
-        taxesCompletedCount++;
-      }
+    // Calculate earnings to date from deposited cases
+    const actualFederal = Number(actualRefundAggregates._sum.federalActualRefund || 0);
+    const actualState = Number(actualRefundAggregates._sum.stateActualRefund || 0);
+    const earningsToDate = (actualFederal + actualState) * COMMISSION_RATE;
 
-      const actualRefund =
-        Number(tc.federalActualRefund || 0) + Number(tc.stateActualRefund || 0);
-      if (isDeposited && actualRefund > 0) {
-        earningsToDate += actualRefund * COMMISSION_RATE;
-      }
-
-      const estimatedRefund = Number(tc.estimatedRefund || 0) || actualRefund;
-      if (estimatedRefund > 0) {
-        projectedEarnings += estimatedRefund * COMMISSION_RATE;
-      }
-    }
+    // Calculate projected earnings
+    // Use estimatedRefund if available, otherwise use actualRefund
+    const totalEstimated = Number(estimatedRefundAggregates._sum.estimatedRefund || 0);
+    const totalActualFederal = Number(estimatedRefundAggregates._sum.federalActualRefund || 0);
+    const totalActualState = Number(estimatedRefundAggregates._sum.stateActualRefund || 0);
+    const projectedBase = totalEstimated > 0 ? totalEstimated : (totalActualFederal + totalActualState);
+    const projectedEarnings = projectedBase * COMMISSION_RATE;
 
     return {
       totalClients,
       taxesCompletedPercent:
-        taxCases.length > 0
-          ? Math.round((taxesCompletedCount / taxCases.length) * 100)
+        totalTaxCases > 0
+          ? Math.round((taxesCompletedCount / totalTaxCases) * 100)
           : 0,
       projectedEarnings: Math.round(projectedEarnings * 100) / 100,
       earningsToDate: Math.round(earningsToDate * 100) / 100,

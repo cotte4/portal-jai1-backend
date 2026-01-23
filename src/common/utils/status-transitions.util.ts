@@ -24,28 +24,30 @@ export const CASE_STATUS_TRANSITIONS = new Map<CaseStatus, CaseStatus[]>([
  * Valid transitions for FederalStatusNew
  */
 export const FEDERAL_STATUS_TRANSITIONS = new Map<FederalStatusNew, FederalStatusNew[]>([
-  [FederalStatusNew.in_process, [FederalStatusNew.in_verification, FederalStatusNew.check_in_transit, FederalStatusNew.issues]],
-  [FederalStatusNew.in_verification, [FederalStatusNew.verification_in_progress, FederalStatusNew.check_in_transit, FederalStatusNew.issues]],
-  [FederalStatusNew.verification_in_progress, [FederalStatusNew.verification_letter_sent, FederalStatusNew.check_in_transit, FederalStatusNew.issues]],
-  [FederalStatusNew.verification_letter_sent, [FederalStatusNew.check_in_transit, FederalStatusNew.issues]],
+  [FederalStatusNew.in_process, [FederalStatusNew.in_verification, FederalStatusNew.deposit_pending, FederalStatusNew.check_in_transit, FederalStatusNew.issues]],
+  [FederalStatusNew.in_verification, [FederalStatusNew.verification_in_progress, FederalStatusNew.deposit_pending, FederalStatusNew.check_in_transit, FederalStatusNew.issues]],
+  [FederalStatusNew.verification_in_progress, [FederalStatusNew.verification_letter_sent, FederalStatusNew.deposit_pending, FederalStatusNew.check_in_transit, FederalStatusNew.issues]],
+  [FederalStatusNew.verification_letter_sent, [FederalStatusNew.deposit_pending, FederalStatusNew.check_in_transit, FederalStatusNew.issues]],
+  [FederalStatusNew.deposit_pending, [FederalStatusNew.taxes_sent, FederalStatusNew.taxes_completed, FederalStatusNew.issues]],
   [FederalStatusNew.check_in_transit, [FederalStatusNew.taxes_sent, FederalStatusNew.issues]],
   [FederalStatusNew.taxes_sent, [FederalStatusNew.taxes_completed, FederalStatusNew.issues]],
   [FederalStatusNew.taxes_completed, [FederalStatusNew.issues]], // terminal but can have issues
-  [FederalStatusNew.issues, [FederalStatusNew.in_process, FederalStatusNew.in_verification, FederalStatusNew.check_in_transit, FederalStatusNew.taxes_sent]],
+  [FederalStatusNew.issues, [FederalStatusNew.in_process, FederalStatusNew.in_verification, FederalStatusNew.deposit_pending, FederalStatusNew.check_in_transit, FederalStatusNew.taxes_sent]],
 ]);
 
 /**
  * Valid transitions for StateStatusNew (same as FederalStatusNew)
  */
 export const STATE_STATUS_TRANSITIONS = new Map<StateStatusNew, StateStatusNew[]>([
-  [StateStatusNew.in_process, [StateStatusNew.in_verification, StateStatusNew.check_in_transit, StateStatusNew.issues]],
-  [StateStatusNew.in_verification, [StateStatusNew.verification_in_progress, StateStatusNew.check_in_transit, StateStatusNew.issues]],
-  [StateStatusNew.verification_in_progress, [StateStatusNew.verification_letter_sent, StateStatusNew.check_in_transit, StateStatusNew.issues]],
-  [StateStatusNew.verification_letter_sent, [StateStatusNew.check_in_transit, StateStatusNew.issues]],
+  [StateStatusNew.in_process, [StateStatusNew.in_verification, StateStatusNew.deposit_pending, StateStatusNew.check_in_transit, StateStatusNew.issues]],
+  [StateStatusNew.in_verification, [StateStatusNew.verification_in_progress, StateStatusNew.deposit_pending, StateStatusNew.check_in_transit, StateStatusNew.issues]],
+  [StateStatusNew.verification_in_progress, [StateStatusNew.verification_letter_sent, StateStatusNew.deposit_pending, StateStatusNew.check_in_transit, StateStatusNew.issues]],
+  [StateStatusNew.verification_letter_sent, [StateStatusNew.deposit_pending, StateStatusNew.check_in_transit, StateStatusNew.issues]],
+  [StateStatusNew.deposit_pending, [StateStatusNew.taxes_sent, StateStatusNew.taxes_completed, StateStatusNew.issues]],
   [StateStatusNew.check_in_transit, [StateStatusNew.taxes_sent, StateStatusNew.issues]],
   [StateStatusNew.taxes_sent, [StateStatusNew.taxes_completed, StateStatusNew.issues]],
   [StateStatusNew.taxes_completed, [StateStatusNew.issues]], // terminal but can have issues
-  [StateStatusNew.issues, [StateStatusNew.in_process, StateStatusNew.in_verification, StateStatusNew.check_in_transit, StateStatusNew.taxes_sent]],
+  [StateStatusNew.issues, [StateStatusNew.in_process, StateStatusNew.in_verification, StateStatusNew.deposit_pending, StateStatusNew.check_in_transit, StateStatusNew.taxes_sent]],
 ]);
 
 // ============= VALIDATION FUNCTIONS =============

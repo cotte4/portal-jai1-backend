@@ -1,92 +1,100 @@
 {
   "notifications": {
     "welcome": {
-      "title": "Welcome to JAI1!",
-      "message": "Hello {{firstName}}, thank you for registering. Complete your profile and upload your documents to begin your tax return."
+      "title": "Welcome to JAI1, {{firstName}}!",
+      "message": "We're ready to help you with your tax return. Complete your profile and upload your documents to get started."
     },
     "document_reviewed": {
-      "title": "Document Reviewed",
-      "message": "Your {{documentType}} \"{{fileName}}\" has been reviewed by our team."
+      "title": "We reviewed your document",
+      "message": "{{firstName}}, we've reviewed your {{documentType}} \"{{fileName}}\". Everything looks good, we're moving forward with your case."
     },
     "docs_missing": {
-      "title": "Documents pending",
-      "message": "Please upload the missing documents to continue with your tax return: {{missingDocs}}"
+      "title": "{{firstName}}, we need some documents",
+      "message": "To continue with your return, please upload these documents: {{missingDocs}}. Go to the Documents section to upload them."
     },
     "ticket_response": {
-      "title": "Response to your ticket",
-      "message": "You have received a response to your ticket: {{subject}}"
+      "title": "You have a response from support",
+      "message": "{{firstName}}, we replied to your question about: {{subject}}. Check the full message in the Messages section."
     },
     "referral_new": {
-      "title": "New referral",
-      "message": "{{referredName}} signed up using your referral code."
+      "title": "Someone used your referral code!",
+      "message": "{{referredName}} just signed up with your code. When they complete their process, you'll get your discount."
     },
     "referral_successful": {
-      "title": "Successful referral",
-      "message": "Congratulations! {{referredName}} completed their process. You will receive your ${{amount}} discount when you get your refund."
+      "title": "Your referral was successful!",
+      "message": "{{firstName}}, {{referredName}} completed their return. You now have ${{amount}} discount available for your next refund."
     },
     "discount_applied": {
-      "title": "Discount applied",
-      "message": "A discount of ${{amount}} has been applied to your account for your successful referral."
+      "title": "Discount applied: ${{amount}}",
+      "message": "{{firstName}}, we applied your ${{amount}} referral discount. It will be automatically deducted from your next payment."
     },
     "problem_set": {
-      "title": "We need your help",
-      "message": "{{description}}"
+      "title": "{{firstName}}, we need your attention",
+      "message": "{{description}}. Go to Messages to resolve this with our team."
     },
     "problem_resolved": {
-      "title": "Issue resolved",
-      "message": "The issue with your process has been resolved."
+      "title": "Problem resolved",
+      "message": "{{firstName}}, the issue with your case has been resolved. We're continuing to work on your return."
     },
     "alarm_verification_timeout": {
-      "title": "Action required: Verification pending",
-      "message": "Your {{track}} return has been in verification for {{days}} days. Please contact support if you haven't received instructions from the IRS."
+      "title": "Update on your verification",
+      "message": "{{firstName}}, your {{track}} return has been in verification for {{days}} days. Go to Messages to review next steps with our team."
     },
     "alarm_letter_sent": {
-      "title": "Reminder: Letter sent",
-      "message": "A letter related to your {{track}} return was sent {{days}} days ago. Check if you have received it and respond if necessary."
+      "title": "Reminder: check your mail",
+      "message": "{{days}} days ago, a letter was sent about your {{track}} return. If you received it, contact us in Messages for guidance on how to respond."
     },
     "alarm_general": {
-      "title": "Update on your process",
-      "message": "There is an important update about your {{track}} return. Check your process status or contact support for more information."
+      "title": "There's news about your case",
+      "message": "{{firstName}}, we have an important update about your {{track}} return. Check your status in Tracking or write to us in Messages."
     },
     "status_federal_filed": {
-      "title": "Federal return submitted",
-      "message": "Your federal return has been submitted to the IRS."
+      "title": "Federal return submitted to the IRS",
+      "message": "{{firstName}}, we've submitted your federal return. The IRS will begin processing it in the coming days."
     },
     "status_federal_processing": {
-      "title": "Federal return in process",
-      "message": "The IRS is processing your federal return."
+      "title": "The IRS is processing your return",
+      "message": "{{firstName}}, your federal return is being processed. We'll notify you when there are updates."
     },
     "status_federal_approved": {
-      "title": "Federal refund approved",
-      "message": "Your federal refund has been approved! Estimated deposit date: {{estimatedDate}}"
+      "title": "Your federal refund was approved!",
+      "message": "{{firstName}}, the IRS approved your federal refund. Estimated deposit date: {{estimatedDate}}"
     },
     "status_federal_deposited": {
       "title": "Federal refund deposited!",
-      "message": "Your federal refund of ${{amount}} has been deposited to your account."
+      "message": "{{firstName}}, your federal refund of ${{amount}} is now in your account. Congratulations!"
+    },
+    "status_federal_rejected": {
+      "title": "Federal return rejected",
+      "message": "{{firstName}}, your federal return was rejected by the IRS. Contact support for more information."
     },
     "status_state_filed": {
       "title": "State return submitted",
-      "message": "Your state return has been submitted."
+      "message": "{{firstName}}, we submitted your state return. Now we just wait for processing."
     },
     "status_state_processing": {
-      "title": "State return in process",
-      "message": "Your state is processing your return."
+      "title": "Processing your state return",
+      "message": "{{firstName}}, your state is reviewing your return. We'll keep you updated on the progress."
     },
     "status_state_approved": {
-      "title": "State refund approved",
-      "message": "Your state refund has been approved! Estimated deposit date: {{estimatedDate}}"
+      "title": "State refund approved!",
+      "message": "{{firstName}}, your state refund was approved. Estimated deposit date: {{estimatedDate}}"
     },
     "status_state_deposited": {
       "title": "State refund deposited!",
-      "message": "Your state refund of ${{amount}} has been deposited to your account."
+      "message": "{{firstName}}, your state refund of ${{amount}} is now available in your account. Excellent!"
+    },
+    "status_state_rejected": {
+      "title": "State return rejected",
+      "message": "{{firstName}}, your state return was rejected. Contact support for more information."
     },
     "admin_document_uploaded": {
-      "title": "New document uploaded",
-      "message": "{{clientName}} uploaded a new document: {{fileName}}"
+      "title": "New document",
+      "message": "{{clientName}}: {{fileName}}"
     },
     "admin_new_registration": {
-      "title": "New client registered",
-      "message": "{{clientName}} registered on the platform."
+      "title": "New registration",
+      "message": "{{clientName}} registered"
     }
   },
   "document_types": {

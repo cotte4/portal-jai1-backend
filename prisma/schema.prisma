@@ -107,6 +107,9 @@ model ClientProfile {
   statePassword     String?   @map("state_password")
   profileComplete   Boolean   @default(false) @map("profile_complete")
   isDraft           Boolean   @default(true) @map("is_draft")
+  // Computed status fields for efficient querying (eliminates post-query filtering)
+  isReadyToPresent  Boolean   @default(false) @map("is_ready_to_present")
+  isIncomplete      Boolean   @default(true) @map("is_incomplete")
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -115,6 +118,8 @@ model ClientProfile {
   @@index([profileComplete])
   @@index([isDraft])
   @@index([createdAt])
+  @@index([isReadyToPresent])
+  @@index([isIncomplete])
   @@map("client_profiles")
 }
 
@@ -123,16 +128,11 @@ model TaxCase {
   clientProfileId    String          @map("client_profile_id") @db.Uuid
   taxYear            Int             @map("tax_year") // CHECK constraint: 2020-2100 (see migration)
 
-  // Phase indicator - separates pre-filing and post-filing workflows
+  // Flags for referral code generation (kept for backward compatibility)
   taxesFiled         Boolean         @default(false) @map("taxes_filed")
   taxesFiledAt       DateTime?       @map("taxes_filed_at") @db.Timestamptz
 
-  // NEW: Pre-filing status (used when taxesFiled = false)
-  preFilingStatus    PreFilingStatus @default(awaiting_registration) @map("pre_filing_status")
-
-  // Federal/State independent tracking (used when taxesFiled = true)
-  federalStatus      TaxStatus?      @map("federal_status")
-  stateStatus        TaxStatus?      @map("state_status")
+  // Estimated refund
   estimatedRefund    Decimal?        @map("estimated_refund") @db.Decimal(10, 2)
   // Separate federal/state tracking (SOURCE OF TRUTH)
   federalEstimatedDate  DateTime?    @map("federal_estimated_date") @db.Timestamptz
@@ -142,26 +142,26 @@ model TaxCase {
   federalDepositDate    DateTime?    @map("federal_deposit_date") @db.Timestamptz
   stateDepositDate      DateTime?    @map("state_deposit_date") @db.Timestamptz
 
-  // NEW: Federal status tracking (comments and dates)
+  // Federal status tracking (comments and dates)
   federalLastComment      String?    @map("federal_last_comment")
   federalStatusChangedAt  DateTime?  @map("federal_status_changed_at") @db.Timestamptz
   federalLastReviewedAt   DateTime?  @map("federal_last_reviewed_at") @db.Timestamptz
 
-  // NEW: State status tracking (comments and dates)
+  // State status tracking (comments and dates)
   stateLastComment        String?    @map("state_last_comment")
   stateStatusChangedAt    DateTime?  @map("state_status_changed_at") @db.Timestamptz
   stateLastReviewedAt     DateTime?  @map("state_last_reviewed_at") @db.Timestamptz
 
-  // ============= NEW STATUS SYSTEM (v2) =============
-  // Unified case status (replaces preFilingStatus + taxesFiled combination)
+  // ============= STATUS FIELDS =============
+  // Case status (pre-filing workflow)
   caseStatus            CaseStatus?       @map("case_status")
   caseStatusChangedAt   DateTime?         @map("case_status_changed_at") @db.Timestamptz
 
-  // Enhanced federal status (new system)
+  // Federal status (post-filing tracking)
   federalStatusNew          FederalStatusNew?  @map("federal_status_new")
   federalStatusNewChangedAt DateTime?          @map("federal_status_new_changed_at") @db.Timestamptz
 
-  // Enhanced state status (new system)
+  // State status (post-filing tracking)
   stateStatusNew            StateStatusNew?    @map("state_status_new")
   stateStatusNewChangedAt   DateTime?          @map("state_status_new_changed_at") @db.Timestamptz
 
@@ -201,15 +201,16 @@ model TaxCase {
   @@index([hasProblem])
   @@index([createdAt])
   @@index([taxesFiled])
-  @@index([preFilingStatus])
-  @@index([taxesFiled, preFilingStatus])
   @@index([taxesFiled, createdAt])
-  // NEW: Indexes for alarm queries (status system v2)
+  // Indexes for alarm queries
   @@index([caseStatus])
   @@index([federalStatusNew])
   @@index([stateStatusNew])
   @@index([federalStatusNew, federalStatusNewChangedAt])
   @@index([stateStatusNew, stateStatusNewChangedAt])
+  // Composite indexes for complex OR/AND WHERE clauses
+  @@index([caseStatus, federalStatusNew, stateStatusNew])
+  @@index([hasProblem, federalStatusNew, stateStatusNew])
   @@map("tax_cases")
 }
 
@@ -325,23 +326,7 @@ enum PaymentMethod {
   check
 }
 
-enum TaxStatus {
-  filed
-  pending
-  processing
-  approved
-  rejected
-  deposited
-}
-
-// Pre-filing workflow status (before taxes are filed)
-enum PreFilingStatus {
-  awaiting_registration
-  awaiting_documents
-  documentation_complete
-}
-
-// NEW: Unified case status (replaces preFilingStatus + taxesFiled combination)
+// Case status (pre-filing workflow)
 enum CaseStatus {
   awaiting_form
   awaiting_docs
@@ -350,24 +335,26 @@ enum CaseStatus {
   case_issues
 }
 
-// NEW: Enhanced federal status tracking (replaces TaxStatus for federal)
+// Federal status tracking (post-filing)
 enum FederalStatusNew {
   in_process
   in_verification
   verification_in_progress
   verification_letter_sent
+  deposit_pending
   check_in_transit
   issues
   taxes_sent
   taxes_completed
 }
 
-// NEW: Enhanced state status tracking (replaces TaxStatus for state)
+// State status tracking (post-filing)
 enum StateStatusNew {
   in_process
   in_verification
   verification_in_progress
   verification_letter_sent
+  deposit_pending
   check_in_transit
   issues
   taxes_sent
@@ -396,6 +383,7 @@ enum AlarmResolution {
   acknowledged
   resolved
   auto_resolved
+  dismissed
 }
 
 // Custom alarm thresholds per tax case (overrides global defaults)
@@ -618,6 +606,7 @@ enum AuditAction {
   // Security (keep forever)
   PASSWORD_CHANGE
   PASSWORD_RESET
+  CREDENTIALS_ACCESS
   // Documents (keep forever)
   DOCUMENT_DELETE
   // Financial (keep forever)

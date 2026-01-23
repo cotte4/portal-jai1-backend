@@ -395,11 +395,14 @@ export class TicketsService {
 
       // Send notification if admin is replying to a client's ticket (fire and forget)
       if (userRole === 'admin' && ticket.user?.role === 'client') {
-        this.notificationsService.create(
+        this.notificationsService.createFromTemplate(
           ticket.userId,
           'message',
-          'Respuesta a tu ticket',
-          `Nuevo mensaje en: ${ticket.subject}`,
+          'notifications.ticket_response',
+          {
+            firstName: ticket.user.firstName,
+            subject: ticket.subject,
+          },
         ).catch((err) => {
           this.logger.error(`Failed to create notification for ticket ${ticketId}`, err);
         });

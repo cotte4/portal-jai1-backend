@@ -4,14 +4,101 @@ import { PrismaService } from '../../config/prisma.service';
 import { NotificationType } from '@prisma/client';
 import { I18nService, SupportedLanguage } from '../../i18n';
 
+/**
+ * Simple LRU cache entry with TTL
+ */
+interface CacheEntry<T> {
+  value: T;
+  expiresAt: number;
+}
+
+/**
+ * Simple LRU cache implementation
+ */
+class LRUCache<K, V> {
+  private cache = new Map<K, CacheEntry<V>>();
+  private readonly maxSize: number;
+  private readonly ttlMs: number;
+
+  constructor(maxSize: number, ttlMs: number) {
+    this.maxSize = maxSize;
+    this.ttlMs = ttlMs;
+  }
+
+  get(key: K): V | undefined {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+
+    // Check if expired
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
+    // Move to end (most recently used)
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.value;
+  }
+
+  set(key: K, value: V): void {
+    // Remove if exists (to update position)
+    this.cache.delete(key);
+
+    // Evict oldest if at capacity
+    if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+
+    // Add new entry
+    this.cache.set(key, {
+      value,
+      expiresAt: Date.now() + this.ttlMs,
+    });
+  }
+
+  delete(key: K): void {
+    this.cache.delete(key);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+}
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
+
+  /**
+   * LRU cache for user language preferences
+   * Max 10,000 entries (covers all users), 1 hour TTL
+   */
+  private readonly languageCache = new LRUCache<string, SupportedLanguage>(
+    10000,
+    60 * 60 * 1000, // 1 hour
+  );
+
+  // Gateway reference - injected lazily to avoid circular dependency
+  private gateway: any;
 
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
   ) {}
+
+  /**
+   * Set the gateway reference (called by NotificationsGateway)
+   * This avoids circular dependency issues
+   */
+  setGateway(gateway: any): void {
+    this.gateway = gateway;
+  }
 
   /**
    * Create a notification with raw title and message (legacy method)
@@ -22,7 +109,7 @@ export class NotificationsService {
     title: string,
     message: string,
   ) {
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: {
         userId,
         type,
@@ -30,6 +117,21 @@ export class NotificationsService {
         message,
       },
     });
+
+    // Emit notification via WebSocket if gateway is available
+    if (this.gateway) {
+      this.gateway.emitNotificationToUser(userId, {
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        isRead: notification.isRead,
+        isArchived: notification.isArchived,
+        createdAt: notification.createdAt,
+      });
+    }
+
+    return notification;
   }
 
   /**
@@ -59,6 +161,20 @@ export class NotificationsService {
       })),
     });
 
+    // Emit notifications via WebSocket if gateway is available
+    // Note: createMany doesn't return created records, so we create minimal notification objects
+    if (this.gateway && result.count > 0) {
+      const notificationData = {
+        type,
+        title,
+        message,
+        isRead: false,
+        isArchived: false,
+        createdAt: new Date(),
+      };
+      this.gateway.emitNotificationToUsers(userIds, notificationData);
+    }
+
     return { count: result.count };
   }
 
@@ -80,11 +196,21 @@ export class NotificationsService {
     // Get user's preferred language if not specified
     let lang = language;
     if (!lang) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { preferredLanguage: true },
-      });
-      lang = (user?.preferredLanguage as SupportedLanguage) || 'es';
+      // Check cache first
+      const cachedLang = this.languageCache.get(userId);
+      if (cachedLang) {
+        lang = cachedLang;
+      } else {
+        // Cache miss - query database
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { preferredLanguage: true },
+        });
+        lang = (user?.preferredLanguage as SupportedLanguage) || 'es';
+
+        // Store in cache
+        this.languageCache.set(userId, lang);
+      }
     }
 
     // Validate language
@@ -94,7 +220,7 @@ export class NotificationsService {
 
     const { title, message } = this.i18n.getNotification(templateKey, variables, lang);
 
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: {
         userId,
         type,
@@ -102,9 +228,42 @@ export class NotificationsService {
         message,
       },
     });
+
+    // Emit notification via WebSocket if gateway is available
+    if (this.gateway) {
+      this.gateway.emitNotificationToUser(userId, {
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        isRead: notification.isRead,
+        isArchived: notification.isArchived,
+        createdAt: notification.createdAt,
+      });
+    }
+
+    return notification;
   }
 
-  async findAll(userId: string, unreadOnly: boolean, includeArchived = false) {
+  /**
+   * Get all notifications for a user with cursor-based pagination
+   * @param userId - User ID
+   * @param unreadOnly - Filter to only unread notifications
+   * @param includeArchived - Include archived notifications
+   * @param cursor - Cursor for pagination (notification ID)
+   * @param limit - Maximum number of results (default 20, max 100)
+   * @returns Paginated notifications with cursor information
+   */
+  async findAll(
+    userId: string,
+    unreadOnly: boolean,
+    includeArchived = false,
+    cursor?: string,
+    limit = 20,
+  ) {
+    // Enforce max limit
+    const effectiveLimit = Math.min(limit, 100);
+
     const where: any = {
       userId,
       deletedAt: null,
@@ -118,20 +277,30 @@ export class NotificationsService {
       where.isArchived = false;
     }
 
+    // Fetch limit + 1 to determine if there are more results
     const notifications = await this.prisma.notification.findMany({
       where,
+      take: effectiveLimit + 1,
+      cursor: cursor ? { id: cursor } : undefined,
       orderBy: { createdAt: 'desc' },
     });
 
-    return notifications.map((notification) => ({
-      id: notification.id,
-      type: notification.type,
-      title: notification.title,
-      message: notification.message,
-      isRead: notification.isRead,
-      isArchived: notification.isArchived,
-      createdAt: notification.createdAt,
-    }));
+    const hasMore = notifications.length > effectiveLimit;
+    const results = hasMore ? notifications.slice(0, -1) : notifications;
+
+    return {
+      notifications: results.map((notification) => ({
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        isRead: notification.isRead,
+        isArchived: notification.isArchived,
+        createdAt: notification.createdAt,
+      })),
+      nextCursor: hasMore ? results[results.length - 1]?.id : null,
+      hasMore,
+    };
   }
 
   async markAsRead(notificationId: string, userId: string) {
@@ -294,5 +463,35 @@ export class NotificationsService {
     } catch (error) {
       this.logger.error('=== CRON: Notification cleanup failed ===', error);
     }
+  }
+
+  // ============= CACHE MANAGEMENT =============
+
+  /**
+   * Invalidate cached language preference for a user
+   * Call this when a user updates their language preference
+   * @param userId - User ID to invalidate cache for
+   */
+  invalidateLanguageCache(userId: string): void {
+    this.languageCache.delete(userId);
+    this.logger.log(`Language cache invalidated for user ${userId}`);
+  }
+
+  /**
+   * Clear entire language cache (for testing or manual cache reset)
+   */
+  clearLanguageCache(): void {
+    this.languageCache.clear();
+    this.logger.log('Language cache cleared completely');
+  }
+
+  /**
+   * Get cache statistics (for monitoring/debugging)
+   */
+  getLanguageCacheStats(): { size: number; maxSize: number } {
+    return {
+      size: this.languageCache.size,
+      maxSize: 10000,
+    };
   }
 }

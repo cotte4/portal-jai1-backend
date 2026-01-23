@@ -16,9 +16,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import {
-  TaxStatus,
   ProblemType,
-  PreFilingStatus,
   CaseStatus,
   FederalStatusNew,
   StateStatusNew,
@@ -57,37 +55,13 @@ export function IsNotFutureDate(validationOptions?: ValidationOptions) {
 }
 
 export class UpdateStatusDto {
-  // Phase indicator - when true, use federalStatus/stateStatus
-  @IsOptional()
-  @IsBoolean()
-  taxesFiled?: boolean;
-
-  @IsOptional()
-  @IsDateString()
-  @IsNotFutureDate({ message: 'Taxes filed date cannot be in the future' })
-  taxesFiledAt?: string;
-
-  // NEW: Pre-filing status (used when taxesFiled = false)
-  @IsOptional()
-  @IsEnum(PreFilingStatus, { message: 'Invalid pre-filing status' })
-  preFilingStatus?: PreFilingStatus;
-
-  // Federal/State status (used when taxesFiled = true)
-  @IsOptional()
-  @IsEnum(TaxStatus, { message: 'Invalid federal status' })
-  federalStatus?: TaxStatus;
-
-  @IsOptional()
-  @IsEnum(TaxStatus, { message: 'Invalid state status' })
-  stateStatus?: TaxStatus;
-
-  // Comment is REQUIRED for status updates in new system (validated in service)
+  // Comment for status updates
   @IsOptional()
   @IsString()
   @MaxLength(2000, { message: 'Comment must be less than 2000 characters' })
   comment?: string;
 
-  // NEW: Separate comments for federal/state tracks
+  // Separate comments for federal/state tracks
   @IsOptional()
   @IsString()
   @MaxLength(1000, { message: 'Federal comment must be less than 1000 characters' })
@@ -128,21 +102,21 @@ export class UpdateStatusDto {
   @IsNotFutureDate({ message: 'State deposit date cannot be in the future' })
   stateDepositDate?: string;
 
-  // ============= NEW STATUS SYSTEM (v2) =============
+  // ============= STATUS FIELDS =============
 
-  // Unified case status (replaces preFilingStatus + taxesFiled)
+  // Case status (pre-filing workflow)
   @IsOptional()
   @IsEnum(CaseStatus, { message: 'Invalid case status' })
   caseStatus?: CaseStatus;
 
-  // Enhanced federal status
+  // Federal status (post-filing tracking)
   @IsOptional()
-  @IsEnum(FederalStatusNew, { message: 'Invalid federal status (new)' })
+  @IsEnum(FederalStatusNew, { message: 'Invalid federal status' })
   federalStatusNew?: FederalStatusNew;
 
-  // Enhanced state status
+  // State status (post-filing tracking)
   @IsOptional()
-  @IsEnum(StateStatusNew, { message: 'Invalid state status (new)' })
+  @IsEnum(StateStatusNew, { message: 'Invalid state status' })
   stateStatusNew?: StateStatusNew;
 
   // ============= FORCE TRANSITION OVERRIDE =============

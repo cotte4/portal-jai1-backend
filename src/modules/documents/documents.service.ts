@@ -35,6 +35,65 @@ export class DocumentsService {
     private i18n: I18nService,
   ) {}
 
+  /**
+   * Update computed status fields for a client profile.
+   * This is called after document uploads/deletions to keep the fields in sync.
+   */
+  private async updateClientComputedStatus(clientProfileId: string): Promise<void> {
+    try {
+      // Get the client profile with their most recent tax case and documents
+      const clientProfile = await this.prisma.clientProfile.findUnique({
+        where: { id: clientProfileId },
+        include: {
+          taxCases: {
+            orderBy: { taxYear: 'desc' },
+            take: 1,
+            include: {
+              documents: {
+                where: { type: 'w2' },
+                select: { id: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!clientProfile) {
+        return;
+      }
+
+      const taxCase = clientProfile.taxCases[0];
+      const hasW2 = taxCase?.documents && taxCase.documents.length > 0;
+
+      const isReadyToPresent =
+        clientProfile.profileComplete &&
+        !clientProfile.isDraft &&
+        hasW2;
+
+      const isIncomplete = !isReadyToPresent;
+
+      // Only update if values changed
+      if (
+        clientProfile.isReadyToPresent !== isReadyToPresent ||
+        clientProfile.isIncomplete !== isIncomplete
+      ) {
+        await this.prisma.clientProfile.update({
+          where: { id: clientProfileId },
+          data: {
+            isReadyToPresent,
+            isIncomplete,
+          },
+        });
+
+        this.logger.log(
+          `Updated computed status for client ${clientProfileId}: ready=${isReadyToPresent}`
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Failed to update computed status:`, error);
+    }
+  }
+
   async upload(
     userId: string,
     file: Express.Multer.File,
@@ -152,6 +211,11 @@ export class DocumentsService {
       taxYear,
       durationMs: Date.now() - uploadStartTime,
     });
+
+    // === Update computed status fields (for W2 documents especially) ===
+    if (uploadDto.type === 'w2') {
+      await this.updateClientComputedStatus(clientProfile.id);
+    }
 
     // === PROGRESS AUTOMATION: Emit events based on document type ===
     try {
@@ -341,6 +405,11 @@ export class DocumentsService {
     await this.prisma.document.delete({
       where: { id: documentId },
     });
+
+    // Update computed status fields if W2 was deleted
+    if (document.type === 'w2') {
+      await this.updateClientComputedStatus(document.taxCase.clientProfile.id);
+    }
 
     // Audit log - document deletion (keep forever for legal protection)
     this.auditLogsService.log({

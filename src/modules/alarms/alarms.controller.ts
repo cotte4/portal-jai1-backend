@@ -13,7 +13,7 @@ import {
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
-import { AlarmsService, AlarmHistoryFilters } from './alarms.service';
+import { AlarmsService, AlarmHistoryFilters, AlarmDashboardFilters } from './alarms.service';
 import { SetThresholdsDto } from './dto/set-thresholds.dto';
 import type { AlarmType, AlarmLevel, AlarmResolution } from '@prisma/client';
 
@@ -25,11 +25,28 @@ export class AlarmsController {
 
   /**
    * GET /admin/alarms/dashboard
-   * Get all cases with active alarms
+   * Get all cases with active alarms (supports pagination and filters)
+   * Query params:
+   * - hideCompleted: boolean - hide cases with completed status
+   * - level: 'warning' | 'critical' | 'all' - filter by alarm level
+   * - cursor: string - pagination cursor (taxCaseId)
+   * - limit: number - items per page (max 100, default 50)
    */
   @Get('dashboard')
-  async getDashboard() {
-    return this.alarmsService.getDashboard();
+  async getDashboard(
+    @Query('hideCompleted') hideCompleted?: string,
+    @Query('level') level?: 'warning' | 'critical' | 'all',
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const filters: AlarmDashboardFilters = {};
+
+    if (hideCompleted === 'true') filters.hideCompleted = true;
+    if (level) filters.level = level;
+    if (cursor) filters.cursor = cursor;
+    if (limit) filters.limit = parseInt(limit, 10);
+
+    return this.alarmsService.getDashboard(filters);
   }
 
   /**
@@ -84,6 +101,33 @@ export class AlarmsController {
   ) {
     await this.alarmsService.resolveAlarm(alarmId, req.user.id, note);
     return { message: 'Alarm resolved' };
+  }
+
+  /**
+   * POST /admin/alarms/:alarmId/dismiss
+   * Dismiss an alarm for a completed client (hides from dashboard)
+   */
+  @Post(':alarmId/dismiss')
+  async dismissAlarm(
+    @Param('alarmId') alarmId: string,
+    @Body('reason') reason: string | undefined,
+    @Request() req: any,
+  ) {
+    await this.alarmsService.dismissAlarm(alarmId, req.user.id, reason);
+    return { message: 'Alarm dismissed' };
+  }
+
+  /**
+   * POST /admin/alarms/dismiss-all/:taxCaseId
+   * Dismiss all alarms for a completed tax case
+   */
+  @Post('dismiss-all/:taxCaseId')
+  async dismissAllForCase(
+    @Param('taxCaseId') taxCaseId: string,
+    @Request() req: any,
+  ) {
+    await this.alarmsService.dismissAllForCase(taxCaseId, req.user.id);
+    return { message: 'All alarms dismissed for this case' };
   }
 
   /**

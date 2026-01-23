@@ -6,26 +6,37 @@ import {
   Param,
   Query,
   UseGuards,
+  Post,
+  Body,
 } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
+import { NotificationsGateway } from './notifications.gateway';
 import { JwtAuthGuard } from '../../common/guards';
 import { CurrentUser } from '../../common/decorators';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly notificationsGateway: NotificationsGateway,
+  ) {}
 
   @Get()
   async findAll(
     @CurrentUser() user: any,
     @Query('unreadOnly') unreadOnly?: string,
     @Query('includeArchived') includeArchived?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
   ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 20;
     return this.notificationsService.findAll(
       user.id,
       unreadOnly === 'true',
       includeArchived === 'true',
+      cursor,
+      parsedLimit,
     );
   }
 
@@ -64,5 +75,39 @@ export class NotificationsController {
   @Delete(':id')
   async delete(@CurrentUser() user: any, @Param('id') id: string) {
     return this.notificationsService.delete(id, user.id);
+  }
+
+  // ============= DEBUG/TESTING ENDPOINTS =============
+
+  /**
+   * Get WebSocket connection statistics (for debugging)
+   */
+  @Get('websocket/stats')
+  async getWebSocketStats() {
+    return this.notificationsGateway.getConnectionStats();
+  }
+
+  /**
+   * Test endpoint: Send a test notification to yourself
+   * Useful for testing WebSocket delivery
+   */
+  @Post('test')
+  async sendTestNotification(
+    @CurrentUser() user: any,
+    @Body('title') title?: string,
+    @Body('message') message?: string,
+  ) {
+    const notification = await this.notificationsService.create(
+      user.id,
+      'GENERAL',
+      title || 'Test Notification',
+      message || 'This is a test notification sent via WebSocket',
+    );
+
+    return {
+      message: 'Test notification sent',
+      notification,
+      isUserConnected: this.notificationsGateway.isUserConnected(user.id),
+    };
   }
 }

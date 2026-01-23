@@ -298,12 +298,20 @@ export class ReferralsService {
       },
     });
 
+    // Get referred user's name for notification
+    const referredUser = await this.prisma.user.findUnique({
+      where: { id: referredUserId },
+      select: { firstName: true },
+    });
+
     // Notify referrer
-    await this.notificationsService.create(
+    await this.notificationsService.createFromTemplate(
       referrerId,
       'message',
-      'Nuevo referido',
-      'Alguien se registró usando tu código de referido. Cuando complete sus taxes, ganarás recompensas.',
+      'notifications.referral_new',
+      {
+        referredName: referredUser?.firstName || 'Alguien',
+      },
     );
   }
 
@@ -372,11 +380,21 @@ export class ReferralsService {
     const totalCount = await this.getTotalReferralCount(referral.referrerId);
     const discountPercent = this.calculateDiscount(totalCount);
 
-    await this.notificationsService.create(
+    // Get referrer's name for notification
+    const referrer = await this.prisma.user.findUnique({
+      where: { id: referral.referrerId },
+      select: { firstName: true },
+    });
+
+    await this.notificationsService.createFromTemplate(
       referral.referrerId,
       'status_change',
-      'Referido exitoso',
-      `Tu referido completó sus taxes. Ahora tienes ${totalCount} referido(s) y ${discountPercent}% de descuento en tu próxima comisión.`,
+      'notifications.referral_successful',
+      {
+        firstName: referrer?.firstName || 'Cliente',
+        referredName: await this.getReferredName(referral.referredId),
+        amount: REFERRED_BONUS.toString(),
+      },
     );
   }
 
@@ -427,6 +445,17 @@ export class ReferralsService {
       }
     }
     return 0;
+  }
+
+  /**
+   * Get referred user's first name
+   */
+  private async getReferredName(referredId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: referredId },
+      select: { firstName: true },
+    });
+    return user?.firstName || 'Alguien';
   }
 
   /**
@@ -922,11 +951,20 @@ export class ReferralsService {
     });
 
     // Notify user
-    await this.notificationsService.create(
+    const user = await this.prisma.user.findUnique({
+      where: { id: clientId },
+      select: { firstName: true },
+    });
+
+    const discountAmount = dto.discountAmount || 0;
+    await this.notificationsService.createFromTemplate(
       clientId,
       'status_change',
-      'Descuento aplicado',
-      `Se te ha aplicado un descuento de ${dto.discountPercent ? dto.discountPercent + '%' : '$' + dto.discountAmount} en tu comisión.`,
+      'notifications.discount_applied',
+      {
+        firstName: user?.firstName || 'Cliente',
+        amount: discountAmount.toString(),
+      },
     );
 
     // Audit log - discount applied (keep forever for financial tracking)

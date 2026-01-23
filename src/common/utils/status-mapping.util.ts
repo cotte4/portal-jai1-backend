@@ -35,6 +35,7 @@ export function mapFederalStatusToClientDisplay(status: FederalStatusNew | null 
     [FederalStatusNew.in_verification]: 'En verificación',
     [FederalStatusNew.verification_in_progress]: 'En verificación',
     [FederalStatusNew.verification_letter_sent]: 'En verificación',
+    [FederalStatusNew.deposit_pending]: 'Esperando depósito',
     [FederalStatusNew.check_in_transit]: 'Cheque en camino',
     [FederalStatusNew.issues]: 'Problemas - contactar soporte',
     [FederalStatusNew.taxes_sent]: 'Reembolso enviado',
@@ -55,6 +56,7 @@ export function mapStateStatusToClientDisplay(status: StateStatusNew | null | un
     [StateStatusNew.in_verification]: 'En verificación',
     [StateStatusNew.verification_in_progress]: 'En verificación',
     [StateStatusNew.verification_letter_sent]: 'En verificación',
+    [StateStatusNew.deposit_pending]: 'Esperando depósito',
     [StateStatusNew.check_in_transit]: 'Cheque en camino',
     [StateStatusNew.issues]: 'Problemas - contactar soporte',
     [StateStatusNew.taxes_sent]: 'Reembolso enviado',
@@ -94,6 +96,7 @@ export function getFederalStatusNewLabel(status: FederalStatusNew | null | undef
     [FederalStatusNew.in_verification]: 'En Verificación',
     [FederalStatusNew.verification_in_progress]: 'Verificación en Progreso',
     [FederalStatusNew.verification_letter_sent]: 'Carta de Verificación Enviada',
+    [FederalStatusNew.deposit_pending]: 'Depósito Pendiente',
     [FederalStatusNew.check_in_transit]: 'Cheque en Camino',
     [FederalStatusNew.issues]: 'Problemas',
     [FederalStatusNew.taxes_sent]: 'Reembolso Enviado',
@@ -114,6 +117,7 @@ export function getStateStatusNewLabel(status: StateStatusNew | null | undefined
     [StateStatusNew.in_verification]: 'En Verificación',
     [StateStatusNew.verification_in_progress]: 'Verificación en Progreso',
     [StateStatusNew.verification_letter_sent]: 'Carta de Verificación Enviada',
+    [StateStatusNew.deposit_pending]: 'Depósito Pendiente',
     [StateStatusNew.check_in_transit]: 'Cheque en Camino',
     [StateStatusNew.issues]: 'Problemas',
     [StateStatusNew.taxes_sent]: 'Reembolso Enviado',
@@ -294,63 +298,3 @@ export function getHighestAlarmLevel(alarms: StatusAlarm[]): AlarmLevel | null {
   return 'warning';
 }
 
-// ============= BACKWARD COMPATIBILITY HELPERS =============
-
-/**
- * Maps old TaxStatus to new FederalStatusNew for dual-write
- */
-export function mapOldToNewFederalStatus(oldStatus: string | null | undefined): FederalStatusNew | null {
-  if (!oldStatus) return null;
-
-  const mapping: Record<string, FederalStatusNew> = {
-    filed: FederalStatusNew.in_process,
-    pending: FederalStatusNew.in_process,
-    processing: FederalStatusNew.in_process,
-    approved: FederalStatusNew.check_in_transit,
-    rejected: FederalStatusNew.issues,
-    deposited: FederalStatusNew.taxes_completed,
-  };
-
-  return mapping[oldStatus] || null;
-}
-
-/**
- * Maps old TaxStatus to new StateStatusNew for dual-write
- */
-export function mapOldToNewStateStatus(oldStatus: string | null | undefined): StateStatusNew | null {
-  if (!oldStatus) return null;
-
-  const mapping: Record<string, StateStatusNew> = {
-    filed: StateStatusNew.in_process,
-    pending: StateStatusNew.in_process,
-    processing: StateStatusNew.in_process,
-    approved: StateStatusNew.check_in_transit,
-    rejected: StateStatusNew.issues,
-    deposited: StateStatusNew.taxes_completed,
-  };
-
-  return mapping[oldStatus] || null;
-}
-
-/**
- * Derives CaseStatus from old system fields
- */
-export function deriveCaseStatusFromOldSystem(
-  taxesFiled: boolean | undefined,
-  preFilingStatus: string | null | undefined,
-  hasProblem: boolean | undefined,
-): CaseStatus {
-  if (hasProblem) return CaseStatus.case_issues;
-  if (taxesFiled) return CaseStatus.taxes_filed;
-
-  switch (preFilingStatus) {
-    case 'awaiting_registration':
-      return CaseStatus.awaiting_form;
-    case 'awaiting_documents':
-      return CaseStatus.awaiting_docs;
-    case 'documentation_complete':
-      return CaseStatus.preparing;
-    default:
-      return CaseStatus.awaiting_form;
-  }
-}

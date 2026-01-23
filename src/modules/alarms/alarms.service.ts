@@ -30,6 +30,15 @@ export interface AlarmDashboardResponse {
   totalWithAlarms: number;
   totalCritical: number;
   totalWarning: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface AlarmDashboardFilters {
+  hideCompleted?: boolean;
+  level?: 'warning' | 'critical' | 'all';
+  cursor?: string;
+  limit?: number;
 }
 
 export interface AlarmHistoryItem {
@@ -101,16 +110,67 @@ export class AlarmsService {
 
   /**
    * Get alarm dashboard with all cases that have active alarms
+   * Now supports filters and pagination for scalability (100+ clients)
    */
-  async getDashboard(): Promise<AlarmDashboardResponse> {
-    // Get all tax cases with their new status fields and custom thresholds
-    const taxCases = await this.prisma.taxCase.findMany({
-      where: {
+  async getDashboard(filters?: AlarmDashboardFilters): Promise<AlarmDashboardResponse> {
+    const limit = Math.min(filters?.limit || 50, 100);
+
+    // Build WHERE clause with smart pre-filtering
+    const whereConditions: Prisma.TaxCaseWhereInput[] = [
+      // Only include cases that COULD have alarms (active statuses that can trigger alarms)
+      {
         OR: [
-          { federalStatusNew: { not: null } },
-          { stateStatusNew: { not: null } },
+          {
+            federalStatusNew: {
+              in: [
+                'in_process',
+                'in_verification',
+                'verification_in_progress',
+                'verification_letter_sent',
+              ],
+            },
+          },
+          {
+            stateStatusNew: {
+              in: [
+                'in_process',
+                'in_verification',
+                'verification_in_progress',
+                'verification_letter_sent',
+              ],
+            },
+          },
         ],
       },
+    ];
+
+    // Exclude completed cases if requested
+    if (filters?.hideCompleted) {
+      whereConditions.push({
+        AND: [
+          {
+            OR: [
+              { federalStatusNew: { not: 'taxes_completed' } },
+              { federalStatusNew: null },
+            ],
+          },
+          {
+            OR: [
+              { stateStatusNew: { not: 'taxes_completed' } },
+              { stateStatusNew: null },
+            ],
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.TaxCaseWhereInput = {
+      AND: whereConditions,
+    };
+
+    // Only fetch tax cases that could potentially have alarms
+    const taxCases = await this.prisma.taxCase.findMany({
+      where,
       include: {
         clientProfile: {
           include: {
@@ -125,13 +185,17 @@ export class AlarmsService {
         },
         alarmThreshold: true,
       },
+      orderBy: { updatedAt: 'desc' },
+      take: limit + 1, // Fetch one extra for hasMore check
+      cursor: filters?.cursor ? { id: filters.cursor } : undefined,
+      skip: filters?.cursor ? 1 : undefined, // Skip the cursor item
     });
 
     const items: AlarmDashboardItem[] = [];
     let totalCritical = 0;
     let totalWarning = 0;
 
-    for (const taxCase of taxCases) {
+    for (const taxCase of taxCases.slice(0, limit)) {
       // Build custom thresholds from the AlarmThreshold relation
       const customThresholds: CustomAlarmThresholds | null = taxCase.alarmThreshold
         ? {
@@ -154,6 +218,11 @@ export class AlarmsService {
 
       if (alarms.length > 0) {
         const highestLevel = getHighestAlarmLevel(alarms);
+
+        // Filter by level if requested
+        if (filters?.level && filters.level !== 'all' && highestLevel !== filters.level) {
+          continue;
+        }
 
         if (highestLevel === 'critical') totalCritical++;
         else if (highestLevel === 'warning') totalWarning++;
@@ -179,6 +248,9 @@ export class AlarmsService {
       }
     }
 
+    const hasMore = taxCases.length > limit;
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]?.taxCaseId : null;
+
     // Sort by severity (critical first) then by days
     items.sort((a, b) => {
       if (a.highestLevel === 'critical' && b.highestLevel !== 'critical') return -1;
@@ -194,6 +266,8 @@ export class AlarmsService {
       totalWithAlarms: items.length,
       totalCritical,
       totalWarning,
+      hasMore,
+      nextCursor,
     };
   }
 
@@ -327,6 +401,50 @@ export class AlarmsService {
         updatedAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Dismiss an alarm for a completed client
+   * This marks the alarm as "dismissed" so it doesn't show in the dashboard
+   */
+  async dismissAlarm(alarmId: string, userId: string, reason?: string): Promise<void> {
+    const alarm = await this.prisma.alarmHistory.findUnique({
+      where: { id: alarmId },
+    });
+
+    if (!alarm) {
+      throw new NotFoundException(`Alarm ${alarmId} not found`);
+    }
+
+    await this.prisma.alarmHistory.update({
+      where: { id: alarmId },
+      data: {
+        resolution: 'dismissed',
+        resolvedAt: new Date(),
+        resolvedById: userId,
+        resolvedNote: reason || null,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Bulk dismiss all alarms for a completed tax case
+   */
+  async dismissAllForCase(taxCaseId: string, userId: string): Promise<void> {
+    await this.prisma.alarmHistory.updateMany({
+      where: {
+        taxCaseId,
+        resolution: { in: ['active', 'acknowledged'] },
+      },
+      data: {
+        resolution: 'dismissed',
+        resolvedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Dismissed all alarms for tax case ${taxCaseId} by user ${userId}`);
   }
 
   /**

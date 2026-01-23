@@ -3,7 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '@nestjs/config';
-import { PreFilingStatus } from '@prisma/client';
+import { CaseStatus } from '@prisma/client';
 import { redactUserId, sanitizeMetadata } from '../../common/utils/log-sanitizer';
 
 export type ProgressEventType =
@@ -73,10 +73,10 @@ export class ProgressAutomationService {
       where: { id: event.taxCaseId },
     });
 
-    // Only update if still in awaiting_registration or awaiting_documents status
-    if (taxCase && ((taxCase as any).preFilingStatus === 'awaiting_registration' || (taxCase as any).preFilingStatus === 'awaiting_documents')) {
-      await this.updateTaxCaseStatus(event.taxCaseId, 'awaiting_documents' as PreFilingStatus);
-      this.logger.log(`Updated preFilingStatus to awaiting_documents for TaxCase ${redactUserId(event.taxCaseId)}`);
+    // Only update if still in awaiting_form or awaiting_docs status
+    if (taxCase && (taxCase.caseStatus === 'awaiting_form' || taxCase.caseStatus === 'awaiting_docs')) {
+      await this.updateTaxCaseCaseStatus(event.taxCaseId, CaseStatus.awaiting_docs);
+      this.logger.log(`Updated caseStatus to awaiting_docs for TaxCase ${redactUserId(event.taxCaseId)}`);
     }
 
     // Notify all admins
@@ -149,16 +149,17 @@ export class ProgressAutomationService {
   }
 
   /**
-   * Update tax case pre-filing status
+   * Update tax case caseStatus
    */
-  private async updateTaxCaseStatus(
+  private async updateTaxCaseCaseStatus(
     taxCaseId: string,
-    preFilingStatus: PreFilingStatus,
+    caseStatus: CaseStatus,
   ): Promise<void> {
     await this.prisma.taxCase.update({
       where: { id: taxCaseId },
       data: {
-        preFilingStatus,
+        caseStatus,
+        caseStatusChangedAt: new Date(),
         statusUpdatedAt: new Date(),
       },
     });
@@ -218,16 +219,16 @@ export class ProgressAutomationService {
     const hasW2 = taxCase.documents.some((d) => d.type === 'w2');
     const profileComplete = taxCase.clientProfile.profileComplete;
 
-    this.logger.log(`Checking status advancement: hasW2=${hasW2}, profileComplete=${profileComplete}, currentStatus=${(taxCase as any).preFilingStatus}`);
+    this.logger.log(`Checking status advancement: hasW2=${hasW2}, profileComplete=${profileComplete}, currentStatus=${taxCase.caseStatus}`);
 
     // If profile complete AND W2 uploaded AND still in awaiting status
     if (
       profileComplete &&
       hasW2 &&
-      ((taxCase as any).preFilingStatus === 'awaiting_registration' || (taxCase as any).preFilingStatus === 'awaiting_documents')
+      (taxCase.caseStatus === 'awaiting_form' || taxCase.caseStatus === 'awaiting_docs')
     ) {
-      await this.updateTaxCaseStatus(taxCaseId, 'documentation_complete' as PreFilingStatus);
-      this.logger.log(`Auto-advanced status to documentation_complete`);
+      await this.updateTaxCaseCaseStatus(taxCaseId, CaseStatus.preparing);
+      this.logger.log(`Auto-advanced caseStatus to preparing`);
     }
   }
 
@@ -430,7 +431,7 @@ export class ProgressAutomationService {
 
     try {
       // Find clients who:
-      // 1. Are in awaiting_documents or awaiting_registration status
+      // 1. Are in awaiting_form or awaiting_docs status
       // 2. Registered more than X days ago
       // 3. Missing required documents (W2 or profile incomplete)
       const thresholdDate = new Date();
@@ -439,8 +440,8 @@ export class ProgressAutomationService {
       const taxCases = await this.prisma.taxCase.findMany({
         where: {
           OR: [
-            { preFilingStatus: 'awaiting_registration' },
-            { preFilingStatus: 'awaiting_documents' },
+            { caseStatus: 'awaiting_form' },
+            { caseStatus: 'awaiting_docs' },
           ],
           createdAt: { lte: thresholdDate },
         },
@@ -498,14 +499,15 @@ export class ProgressAutomationService {
         if (!profileComplete) missingItems.push('completar tu perfil');
         if (!hasW2) missingItems.push('subir tu documento W2');
 
-        const message = `Hola ${user.firstName}, para continuar con tu declaración de impuestos necesitas: ${missingItems.join(' y ')}. Ingresa a tu portal para completar estos pasos.`;
-
-        // Send the notification
-        await this.notificationsService.create(
+        // Send the notification using template
+        await this.notificationsService.createFromTemplate(
           user.id,
           'docs_missing',
-          'Documentos pendientes',
-          message,
+          'notifications.docs_missing',
+          {
+            firstName: user.firstName,
+            missingDocs: missingItems.join(' y '),
+          },
         );
 
         this.logger.log(`Sent docs_missing notification to client ${redactUserId(user.id)} (${user.firstName} ${user.lastName})`);
@@ -568,13 +570,14 @@ export class ProgressAutomationService {
         return false;
       }
 
-      const message = `Hola ${user.firstName}, para continuar con tu declaración de impuestos necesitas: ${missingItems.join(' y ')}. Ingresa a tu portal para completar estos pasos.`;
-
-      await this.notificationsService.create(
+      await this.notificationsService.createFromTemplate(
         userId,
         'docs_missing',
-        'Documentos pendientes',
-        message,
+        'notifications.docs_missing',
+        {
+          firstName: user.firstName,
+          missingDocs: missingItems.join(' y '),
+        },
       );
 
       this.logger.log(`Sent docs_missing notification to user ${redactUserId(userId)}`);
