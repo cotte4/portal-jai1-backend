@@ -19,49 +19,26 @@ export class ChatbotController {
 
   @Post()
   async chat(@Body() body: ChatRequest) {
-    console.log('Chatbot request received');
-    console.log('N8N_WEBHOOK_URL env:', process.env.N8N_WEBHOOK_URL);
-    console.log('Using webhook URL:', this.webhookUrl);
-    console.log('Message:', body.message);
-
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 55000);
 
-      const requestBody = JSON.stringify({
-        message: body.message,
-        history: body.history || [],
-      });
-      console.log('Request body:', requestBody);
-
       const response = await fetch(this.webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: requestBody,
+        body: JSON.stringify({
+          message: body.message,
+          history: body.history || [],
+        }),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
-      console.log('n8n response status:', response.status);
-      console.log('n8n response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
-
-      // Clone the response to read it twice if needed
-      const responseClone = response.clone();
-
-      let responseText: string;
-      try {
-        responseText = await response.text();
-      } catch (textError) {
-        console.error('Error reading response text:', textError);
-        responseText = await responseClone.json().then(j => JSON.stringify(j)).catch(() => '');
-      }
-
-      console.log('n8n response text length:', responseText?.length);
-      console.log('n8n response text:', responseText);
+      const responseText = await response.text();
 
       if (!response.ok) {
-        throw new Error(`n8n responded with status ${response.status}: ${responseText}`);
+        throw new Error(`n8n responded with status ${response.status}`);
       }
 
       if (!responseText) {
@@ -69,12 +46,10 @@ export class ChatbotController {
       }
 
       const data = JSON.parse(responseText);
-      console.log('Parsed response:', data);
       // n8n AI Agent returns 'output', but we normalize to 'response'
       return { response: data.output || data.response || 'No response from assistant' };
     } catch (error) {
       console.error('Chatbot error:', error.message || error);
-      console.error('Full error:', error);
       return { response: 'Lo siento, el asistente no está disponible en este momento.', error: true };
     }
   }
