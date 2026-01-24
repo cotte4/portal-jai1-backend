@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum } from 'class-validator';
 
 export enum TicketStatus {
@@ -7,6 +8,7 @@ export enum TicketStatus {
 }
 
 export class UpdateStatusDto {
+  @ApiProperty({ description: 'New ticket status', enum: TicketStatus, example: 'in_progress' })
   @IsEnum(TicketStatus)
   status: TicketStatus;
 }

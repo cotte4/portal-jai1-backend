@@ -13,6 +13,7 @@ import { AuditLogFiltersDto, ExportFiltersDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { PAGINATION_LIMITS, validateLimit, validatePage } from '../../common/constants';
 
 @Controller('admin/audit-logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -77,23 +78,8 @@ export class AuditLogsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    // Validate page and limit to prevent DoS attacks
-    const MAX_LIMIT = 100;
-    const DEFAULT_LIMIT = 50;
-    const MAX_PAGE = 10000;
-    const DEFAULT_PAGE = 1;
-
-    const parsedPage = page ? parseInt(page, 10) : DEFAULT_PAGE;
-    const validatedPage =
-      isNaN(parsedPage) || parsedPage < 1
-        ? DEFAULT_PAGE
-        : Math.min(parsedPage, MAX_PAGE);
-
-    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
-    const validatedLimit =
-      isNaN(parsedLimit) || parsedLimit < 1
-        ? DEFAULT_LIMIT
-        : Math.min(parsedLimit, MAX_LIMIT);
+    const validatedPage = validatePage(page, PAGINATION_LIMITS.AUDIT_LOGS_PAGE.MAX);
+    const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.AUDIT_LOGS);
 
     return this.auditLogsService.findByUser(
       userId,

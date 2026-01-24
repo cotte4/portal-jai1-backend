@@ -1,0 +1,3941 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/v1/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "409": {
+            "description": "Email already exists"
+          }
+        },
+        "summary": "Register a new user",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        },
+        "summary": "User login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Logout successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "User logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token refreshed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid refresh token"
+          }
+        },
+        "summary": "Refresh access token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/forgot-password": {
+      "post": {
+        "operationId": "AuthController_forgotPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset email sent (if account exists)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Request password reset email",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/reset-password": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired token"
+          }
+        },
+        "summary": "Reset password with token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/change-password": {
+      "post": {
+        "operationId": "AuthController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid current password"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change password (authenticated)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/google": {
+      "get": {
+        "operationId": "AuthController_googleAuth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/google/callback": {
+      "get": {
+        "operationId": "AuthController_googleAuthCallback",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/google/exchange": {
+      "post": {
+        "operationId": "AuthController_exchangeGoogleCode",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/verify-email/{token}": {
+      "get": {
+        "operationId": "AuthController_verifyEmail",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/resend-verification": {
+      "post": {
+        "operationId": "AuthController_resendVerification",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/users/me": {
+      "get": {
+        "operationId": "UsersController_getMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/v1/users/referral-onboarding/complete": {
+      "post": {
+        "operationId": "UsersController_completeReferralOnboarding",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/v1/users/referral-onboarding/status": {
+      "get": {
+        "operationId": "UsersController_getReferralOnboardingStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/v1/referrals/validate/{code}": {
+      "get": {
+        "operationId": "ReferralsController_validateCode",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/apply-code": {
+      "post": {
+        "operationId": "ReferralsController_applyCode",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyReferralCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/my-referrer": {
+      "get": {
+        "operationId": "ReferralsController_getMyReferrer",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/my-code": {
+      "get": {
+        "operationId": "ReferralsController_getMyCode",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/my-referrals": {
+      "get": {
+        "operationId": "ReferralsController_getMyReferrals",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/my-discount": {
+      "get": {
+        "operationId": "ReferralsController_getMyDiscount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/leaderboard": {
+      "get": {
+        "operationId": "ReferralsController_getLeaderboard",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/mark-onboarding-complete": {
+      "post": {
+        "operationId": "ReferralsController_markReferralOnboardingComplete",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/onboarding-status": {
+      "get": {
+        "operationId": "ReferralsController_getReferralOnboardingStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/admin": {
+      "get": {
+        "operationId": "ReferralsController_getAllReferrals",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/admin/summary": {
+      "get": {
+        "operationId": "ReferralsController_getReferralSummary",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/admin/stats": {
+      "get": {
+        "operationId": "ReferralsController_getStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/admin/{id}/status": {
+      "patch": {
+        "operationId": "ReferralsController_updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReferralStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/referrals/admin/clients/{id}/apply-discount": {
+      "post": {
+        "operationId": "ReferralsController_applyDiscount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyDiscountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/v1/notifications": {
+      "get": {
+        "operationId": "NotificationsController_findAll",
+        "parameters": [
+          {
+            "name": "unreadOnly",
+            "required": false,
+            "in": "query",
+            "description": "Filter to only unread",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeArchived",
+            "required": false,
+            "in": "query",
+            "description": "Include archived notifications",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Pagination cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsPaginatedResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List notifications (paginated)",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/unread-count": {
+      "get": {
+        "operationId": "NotificationsController_getUnreadCount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Unread count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get unread notification count",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/read-all": {
+      "patch": {
+        "operationId": "NotificationsController_markAllAsRead",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationActionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark all notifications as read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/archive-all-read": {
+      "patch": {
+        "operationId": "NotificationsController_archiveAllRead",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Archived",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationActionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive all read notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/read": {
+      "delete": {
+        "operationId": "NotificationsController_deleteAllRead",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationActionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete all read notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/{id}/read": {
+      "patch": {
+        "operationId": "NotificationsController_markAsRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marked as read"
+          },
+          "404": {
+            "description": "Notification not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark notification as read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/{id}/archive": {
+      "patch": {
+        "operationId": "NotificationsController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archived"
+          },
+          "404": {
+            "description": "Notification not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive notification",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/{id}": {
+      "delete": {
+        "operationId": "NotificationsController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Notification not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete notification",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/websocket/stats": {
+      "get": {
+        "operationId": "NotificationsController_getWebSocketStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/notifications/test": {
+      "post": {
+        "operationId": "NotificationsController_sendTestNotification",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/v1/admin/audit-logs": {
+      "get": {
+        "operationId": "AuditLogsController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AuditLogs"
+        ]
+      }
+    },
+    "/v1/admin/audit-logs/actions": {
+      "get": {
+        "operationId": "AuditLogsController_getAvailableActions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AuditLogs"
+        ]
+      }
+    },
+    "/v1/admin/audit-logs/stats": {
+      "get": {
+        "operationId": "AuditLogsController_getStats",
+        "parameters": [
+          {
+            "name": "dateFrom",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AuditLogs"
+        ]
+      }
+    },
+    "/v1/admin/audit-logs/export": {
+      "get": {
+        "operationId": "AuditLogsController_exportToCsv",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AuditLogs"
+        ]
+      }
+    },
+    "/v1/admin/audit-logs/user/{id}": {
+      "get": {
+        "operationId": "AuditLogsController_findByUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "AuditLogs"
+        ]
+      }
+    },
+    "/v1/profile": {
+      "get": {
+        "operationId": "ClientsController_getProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "User profile data"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current user profile",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/profile/complete": {
+      "post": {
+        "operationId": "ClientsController_completeProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Complete or update profile",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/profile/draft": {
+      "get": {
+        "operationId": "ClientsController_getDraft",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Draft data"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get profile draft data",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/profile/user-info": {
+      "patch": {
+        "operationId": "ClientsController_updateUserInfo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "User info updated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update user info (name, phone, address)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/profile/picture": {
+      "post": {
+        "operationId": "ClientsController_uploadProfilePicture",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Picture uploaded"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload profile picture",
+        "tags": [
+          "clients"
+        ]
+      },
+      "delete": {
+        "operationId": "ClientsController_deleteProfilePicture",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/profile/sensitive": {
+      "patch": {
+        "operationId": "ClientsController_updateSensitiveProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSensitiveProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/profile/mark-onboarding-complete": {
+      "post": {
+        "operationId": "ClientsController_markOnboardingComplete",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/stats/season": {
+      "get": {
+        "operationId": "ClientsController_getSeasonStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/accounts": {
+      "get": {
+        "operationId": "ClientsController_getAllClientAccounts",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/{id}/credentials": {
+      "get": {
+        "operationId": "ClientsController_getClientCredentials",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/payments": {
+      "get": {
+        "operationId": "ClientsController_getPaymentsSummary",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/delays": {
+      "get": {
+        "operationId": "ClientsController_getDelaysData",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/alarms": {
+      "get": {
+        "operationId": "ClientsController_getClientsWithAlarms",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients": {
+      "get": {
+        "operationId": "ClientsController_findAll",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hasProblem",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "federalStatus",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stateStatus",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caseStatus",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/export": {
+      "get": {
+        "operationId": "ClientsController_exportToExcel",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hasProblem",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "federalStatus",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stateStatus",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caseStatus",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/{id}": {
+      "get": {
+        "operationId": "ClientsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      },
+      "patch": {
+        "operationId": "ClientsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      },
+      "delete": {
+        "operationId": "ClientsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/{id}/status": {
+      "patch": {
+        "operationId": "ClientsController_updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/{id}/valid-transitions": {
+      "get": {
+        "operationId": "ClientsController_getValidTransitions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/{id}/mark-paid": {
+      "post": {
+        "operationId": "ClientsController_markPaid",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/{id}/problem": {
+      "patch": {
+        "operationId": "ClientsController_setProblem",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetProblemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/{id}/notify": {
+      "post": {
+        "operationId": "ClientsController_sendClientNotification",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendNotificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/progress/check-missing-documents": {
+      "post": {
+        "operationId": "ProgressController_checkMissingDocuments",
+        "parameters": [
+          {
+            "name": "daysThreshold",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "maxNotifications",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Progress"
+        ]
+      }
+    },
+    "/v1/admin/progress/send-missing-docs-notification": {
+      "post": {
+        "operationId": "ProgressController_sendMissingDocsNotification",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Progress"
+        ]
+      }
+    },
+    "/v1/admin/progress/cron/missing-docs/status": {
+      "get": {
+        "operationId": "ProgressController_getMissingDocsCronStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Progress"
+        ]
+      },
+      "patch": {
+        "operationId": "ProgressController_setMissingDocsCronStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Progress"
+        ]
+      }
+    },
+    "/v1/documents/upload": {
+      "post": {
+        "operationId": "DocumentsController_upload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/v1/documents": {
+      "get": {
+        "operationId": "DocumentsController_findAll",
+        "parameters": [
+          {
+            "name": "client_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}/download": {
+      "get": {
+        "operationId": "DocumentsController_download",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/v1/documents/{id}": {
+      "delete": {
+        "operationId": "DocumentsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/v1/tickets": {
+      "post": {
+        "operationId": "TicketsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicketDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Ticket created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTicketResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new support ticket",
+        "tags": [
+          "tickets"
+        ]
+      },
+      "get": {
+        "operationId": "TicketsController_findAll",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "open",
+                "in_progress",
+                "closed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "required": false,
+            "in": "query",
+            "description": "Filter by user ID (admin only)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Pagination cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tickets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketsPaginatedResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List tickets (paginated)",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/v1/tickets/{id}": {
+      "get": {
+        "operationId": "TicketsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketDetailDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ticket not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get ticket details with messages",
+        "tags": [
+          "tickets"
+        ]
+      },
+      "delete": {
+        "operationId": "TicketsController_deleteTicket",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket deleted"
+          },
+          "404": {
+            "description": "Ticket not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete ticket",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/v1/tickets/{id}/messages": {
+      "post": {
+        "operationId": "TicketsController_addMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message added"
+          },
+          "404": {
+            "description": "Ticket not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add message to ticket",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/v1/tickets/{id}/status": {
+      "patch": {
+        "operationId": "TicketsController_updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateTicketStatusResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ticket not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update ticket status (admin only)",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/v1/tickets/{id}/messages/{messageId}": {
+      "delete": {
+        "operationId": "TicketsController_deleteMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message deleted"
+          },
+          "404": {
+            "description": "Message not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete message (admin only)",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/v1/tickets/{id}/messages/read": {
+      "patch": {
+        "operationId": "TicketsController_markMessagesAsRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages marked as read"
+          },
+          "404": {
+            "description": "Ticket not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark messages as read",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/v1/calculator/estimate": {
+      "post": {
+        "operationId": "CalculatorController_estimate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Calculator"
+        ]
+      }
+    },
+    "/v1/calculator/history": {
+      "get": {
+        "operationId": "CalculatorController_getHistory",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Calculator"
+        ]
+      }
+    },
+    "/v1/calculator/latest": {
+      "get": {
+        "operationId": "CalculatorController_getLatestEstimate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Calculator"
+        ]
+      }
+    },
+    "/v1/calculator/has-estimate": {
+      "get": {
+        "operationId": "CalculatorController_hasEstimate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Calculator"
+        ]
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/v1/health/detailed": {
+      "get": {
+        "operationId": "HealthController_detailed",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/v1/admin/storage-cleanup/stats": {
+      "get": {
+        "operationId": "StorageCleanupController_getStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StorageCleanup"
+        ]
+      }
+    },
+    "/v1/admin/storage-cleanup/scan": {
+      "get": {
+        "operationId": "StorageCleanupController_scan",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StorageCleanup"
+        ]
+      }
+    },
+    "/v1/admin/storage-cleanup/execute": {
+      "post": {
+        "operationId": "StorageCleanupController_execute",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteCleanupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StorageCleanup"
+        ]
+      }
+    },
+    "/v1/admin/alarms/dashboard": {
+      "get": {
+        "operationId": "AlarmsController_getDashboard",
+        "parameters": [
+          {
+            "name": "hideCompleted",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
+    "/v1/admin/alarms/history": {
+      "get": {
+        "operationId": "AlarmsController_getHistory",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "alarmType",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "alarmLevel",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resolution",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "track",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
+    "/v1/admin/alarms/{alarmId}/acknowledge": {
+      "post": {
+        "operationId": "AlarmsController_acknowledgeAlarm",
+        "parameters": [
+          {
+            "name": "alarmId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
+    "/v1/admin/alarms/{alarmId}/resolve": {
+      "post": {
+        "operationId": "AlarmsController_resolveAlarm",
+        "parameters": [
+          {
+            "name": "alarmId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
+    "/v1/admin/alarms/{alarmId}/dismiss": {
+      "post": {
+        "operationId": "AlarmsController_dismissAlarm",
+        "parameters": [
+          {
+            "name": "alarmId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
+    "/v1/admin/alarms/dismiss-all/{taxCaseId}": {
+      "post": {
+        "operationId": "AlarmsController_dismissAllForCase",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
+    "/v1/admin/alarms/thresholds/{taxCaseId}": {
+      "get": {
+        "operationId": "AlarmsController_getThresholds",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      },
+      "patch": {
+        "operationId": "AlarmsController_setThresholds",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetThresholdsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      },
+      "delete": {
+        "operationId": "AlarmsController_deleteThresholds",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
+    "/v1/admin/alarms/sync/{taxCaseId}": {
+      "post": {
+        "operationId": "AlarmsController_syncAlarms",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
+    "/v1/chatbot": {
+      "post": {
+        "operationId": "ChatbotController_chat",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Chatbot"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Portal JAI1 API",
+    "description": "API para gestión de tax refunds - Estudiantes J-1",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password (min 8 chars, must include uppercase, lowercase, number, and special char)",
+            "example": "SecureP@ss1"
+          },
+          "first_name": {
+            "type": "string",
+            "description": "User first name",
+            "example": "John"
+          },
+          "last_name": {
+            "type": "string",
+            "description": "User last name",
+            "example": "Doe"
+          },
+          "phone": {
+            "type": "string",
+            "description": "User phone number",
+            "example": "+1234567890"
+          },
+          "referral_code": {
+            "type": "string",
+            "description": "Referral code from another user",
+            "example": "REF123ABC"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "first_name",
+          "last_name"
+        ]
+      },
+      "AuthUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User ID",
+            "example": "uuid-string"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email",
+            "example": "user@example.com"
+          },
+          "role": {
+            "type": "string",
+            "description": "User role",
+            "enum": [
+              "admin",
+              "client"
+            ],
+            "example": "client"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "User first name"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "User last name"
+          },
+          "isProfileComplete": {
+            "type": "boolean",
+            "description": "Whether profile is complete"
+          },
+          "isEmailVerified": {
+            "type": "boolean",
+            "description": "Whether email is verified"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role"
+        ]
+      },
+      "RegisterResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Registration successful"
+          },
+          "user": {
+            "description": "User information",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthUserDto"
+              }
+            ]
+          },
+          "verificationEmailSent": {
+            "type": "boolean",
+            "description": "Whether verification email was sent"
+          }
+        },
+        "required": [
+          "message",
+          "user"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password",
+            "example": "SecureP@ss1"
+          },
+          "rememberMe": {
+            "type": "boolean",
+            "description": "Remember login session",
+            "default": false
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "AuthResponseDto": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "JWT access token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "Refresh token for obtaining new access tokens"
+          },
+          "expires_in": {
+            "type": "number",
+            "description": "Access token expiry time in seconds",
+            "example": 900
+          },
+          "user": {
+            "description": "User information",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthUserDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token",
+          "expires_in"
+        ]
+      },
+      "LogoutResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Logged out successfully"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "RefreshTokenDto": {
+        "type": "object",
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "description": "Refresh token for obtaining new access tokens"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ]
+      },
+      "ForgotPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address to send password reset link",
+            "example": "user@example.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "PasswordResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Password reset token from email"
+          },
+          "new_password": {
+            "type": "string",
+            "description": "New password (min 8 characters)",
+            "example": "NewSecureP@ss1"
+          }
+        },
+        "required": [
+          "token",
+          "new_password"
+        ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "description": "Current password for verification"
+          },
+          "new_password": {
+            "type": "string",
+            "description": "New password (min 8 characters)",
+            "example": "NewSecureP@ss1"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ]
+      },
+      "ApplyReferralCodeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Referral code to apply",
+            "example": "REF123ABC"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "UpdateReferralStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "New referral status",
+            "enum": [
+              "pending",
+              "tax_form_submitted",
+              "awaiting_refund",
+              "successful",
+              "expired"
+            ],
+            "example": "successful"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "ApplyDiscountDto": {
+        "type": "object",
+        "properties": {
+          "discountType": {
+            "type": "string",
+            "description": "Type of discount",
+            "enum": [
+              "referral_bonus",
+              "referrer_reward"
+            ],
+            "example": "referral_bonus"
+          },
+          "discountAmount": {
+            "type": "number",
+            "description": "Fixed discount amount in USD",
+            "example": 50
+          },
+          "discountPercent": {
+            "type": "number",
+            "description": "Percentage discount (0-100)",
+            "example": 10
+          },
+          "referralId": {
+            "type": "string",
+            "description": "Associated referral ID"
+          },
+          "seasonYear": {
+            "type": "number",
+            "description": "Tax season year",
+            "example": 2024
+          },
+          "applyImmediately": {
+            "type": "boolean",
+            "description": "Whether to apply discount immediately",
+            "default": false
+          },
+          "notes": {
+            "type": "string",
+            "description": "Admin notes about the discount"
+          }
+        },
+        "required": [
+          "discountType",
+          "discountAmount",
+          "seasonYear"
+        ]
+      },
+      "NotificationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Notification ID"
+          },
+          "userId": {
+            "type": "string",
+            "description": "User ID who received the notification"
+          },
+          "type": {
+            "type": "string",
+            "description": "Notification type",
+            "enum": [
+              "status_update",
+              "document_update",
+              "message",
+              "refund_update",
+              "referral",
+              "system"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "Notification title"
+          },
+          "message": {
+            "type": "string",
+            "description": "Notification message"
+          },
+          "isRead": {
+            "type": "boolean",
+            "description": "Whether notification has been read"
+          },
+          "isArchived": {
+            "type": "boolean",
+            "description": "Whether notification is archived"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Creation timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "type",
+          "title",
+          "message",
+          "isRead",
+          "isArchived",
+          "createdAt"
+        ]
+      },
+      "NotificationsPaginatedResponseDto": {
+        "type": "object",
+        "properties": {
+          "notifications": {
+            "description": "List of notifications",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationDto"
+            }
+          },
+          "nextCursor": {
+            "type": "object",
+            "description": "Cursor for next page",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "Whether more results exist"
+          }
+        },
+        "required": [
+          "notifications",
+          "hasMore"
+        ]
+      },
+      "UnreadCountResponseDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number",
+            "description": "Number of unread notifications"
+          }
+        },
+        "required": [
+          "count"
+        ]
+      },
+      "NotificationActionResponseDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Success status"
+          },
+          "count": {
+            "type": "number",
+            "description": "Number of affected notifications"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "AddressDto": {
+        "type": "object",
+        "properties": {
+          "street": {
+            "type": "string",
+            "description": "Street address",
+            "example": "123 Main St"
+          },
+          "city": {
+            "type": "string",
+            "description": "City",
+            "example": "New York"
+          },
+          "state": {
+            "type": "string",
+            "description": "State",
+            "example": "NY"
+          },
+          "zip": {
+            "type": "string",
+            "description": "ZIP code",
+            "example": "10001"
+          }
+        }
+      },
+      "BankDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Bank name",
+            "example": "Chase Bank"
+          },
+          "routing_number": {
+            "type": "string",
+            "description": "Bank routing number (9 digits)",
+            "example": "123456789"
+          },
+          "account_number": {
+            "type": "string",
+            "description": "Bank account number"
+          }
+        }
+      },
+      "CompleteProfileDto": {
+        "type": "object",
+        "properties": {
+          "is_draft": {
+            "type": "boolean",
+            "description": "Whether this is a draft save (allows partial data)",
+            "default": false
+          },
+          "payment_method": {
+            "type": "string",
+            "description": "Payment method",
+            "enum": [
+              "bank_deposit",
+              "check"
+            ],
+            "default": "bank_deposit"
+          },
+          "ssn": {
+            "type": "string",
+            "description": "Social Security Number (9 digits, with or without dashes)",
+            "example": "123-45-6789"
+          },
+          "date_of_birth": {
+            "type": "string",
+            "description": "Date of birth (ISO 8601)",
+            "example": "1995-06-15"
+          },
+          "address": {
+            "description": "Mailing address",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AddressDto"
+              }
+            ]
+          },
+          "bank": {
+            "description": "Bank account information",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BankDto"
+              }
+            ]
+          },
+          "work_state": {
+            "type": "string",
+            "description": "State where client worked",
+            "example": "CA"
+          },
+          "employer_name": {
+            "type": "string",
+            "description": "Employer name",
+            "example": "Acme Corporation"
+          },
+          "turbotax_email": {
+            "type": "string",
+            "description": "TurboTax account email"
+          },
+          "turbotax_password": {
+            "type": "string",
+            "description": "TurboTax account password"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Phone number in E.164 format",
+            "example": "+5491112345678"
+          }
+        }
+      },
+      "UpdateSensitiveProfileDto": {
+        "type": "object",
+        "properties": {
+          "ssn": {
+            "type": "string",
+            "description": "Social Security Number (9 digits)",
+            "example": "123-45-6789"
+          },
+          "bankName": {
+            "type": "string",
+            "description": "Bank name",
+            "example": "Chase Bank"
+          },
+          "bankRoutingNumber": {
+            "type": "string",
+            "description": "Bank routing number (9 digits)",
+            "example": "123456789"
+          },
+          "bankAccountNumber": {
+            "type": "string",
+            "description": "Bank account number"
+          },
+          "turbotaxEmail": {
+            "type": "string",
+            "description": "TurboTax account email"
+          },
+          "turbotaxPassword": {
+            "type": "string",
+            "description": "TurboTax account password"
+          }
+        }
+      },
+      "AdminUpdateProfileDto": {
+        "type": "object",
+        "properties": {
+          "ssn": {
+            "type": "string",
+            "description": "Social Security Number"
+          },
+          "addressStreet": {
+            "type": "string",
+            "description": "Street address"
+          },
+          "addressCity": {
+            "type": "string",
+            "description": "City"
+          },
+          "addressState": {
+            "type": "string",
+            "description": "State"
+          },
+          "addressZip": {
+            "type": "string",
+            "description": "ZIP code"
+          },
+          "turbotaxEmail": {
+            "type": "string",
+            "description": "TurboTax account email"
+          },
+          "turbotaxPassword": {
+            "type": "string",
+            "description": "TurboTax account password"
+          },
+          "irsUsername": {
+            "type": "string",
+            "description": "IRS account username"
+          },
+          "irsPassword": {
+            "type": "string",
+            "description": "IRS account password"
+          },
+          "stateUsername": {
+            "type": "string",
+            "description": "State tax portal username"
+          },
+          "statePassword": {
+            "type": "string",
+            "description": "State tax portal password"
+          },
+          "bankName": {
+            "type": "string",
+            "description": "Bank name"
+          },
+          "bankRoutingNumber": {
+            "type": "string",
+            "description": "Bank routing number"
+          },
+          "bankAccountNumber": {
+            "type": "string",
+            "description": "Bank account number"
+          },
+          "workState": {
+            "type": "string",
+            "description": "State where client worked"
+          },
+          "employerName": {
+            "type": "string",
+            "description": "Employer name"
+          }
+        }
+      },
+      "UpdateStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "New ticket status",
+            "enum": [
+              "open",
+              "in_progress",
+              "closed"
+            ],
+            "example": "in_progress"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "SetProblemDto": {
+        "type": "object",
+        "properties": {
+          "hasProblem": {
+            "type": "boolean",
+            "description": "Whether client has a problem"
+          },
+          "problemType": {
+            "type": "string",
+            "description": "Type of problem (required if hasProblem=true)"
+          },
+          "problemDescription": {
+            "type": "string",
+            "description": "Detailed description of the problem"
+          }
+        },
+        "required": [
+          "hasProblem"
+        ]
+      },
+      "SendNotificationDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Notification title",
+            "example": "Important Update"
+          },
+          "message": {
+            "type": "string",
+            "description": "Notification message content"
+          },
+          "sendEmail": {
+            "type": "boolean",
+            "description": "Whether to also send email notification",
+            "default": false
+          }
+        },
+        "required": [
+          "title",
+          "message"
+        ]
+      },
+      "UploadDocumentDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Document type",
+            "enum": [
+              "w2",
+              "payment_proof",
+              "other"
+            ],
+            "example": "w2"
+          },
+          "tax_year": {
+            "type": "number",
+            "description": "Tax year for the document",
+            "example": 2024
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "CreateTicketDto": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string",
+            "description": "Ticket subject/title",
+            "example": "Question about my tax refund status"
+          },
+          "message": {
+            "type": "string",
+            "description": "Initial message for the ticket",
+            "example": "I would like to know when I can expect my refund."
+          }
+        },
+        "required": [
+          "subject"
+        ]
+      },
+      "CreateTicketResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Created ticket ID"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Ticket subject"
+          },
+          "status": {
+            "type": "string",
+            "description": "Ticket status"
+          },
+          "message": {
+            "type": "string",
+            "description": "Success message"
+          }
+        },
+        "required": [
+          "id",
+          "subject",
+          "status",
+          "message"
+        ]
+      },
+      "TicketUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User ID"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "User first name"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "User last name"
+          },
+          "role": {
+            "type": "string",
+            "description": "User role",
+            "enum": [
+              "admin",
+              "client"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "email"
+        ]
+      },
+      "TicketListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Ticket ID"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Ticket subject"
+          },
+          "status": {
+            "type": "string",
+            "description": "Ticket status",
+            "enum": [
+              "open",
+              "in_progress",
+              "closed"
+            ]
+          },
+          "userId": {
+            "type": "string",
+            "description": "Owner user ID"
+          },
+          "unreadCount": {
+            "type": "number",
+            "description": "Number of unread messages"
+          },
+          "messageCount": {
+            "type": "number",
+            "description": "Total message count"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Creation timestamp"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Last update timestamp"
+          },
+          "user": {
+            "description": "User information",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TicketUserDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "subject",
+          "status",
+          "userId",
+          "unreadCount",
+          "messageCount",
+          "createdAt",
+          "updatedAt",
+          "user"
+        ]
+      },
+      "TicketsPaginatedResponseDto": {
+        "type": "object",
+        "properties": {
+          "tickets": {
+            "description": "List of tickets",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketListItemDto"
+            }
+          },
+          "nextCursor": {
+            "type": "object",
+            "description": "Cursor for next page",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "Whether more results exist"
+          }
+        },
+        "required": [
+          "tickets",
+          "hasMore"
+        ]
+      },
+      "MessageSenderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Sender ID"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "Sender first name"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Sender last name"
+          },
+          "role": {
+            "type": "string",
+            "description": "Sender role",
+            "enum": [
+              "admin",
+              "client"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "role"
+        ]
+      },
+      "TicketMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Message ID"
+          },
+          "message": {
+            "type": "string",
+            "description": "Message content"
+          },
+          "senderId": {
+            "type": "string",
+            "description": "Sender ID"
+          },
+          "isRead": {
+            "type": "boolean",
+            "description": "Whether message has been read"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Message creation timestamp"
+          },
+          "sender": {
+            "description": "Sender information",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageSenderDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "message",
+          "senderId",
+          "isRead",
+          "createdAt",
+          "sender"
+        ]
+      },
+      "TicketDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Ticket ID"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Ticket subject"
+          },
+          "status": {
+            "type": "string",
+            "description": "Ticket status",
+            "enum": [
+              "open",
+              "in_progress",
+              "closed"
+            ]
+          },
+          "userId": {
+            "type": "string",
+            "description": "Owner user ID"
+          },
+          "unreadCount": {
+            "type": "number",
+            "description": "Number of unread messages"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Creation timestamp"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Last update timestamp"
+          },
+          "user": {
+            "description": "User information",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TicketUserDto"
+              }
+            ]
+          },
+          "messages": {
+            "description": "Ticket messages",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketMessageDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "subject",
+          "status",
+          "userId",
+          "unreadCount",
+          "createdAt",
+          "updatedAt",
+          "user",
+          "messages"
+        ]
+      },
+      "CreateMessageDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message content",
+            "example": "Thank you for your response."
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "UpdateTicketStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Ticket ID"
+          },
+          "status": {
+            "type": "string",
+            "description": "Updated status"
+          },
+          "message": {
+            "type": "string",
+            "description": "Success message"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "message"
+        ]
+      },
+      "ExecuteCleanupDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "SetThresholdsDto": {
+        "type": "object",
+        "properties": {
+          "federalInProcessDays": {
+            "type": "object",
+            "description": "Days before federal in-process status triggers alarm (1-365)",
+            "example": 21
+          },
+          "stateInProcessDays": {
+            "type": "object",
+            "description": "Days before state in-process status triggers alarm (1-365)",
+            "example": 21
+          },
+          "verificationTimeoutDays": {
+            "type": "object",
+            "description": "Days before verification timeout triggers alarm (1-365)",
+            "example": 14
+          },
+          "letterSentTimeoutDays": {
+            "type": "object",
+            "description": "Days before letter sent timeout triggers alarm (1-365)",
+            "example": 30
+          },
+          "disableFederalAlarms": {
+            "type": "boolean",
+            "description": "Disable federal status alarms",
+            "default": false
+          },
+          "disableStateAlarms": {
+            "type": "boolean",
+            "description": "Disable state status alarms",
+            "default": false
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason for threshold change (for audit log)"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString,
   IsOptional,
@@ -55,78 +56,79 @@ export function IsNotFutureDate(validationOptions?: ValidationOptions) {
 }
 
 export class UpdateStatusDto {
-  // Comment for status updates
+  @ApiPropertyOptional({ description: 'General comment for status update' })
   @IsOptional()
   @IsString()
   @MaxLength(2000, { message: 'Comment must be less than 2000 characters' })
   comment?: string;
 
-  // Separate comments for federal/state tracks
+  @ApiPropertyOptional({ description: 'Comment specific to federal status' })
   @IsOptional()
   @IsString()
   @MaxLength(1000, { message: 'Federal comment must be less than 1000 characters' })
   federalComment?: string;
 
+  @ApiPropertyOptional({ description: 'Comment specific to state status' })
   @IsOptional()
   @IsString()
   @MaxLength(1000, { message: 'State comment must be less than 1000 characters' })
   stateComment?: string;
 
-  // Federal tracking fields
+  @ApiPropertyOptional({ description: 'Estimated federal refund date', example: '2024-03-15' })
   @IsOptional()
   @IsDateString()
   federalEstimatedDate?: string;
 
+  @ApiPropertyOptional({ description: 'Actual federal refund amount', example: 2500 })
   @IsOptional()
   @IsNumber()
   @Min(0, { message: 'Federal refund cannot be negative' })
   federalActualRefund?: number;
 
+  @ApiPropertyOptional({ description: 'Federal refund deposit date', example: '2024-03-10' })
   @IsOptional()
   @IsDateString()
   @IsNotFutureDate({ message: 'Federal deposit date cannot be in the future' })
   federalDepositDate?: string;
 
-  // State tracking fields
+  @ApiPropertyOptional({ description: 'Estimated state refund date', example: '2024-04-01' })
   @IsOptional()
   @IsDateString()
   stateEstimatedDate?: string;
 
+  @ApiPropertyOptional({ description: 'Actual state refund amount', example: 800 })
   @IsOptional()
   @IsNumber()
   @Min(0, { message: 'State refund cannot be negative' })
   stateActualRefund?: number;
 
+  @ApiPropertyOptional({ description: 'State refund deposit date', example: '2024-03-25' })
   @IsOptional()
   @IsDateString()
   @IsNotFutureDate({ message: 'State deposit date cannot be in the future' })
   stateDepositDate?: string;
 
-  // ============= STATUS FIELDS =============
-
-  // Case status (pre-filing workflow)
+  @ApiPropertyOptional({ description: 'Case status (pre-filing workflow)' })
   @IsOptional()
   @IsEnum(CaseStatus, { message: 'Invalid case status' })
   caseStatus?: CaseStatus;
 
-  // Federal status (post-filing tracking)
+  @ApiPropertyOptional({ description: 'Federal status (post-filing tracking)' })
   @IsOptional()
   @IsEnum(FederalStatusNew, { message: 'Invalid federal status' })
   federalStatusNew?: FederalStatusNew;
 
-  // State status (post-filing tracking)
+  @ApiPropertyOptional({ description: 'State status (post-filing tracking)' })
   @IsOptional()
   @IsEnum(StateStatusNew, { message: 'Invalid state status' })
   stateStatusNew?: StateStatusNew;
 
-  // ============= FORCE TRANSITION OVERRIDE =============
-
-  // Allow admin to force an otherwise invalid status transition
+  @ApiPropertyOptional({ description: 'Force an otherwise invalid status transition', default: false })
   @IsOptional()
   @IsBoolean()
   forceTransition?: boolean;
 
-  // Reason is required when forcing a transition (min 10 chars)
+  @ApiPropertyOptional({ description: 'Reason for forcing transition (required if forceTransition=true, min 10 chars)' })
   @ValidateIf((o) => o.forceTransition === true)
   @IsString()
   @MinLength(10, { message: 'Override reason must be at least 10 characters' })
@@ -137,13 +139,16 @@ export class UpdateStatusDto {
 // DEPRECATED: UpdateAdminStepDto removed - use internalStatus changes instead
 
 export class SetProblemDto {
+  @ApiProperty({ description: 'Whether client has a problem' })
   @IsBoolean()
   hasProblem: boolean;
 
+  @ApiPropertyOptional({ description: 'Type of problem (required if hasProblem=true)' })
   @ValidateIf((o) => o.hasProblem === true)
   @IsEnum(ProblemType, { message: 'Problem type is required when marking a problem' })
   problemType?: ProblemType;
 
+  @ApiPropertyOptional({ description: 'Detailed description of the problem' })
   @IsOptional()
   @IsString()
   @MaxLength(2000, { message: 'Problem description must be less than 2000 characters' })
@@ -151,14 +156,17 @@ export class SetProblemDto {
 }
 
 export class SendNotificationDto {
+  @ApiProperty({ description: 'Notification title', example: 'Important Update' })
   @IsString()
   @MaxLength(200, { message: 'Title must be less than 200 characters' })
   title: string;
 
+  @ApiProperty({ description: 'Notification message content' })
   @IsString()
   @MaxLength(2000, { message: 'Message must be less than 2000 characters' })
   message: string;
 
+  @ApiPropertyOptional({ description: 'Whether to also send email notification', default: false })
   @IsOptional()
   @IsBoolean()
   sendEmail?: boolean;
@@ -168,86 +176,97 @@ export class SendNotificationDto {
  * DTO for admin updates to client profile data (including credentials)
  */
 export class AdminUpdateProfileDto {
+  @ApiPropertyOptional({ description: 'Social Security Number' })
   @IsOptional()
   @IsString()
   @MaxLength(20, { message: 'SSN must be less than 20 characters' })
   ssn?: string;
 
+  @ApiPropertyOptional({ description: 'Street address' })
   @IsOptional()
   @IsString()
   @MaxLength(500, { message: 'Street address must be less than 500 characters' })
   addressStreet?: string;
 
+  @ApiPropertyOptional({ description: 'City' })
   @IsOptional()
   @IsString()
   @MaxLength(100, { message: 'City must be less than 100 characters' })
   addressCity?: string;
 
+  @ApiPropertyOptional({ description: 'State' })
   @IsOptional()
   @IsString()
   @MaxLength(50, { message: 'State must be less than 50 characters' })
   addressState?: string;
 
+  @ApiPropertyOptional({ description: 'ZIP code' })
   @IsOptional()
   @IsString()
   @MaxLength(20, { message: 'ZIP code must be less than 20 characters' })
   addressZip?: string;
 
-  // TurboTax credentials
+  @ApiPropertyOptional({ description: 'TurboTax account email' })
   @IsOptional()
   @IsString()
   @MaxLength(255, { message: 'TurboTax email must be less than 255 characters' })
   turbotaxEmail?: string;
 
+  @ApiPropertyOptional({ description: 'TurboTax account password' })
   @IsOptional()
   @IsString()
   @MaxLength(200, { message: 'TurboTax password must be less than 200 characters' })
   turbotaxPassword?: string;
 
-  // IRS account credentials (encrypted)
+  @ApiPropertyOptional({ description: 'IRS account username' })
   @IsOptional()
   @IsString()
   @MaxLength(100, { message: 'IRS username must be less than 100 characters' })
   irsUsername?: string;
 
+  @ApiPropertyOptional({ description: 'IRS account password' })
   @IsOptional()
   @IsString()
   @MaxLength(200, { message: 'IRS password must be less than 200 characters' })
   irsPassword?: string;
 
-  // State account credentials (encrypted)
+  @ApiPropertyOptional({ description: 'State tax portal username' })
   @IsOptional()
   @IsString()
   @MaxLength(100, { message: 'State username must be less than 100 characters' })
   stateUsername?: string;
 
+  @ApiPropertyOptional({ description: 'State tax portal password' })
   @IsOptional()
   @IsString()
   @MaxLength(200, { message: 'State password must be less than 200 characters' })
   statePassword?: string;
 
-  // Bank info (stored in TaxCase)
+  @ApiPropertyOptional({ description: 'Bank name' })
   @IsOptional()
   @IsString()
   @MaxLength(100, { message: 'Bank name must be less than 100 characters' })
   bankName?: string;
 
+  @ApiPropertyOptional({ description: 'Bank routing number' })
   @IsOptional()
   @IsString()
   @MaxLength(20, { message: 'Routing number must be less than 20 characters' })
   bankRoutingNumber?: string;
 
+  @ApiPropertyOptional({ description: 'Bank account number' })
   @IsOptional()
   @IsString()
   @MaxLength(30, { message: 'Account number must be less than 30 characters' })
   bankAccountNumber?: string;
 
-  // Employment info (stored in TaxCase)
+  @ApiPropertyOptional({ description: 'State where client worked' })
   @IsOptional()
   @IsString()
   @MaxLength(50, { message: 'Work state must be less than 50 characters' })
   workState?: string;
 
+  @ApiPropertyOptional({ description: 'Employer name' })
   @IsOptional()
   @IsString()
   @MaxLength(200, { message: 'Employer name must be less than 200 characters' })

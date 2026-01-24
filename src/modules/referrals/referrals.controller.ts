@@ -12,6 +12,7 @@ import { UserRole } from '@prisma/client';
 import { ReferralsService } from './referrals.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
+import { PAGINATION_LIMITS, validateLimit, validateOffset } from '../../common/constants';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
 import { ApplyReferralCodeDto } from './dto/apply-referral-code.dto';
 import { UpdateReferralStatusDto } from './dto/update-referral-status.dto';
@@ -83,14 +84,7 @@ export class ReferralsController {
   @Get('leaderboard')
   @UseGuards(JwtAuthGuard)
   async getLeaderboard(@Query('limit') limit?: string) {
-    // Validate limit to prevent DoS attacks
-    const MAX_LIMIT = 100;
-    const DEFAULT_LIMIT = 10;
-    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
-    const validatedLimit =
-      isNaN(parsedLimit) || parsedLimit < 1
-        ? DEFAULT_LIMIT
-        : Math.min(parsedLimit, MAX_LIMIT);
+    const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.LEADERBOARD);
     return this.referralsService.getLeaderboard(validatedLimit);
   }
 
@@ -124,28 +118,8 @@ export class ReferralsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    // Validate limit and offset to prevent DoS attacks
-    const MAX_LIMIT = 1000;
-    const DEFAULT_LIMIT = 50;
-    const MAX_OFFSET = 100000;
-
-    let validatedLimit: number | undefined;
-    if (limit) {
-      const parsedLimit = parseInt(limit, 10);
-      validatedLimit =
-        isNaN(parsedLimit) || parsedLimit < 1
-          ? DEFAULT_LIMIT
-          : Math.min(parsedLimit, MAX_LIMIT);
-    }
-
-    let validatedOffset: number | undefined;
-    if (offset) {
-      const parsedOffset = parseInt(offset, 10);
-      validatedOffset =
-        isNaN(parsedOffset) || parsedOffset < 0
-          ? 0
-          : Math.min(parsedOffset, MAX_OFFSET);
-    }
+    const validatedLimit = limit ? validateLimit(limit, PAGINATION_LIMITS.REFERRALS) : undefined;
+    const validatedOffset = offset ? validateOffset(offset) : undefined;
 
     return this.referralsService.getAllReferrals({
       status,
@@ -166,19 +140,7 @@ export class ReferralsController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
-    // Validate limit to prevent DoS attacks
-    const MAX_LIMIT = 100;
-    const DEFAULT_LIMIT = 50;
-    let validatedLimit = DEFAULT_LIMIT;
-
-    if (limit) {
-      const parsedLimit = parseInt(limit, 10);
-      validatedLimit =
-        isNaN(parsedLimit) || parsedLimit < 1
-          ? DEFAULT_LIMIT
-          : Math.min(parsedLimit, MAX_LIMIT);
-    }
-
+    const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.REFERRALS_SUMMARY);
     return this.referralsService.getReferralSummary({
       cursor,
       limit: validatedLimit,

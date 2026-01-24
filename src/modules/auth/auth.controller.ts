@@ -10,6 +10,7 @@ import {
   Res,
   Param,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
@@ -21,9 +22,11 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { AuthResponseDto, RegisterResponseDto, PasswordResponseDto, LogoutResponseDto } from './dto/auth-response.dto';
 import { JwtAuthGuard } from '../../common/guards';
 import { CurrentUser } from '../../common/decorators';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -32,14 +35,21 @@ export class AuthController {
   ) {}
 
   @Post('register')
-  @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 attempts per minute
+  @ApiOperation({ summary: 'Register a new user' })
+  @ApiResponse({ status: 201, description: 'User registered successfully', type: RegisterResponseDto })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 409, description: 'Email already exists' })
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
+  @ApiOperation({ summary: 'User login' })
+  @ApiResponse({ status: 200, description: 'Login successful', type: AuthResponseDto })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async login(@Body() loginDto: LoginDto, @Req() req: any) {
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
@@ -49,17 +59,22 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'User logout' })
+  @ApiResponse({ status: 200, description: 'Logout successful', type: LogoutResponseDto })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async logout(
     @CurrentUser() user: any,
     @Body('refresh_token') refreshToken?: string,
   ) {
-    // Pass the refresh token to revoke the specific session
-    // If not provided, all sessions will be revoked
     return this.authService.logout(user.id, refreshToken);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiResponse({ status: 200, description: 'Token refreshed', type: AuthResponseDto })
+  @ApiResponse({ status: 401, description: 'Invalid refresh token' })
   async refresh(@Body() refreshTokenDto: RefreshTokenDto, @Req() req: any) {
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
@@ -68,13 +83,18 @@ export class AuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 attempts per minute
+  @ApiOperation({ summary: 'Request password reset email' })
+  @ApiResponse({ status: 200, description: 'Reset email sent (if account exists)', type: PasswordResponseDto })
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto.email);
   }
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password with token' })
+  @ApiResponse({ status: 200, description: 'Password reset successful', type: PasswordResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid or expired token' })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(
       resetPasswordDto.token,
@@ -85,6 +105,10 @@ export class AuthController {
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password (authenticated)' })
+  @ApiResponse({ status: 200, description: 'Password changed', type: PasswordResponseDto })
+  @ApiResponse({ status: 401, description: 'Invalid current password' })
   async changePassword(
     @CurrentUser() user: any,
     @Body() changePasswordDto: ChangePasswordDto,

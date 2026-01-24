@@ -1,6 +1,7 @@
 // Sentry must be imported first
 import './instrument';
 
+import { writeFileSync } from 'fs';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -64,6 +65,12 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
+
+  // Export OpenAPI spec for frontend type generation
+  if (isDev || process.env.GENERATE_OPENAPI === 'true') {
+    writeFileSync('./openapi.json', JSON.stringify(document, null, 2));
+    console.log('📄 OpenAPI spec written to openapi.json');
+  }
 
   const port = configService.get<number>('PORT') || 3000;
   await app.listen(port, '0.0.0.0');

@@ -26,7 +26,8 @@
     "test:db:down": "docker-compose -f docker-compose.test.yml down",
     "test:db:reset": "docker-compose -f docker-compose.test.yml down -v && docker-compose -f docker-compose.test.yml up -d",
     "test:db:push": "ts-node test/scripts/db-push.ts",
-    "create-admin": "ts-node scripts/create-admin.ts"
+    "create-admin": "ts-node scripts/create-admin.ts",
+    "generate:openapi": "GENERATE_OPENAPI=true nest start --watch=false"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

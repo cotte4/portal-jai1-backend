@@ -16,6 +16,7 @@ import {
   MaxFileSizeValidator,
   FileTypeValidator,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
@@ -23,6 +24,7 @@ import { UserRole } from '@prisma/client';
 import { ClientsService } from './clients.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
+import { PAGINATION_LIMITS, validateLimit } from '../../common/constants';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { UpdateSensitiveProfileDto } from './dto/update-sensitive-profile.dto';
 import {
@@ -32,6 +34,7 @@ import {
   AdminUpdateProfileDto,
 } from './dto/admin-update.dto';
 
+@ApiTags('clients')
 @Controller()
 export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}
@@ -39,12 +42,19 @@ export class ClientsController {
   // Client endpoints
   @Get('profile')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'User profile data' })
   async getProfile(@CurrentUser() user: any) {
     return this.clientsService.getProfile(user.id);
   }
 
   @Post('profile/complete')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Complete or update profile' })
+  @ApiResponse({ status: 200, description: 'Profile updated' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
   async completeProfile(
     @CurrentUser() user: any,
     @Body() completeProfileDto: CompleteProfileDto,
@@ -54,12 +64,18 @@ export class ClientsController {
 
   @Get('profile/draft')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get profile draft data' })
+  @ApiResponse({ status: 200, description: 'Draft data' })
   async getDraft(@CurrentUser() user: any) {
     return this.clientsService.getDraft(user.id);
   }
 
   @Patch('profile/user-info')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update user info (name, phone, address)' })
+  @ApiResponse({ status: 200, description: 'User info updated' })
   async updateUserInfo(
     @CurrentUser() user: any,
     @Body()
@@ -82,6 +98,10 @@ export class ClientsController {
 
   @Post('profile/picture')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Upload profile picture' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Picture uploaded' })
   @UseInterceptors(FileInterceptor('file'))
   async uploadProfilePicture(
     @CurrentUser() user: any,
@@ -140,15 +160,7 @@ export class ClientsController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
-    // Validate limit to prevent DoS attacks
-    const MAX_LIMIT = 500;
-    const DEFAULT_LIMIT = 50;
-    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
-    const validatedLimit =
-      isNaN(parsedLimit) || parsedLimit < 1
-        ? DEFAULT_LIMIT
-        : Math.min(parsedLimit, MAX_LIMIT);
-
+    const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.ACCOUNTS);
     return this.clientsService.getAllClientAccounts({ cursor, limit: validatedLimit });
   }
 
@@ -172,15 +184,7 @@ export class ClientsController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
-    // Validate limit to prevent DoS attacks
-    const MAX_LIMIT = 500;
-    const DEFAULT_LIMIT = 50;
-    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
-    const validatedLimit =
-      isNaN(parsedLimit) || parsedLimit < 1
-        ? DEFAULT_LIMIT
-        : Math.min(parsedLimit, MAX_LIMIT);
-
+    const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.PAYMENTS);
     return this.clientsService.getPaymentsSummary({ cursor, limit: validatedLimit });
   }
 
@@ -195,15 +199,7 @@ export class ClientsController {
     @Query('dateTo') dateTo?: string,
     @Query('status') status?: string,
   ) {
-    // Validate limit to prevent DoS attacks
-    const MAX_LIMIT = 500;
-    const DEFAULT_LIMIT = 50;
-    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
-    const validatedLimit =
-      isNaN(parsedLimit) || parsedLimit < 1
-        ? DEFAULT_LIMIT
-        : Math.min(parsedLimit, MAX_LIMIT);
-
+    const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.DELAYS);
     return this.clientsService.getDelaysData({
       cursor,
       limit: validatedLimit,
@@ -240,14 +236,7 @@ export class ClientsController {
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
   ) {
-    // Validate limit to prevent DoS attacks
-    const MAX_LIMIT = 1000;
-    const DEFAULT_LIMIT = 20;
-    const parsedLimit = limit ? parseInt(limit, 10) : DEFAULT_LIMIT;
-    const validatedLimit =
-      isNaN(parsedLimit) || parsedLimit < 1
-        ? DEFAULT_LIMIT
-        : Math.min(parsedLimit, MAX_LIMIT);
+    const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.CLIENTS);
 
     // Parse boolean filter
     const hasProblemBool = hasProblem === 'true' ? true : hasProblem === 'false' ? false : undefined;

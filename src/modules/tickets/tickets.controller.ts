@@ -13,13 +13,21 @@ import {
   ParseUUIDPipe,
   BadRequestException,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { TicketsService } from './tickets.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
+import { PAGINATION_LIMITS, validateLimit } from '../../common/constants';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import {
+  TicketsPaginatedResponseDto,
+  TicketDetailDto,
+  CreateTicketResponseDto,
+  UpdateTicketStatusResponseDto,
+} from './dto/ticket-response.dto';
 
 // Type for authenticated user from JWT
 interface AuthenticatedUser {
@@ -28,6 +36,8 @@ interface AuthenticatedUser {
   role: 'admin' | 'client';
 }
 
+@ApiTags('tickets')
+@ApiBearerAuth()
 @Controller('tickets')
 @UseGuards(JwtAuthGuard)
 export class TicketsController {
@@ -35,6 +45,9 @@ export class TicketsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new support ticket' })
+  @ApiResponse({ status: 201, description: 'Ticket created', type: CreateTicketResponseDto })
+  @ApiResponse({ status: 400, description: 'Validation error' })
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() createTicketDto: CreateTicketDto,
@@ -44,6 +57,12 @@ export class TicketsController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List tickets (paginated)' })
+  @ApiQuery({ name: 'status', required: false, enum: ['open', 'in_progress', 'closed'] })
+  @ApiQuery({ name: 'user_id', required: false, description: 'Filter by user ID (admin only)' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'Pagination cursor' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'List of tickets', type: TicketsPaginatedResponseDto })
   async findAll(
     @CurrentUser() user: AuthenticatedUser,
     @Query('status') status?: string,
@@ -56,11 +75,7 @@ export class TicketsController {
       throw new BadRequestException('Invalid status. Must be one of: open, in_progress, closed');
     }
 
-    // Parse limit to integer with default 20
-    const limit = limitStr ? parseInt(limitStr, 10) : 20;
-    if (isNaN(limit) || limit < 1) {
-      throw new BadRequestException('Invalid limit. Must be a positive integer.');
-    }
+    const limit = validateLimit(limitStr, PAGINATION_LIMITS.TICKETS);
 
     // Admin can see all tickets, client can only see their own
     if (user.role === 'admin') {
@@ -71,6 +86,9 @@ export class TicketsController {
 
   @Get(':id')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get ticket details with messages' })
+  @ApiResponse({ status: 200, description: 'Ticket details', type: TicketDetailDto })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
   async findOne(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: string,
@@ -80,6 +98,9 @@ export class TicketsController {
 
   @Post(':id/messages')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Add message to ticket' })
+  @ApiResponse({ status: 201, description: 'Message added' })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
   async addMessage(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: string,
@@ -92,6 +113,9 @@ export class TicketsController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.admin)
+  @ApiOperation({ summary: 'Update ticket status (admin only)' })
+  @ApiResponse({ status: 200, description: 'Status updated', type: UpdateTicketStatusResponseDto })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
   async updateStatus(
     @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: string,
     @Body() updateStatusDto: UpdateStatusDto,
@@ -101,6 +125,9 @@ export class TicketsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete ticket' })
+  @ApiResponse({ status: 200, description: 'Ticket deleted' })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
   async deleteTicket(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: string,
@@ -112,6 +139,9 @@ export class TicketsController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles(UserRole.admin)
+  @ApiOperation({ summary: 'Delete message (admin only)' })
+  @ApiResponse({ status: 200, description: 'Message deleted' })
+  @ApiResponse({ status: 404, description: 'Message not found' })
   async deleteMessage(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: string,
@@ -122,6 +152,9 @@ export class TicketsController {
 
   @Patch(':id/messages/read')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark messages as read' })
+  @ApiResponse({ status: 200, description: 'Messages marked as read' })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
   async markMessagesAsRead(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.BAD_REQUEST })) id: string,
