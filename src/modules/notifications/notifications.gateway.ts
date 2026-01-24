@@ -188,4 +188,34 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     const socketIds = this.userSockets.get(userId);
     return !!(socketIds && socketIds.size > 0);
   }
+
+  /**
+   * Emit a ticket message event to a specific user
+   */
+  emitTicketMessage(userId: string, ticketId: string, message: any): void {
+    const socketIds = this.userSockets.get(userId);
+    if (!socketIds || socketIds.size === 0) {
+      this.logger.debug(`No active connections for user ${userId} for ticket message`);
+      return;
+    }
+    this.logger.log(`Emitting ticket message to user ${userId} for ticket ${ticketId}`);
+    socketIds.forEach((socketId) => {
+      this.server.to(socketId).emit('ticket:message', { ticketId, message });
+    });
+  }
+
+  /**
+   * Emit ticket status change event
+   */
+  emitTicketStatusChange(userId: string, ticketId: string, newStatus: string): void {
+    const socketIds = this.userSockets.get(userId);
+    if (!socketIds || socketIds.size === 0) {
+      this.logger.debug(`No active connections for user ${userId} for ticket status change`);
+      return;
+    }
+    this.logger.log(`Emitting ticket status change to user ${userId} for ticket ${ticketId}: ${newStatus}`);
+    socketIds.forEach((socketId) => {
+      this.server.to(socketId).emit('ticket:status', { ticketId, status: newStatus });
+    });
+  }
 }

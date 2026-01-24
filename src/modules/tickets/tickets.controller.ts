@@ -48,17 +48,25 @@ export class TicketsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('status') status?: string,
     @Query('user_id') userId?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limitStr?: string,
   ) {
     // Validate status if provided
     if (status && !['open', 'in_progress', 'closed'].includes(status)) {
       throw new BadRequestException('Invalid status. Must be one of: open, in_progress, closed');
     }
 
+    // Parse limit to integer with default 20
+    const limit = limitStr ? parseInt(limitStr, 10) : 20;
+    if (isNaN(limit) || limit < 1) {
+      throw new BadRequestException('Invalid limit. Must be a positive integer.');
+    }
+
     // Admin can see all tickets, client can only see their own
     if (user.role === 'admin') {
-      return this.ticketsService.findAll({ status, userId });
+      return this.ticketsService.findAll({ status, userId, cursor, limit });
     }
-    return this.ticketsService.findAll({ status, userId: user.id });
+    return this.ticketsService.findAll({ status, userId: user.id, cursor, limit });
   }
 
   @Get(':id')

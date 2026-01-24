@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
@@ -50,6 +51,12 @@ export interface TicketResponse {
   updatedAt: Date;
 }
 
+export interface PaginatedTicketsResponse {
+  tickets: Omit<TicketResponse, 'messages'>[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 @Injectable()
 export class TicketsService {
   private readonly logger = new Logger(TicketsService.name);
@@ -57,6 +64,7 @@ export class TicketsService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   async create(userId: string, createTicketDto: CreateTicketDto): Promise<TicketResponse> {
@@ -114,10 +122,13 @@ export class TicketsService {
     }
   }
 
-  async findAll(options: { status?: string; userId?: string }): Promise<Omit<TicketResponse, 'messages'>[]> {
+  async findAll(options: { status?: string; userId?: string; cursor?: string; limit?: number }): Promise<PaginatedTicketsResponse> {
     this.logger.debug(`Finding tickets with options: ${JSON.stringify(options)}`);
 
     try {
+      // Enforce max limit and set default
+      const effectiveLimit = Math.min(options.limit || 20, 100);
+
       // Build where clause with proper Prisma types - exclude soft-deleted tickets
       const where: Prisma.TicketWhereInput = {
         deletedAt: null,
@@ -131,8 +142,12 @@ export class TicketsService {
         where.userId = options.userId;
       }
 
+      // Fetch limit + 1 to determine if there are more results
       const tickets = await this.prisma.ticket.findMany({
         where,
+        take: effectiveLimit + 1,
+        skip: options.cursor ? 1 : 0, // Skip the cursor record itself
+        cursor: options.cursor ? { id: options.cursor } : undefined,
         select: {
           id: true,
           subject: true,
@@ -160,9 +175,12 @@ export class TicketsService {
         orderBy: { updatedAt: 'desc' },
       });
 
-      this.logger.debug(`Found ${tickets.length} tickets`);
+      const hasMore = tickets.length > effectiveLimit;
+      const results = hasMore ? tickets.slice(0, -1) : tickets;
 
-      return tickets.map((ticket) => ({
+      this.logger.debug(`Found ${results.length} tickets, hasMore: ${hasMore}`);
+
+      const mappedTickets = results.map((ticket) => ({
         id: ticket.id,
         userId: ticket.userId,
         subject: ticket.subject,
@@ -178,6 +196,12 @@ export class TicketsService {
         createdAt: ticket.createdAt,
         updatedAt: ticket.updatedAt,
       }));
+
+      return {
+        tickets: mappedTickets,
+        nextCursor: hasMore && results.length > 0 ? results[results.length - 1].id : null,
+        hasMore,
+      };
     } catch (error) {
       this.logger.error('Error in findAll tickets', error instanceof Error ? error.stack : error);
       throw new InternalServerErrorException('Failed to fetch tickets');
@@ -408,6 +432,29 @@ export class TicketsService {
         });
       }
 
+      // Emit WebSocket event for real-time updates
+      // Notify the ticket owner if someone else sent the message
+      const recipientUserId = userRole === 'admin' ? ticket.userId : null;
+      if (recipientUserId) {
+        const messagePayload = {
+          id: newMessage.id,
+          ticketId: ticket.id,
+          message: newMessage.message,
+          senderId: newMessage.senderId,
+          isRead: newMessage.isRead,
+          sender: newMessage.sender
+            ? {
+                id: newMessage.sender.id,
+                firstName: newMessage.sender.firstName,
+                lastName: newMessage.sender.lastName,
+                role: newMessage.sender.role,
+              }
+            : null,
+          createdAt: newMessage.createdAt,
+        };
+        this.notificationsGateway.emitTicketMessage(recipientUserId, ticketId, messagePayload);
+      }
+
       this.logger.log(`Successfully added message to ticket ${ticketId}`);
 
       // Build response from transaction data (no extra query needed)
@@ -475,10 +522,10 @@ export class TicketsService {
     this.logger.log(`Updating status of ticket ${ticketId} to ${updateStatusDto.status}`);
 
     try {
-      // First check if ticket exists
+      // First check if ticket exists and get userId for WebSocket notification
       const existingTicket = await this.prisma.ticket.findUnique({
         where: { id: ticketId },
-        select: { id: true },
+        select: { id: true, userId: true },
       });
 
       if (!existingTicket) {
@@ -493,6 +540,9 @@ export class TicketsService {
       });
 
       this.logger.log(`Successfully updated ticket ${ticketId} status to ${ticket.status}`);
+
+      // Emit WebSocket event for real-time status updates
+      this.notificationsGateway.emitTicketStatusChange(existingTicket.userId, ticketId, ticket.status);
 
       return {
         id: ticket.id,
