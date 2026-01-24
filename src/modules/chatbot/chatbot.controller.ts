@@ -70,7 +70,8 @@ export class ChatbotController {
 
       const data = JSON.parse(responseText);
       console.log('Parsed response:', data);
-      return { response: data.response || 'No response from assistant' };
+      // n8n AI Agent returns 'output', but we normalize to 'response'
+      return { response: data.output || data.response || 'No response from assistant' };
     } catch (error) {
       console.error('Chatbot error:', error.message || error);
       console.error('Full error:', error);
