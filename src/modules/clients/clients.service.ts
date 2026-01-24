@@ -3310,7 +3310,7 @@ export class ClientsService {
       completedCases,
       depositedCases,
       actualRefundAggregates,
-      estimatedRefundAggregates,
+      projectedRefundResult,
     ] = await Promise.all([
       // Total clients count
       this.prisma.clientProfile.count(),
@@ -3352,14 +3352,17 @@ export class ClientsService {
         },
       }),
 
-      // Sum of estimated refunds for all cases (projected earnings)
-      this.prisma.taxCase.aggregate({
-        _sum: {
-          estimatedRefund: true,
-          federalActualRefund: true,
-          stateActualRefund: true,
-        },
-      }),
+      // Sum of projected refunds for all cases (per-client: use estimatedRefund if available, else actual)
+      // This raw query properly handles the per-row fallback logic
+      this.prisma.$queryRaw<[{ projectedBase: number | null }]>`
+        SELECT SUM(
+          COALESCE(
+            "estimatedRefund",
+            COALESCE("federalActualRefund", 0) + COALESCE("stateActualRefund", 0)
+          )
+        ) as "projectedBase"
+        FROM "TaxCase"
+      `,
     ]);
 
     // Calculate completed count (max of status-based or date-based)
@@ -3370,12 +3373,8 @@ export class ClientsService {
     const actualState = Number(actualRefundAggregates._sum.stateActualRefund || 0);
     const earningsToDate = (actualFederal + actualState) * COMMISSION_RATE;
 
-    // Calculate projected earnings
-    // Use estimatedRefund if available, otherwise use actualRefund
-    const totalEstimated = Number(estimatedRefundAggregates._sum.estimatedRefund || 0);
-    const totalActualFederal = Number(estimatedRefundAggregates._sum.federalActualRefund || 0);
-    const totalActualState = Number(estimatedRefundAggregates._sum.stateActualRefund || 0);
-    const projectedBase = totalEstimated > 0 ? totalEstimated : (totalActualFederal + totalActualState);
+    // Calculate projected earnings from per-client projected refunds
+    const projectedBase = Number(projectedRefundResult[0]?.projectedBase || 0);
     const projectedEarnings = projectedBase * COMMISSION_RATE;
 
     return {
