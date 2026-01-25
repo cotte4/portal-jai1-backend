@@ -505,6 +505,11 @@ export class AuthService {
       throw new BadRequestException('User not found');
     }
 
+    // OAuth-only users cannot change password (they don't have one)
+    if (!user.passwordHash) {
+      throw new BadRequestException('Cannot change password for Google-only accounts. Please use Google to sign in.');
+    }
+
     // Verify current password
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!isCurrentPasswordValid) {
