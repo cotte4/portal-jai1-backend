@@ -1097,6 +1097,214 @@
         ]
       }
     },
+    "/v1/jai1gents/validate-invite/{code}": {
+      "get": {
+        "operationId": "Jai1gentsController_validateInviteCode",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
+    "/v1/jai1gents/validate-referral/{code}": {
+      "get": {
+        "operationId": "Jai1gentsController_validateReferralCode",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
+    "/v1/jai1gents/register": {
+      "post": {
+        "operationId": "Jai1gentsController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterJai1gentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
+    "/v1/jai1gents/dashboard": {
+      "get": {
+        "operationId": "Jai1gentsController_getDashboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
+    "/v1/jai1gents/profile": {
+      "patch": {
+        "operationId": "Jai1gentsController_updateProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateJai1gentProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
+    "/v1/jai1gents/admin/invite-codes": {
+      "post": {
+        "operationId": "Jai1gentsController_generateInviteCodes",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateInviteCodesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      },
+      "get": {
+        "operationId": "Jai1gentsController_listInviteCodes",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
+    "/v1/jai1gents/admin/list": {
+      "get": {
+        "operationId": "Jai1gentsController_listJai1gents",
+        "parameters": [
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
     "/v1/profile": {
       "get": {
         "operationId": "ClientsController_getProfile",
@@ -2797,6 +3005,116 @@
           "Chatbot"
         ]
       }
+    },
+    "/v1/consent-form/status": {
+      "get": {
+        "operationId": "ConsentFormController_getStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns consent form status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentFormStatusDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get consent form status",
+        "tags": [
+          "Consent Form"
+        ]
+      }
+    },
+    "/v1/consent-form/prefilled": {
+      "get": {
+        "operationId": "ConsentFormController_getPrefilled",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns pre-filled data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsentFormPrefilledDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get pre-filled client data for consent form",
+        "tags": [
+          "Consent Form"
+        ]
+      }
+    },
+    "/v1/consent-form/sign": {
+      "post": {
+        "operationId": "ConsentFormController_sign",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignConsentFormDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Consent form signed successfully"
+          },
+          "400": {
+            "description": "Invalid request or missing required data"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sign consent form with client signature",
+        "tags": [
+          "Consent Form"
+        ]
+      }
+    },
+    "/v1/consent-form/download": {
+      "get": {
+        "operationId": "ConsentFormController_download",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns signed URL for PDF download"
+          },
+          "404": {
+            "description": "Signed consent form not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get download URL for signed consent form",
+        "tags": [
+          "Consent Form"
+        ]
+      }
     }
   },
   "info": {
@@ -3258,6 +3576,18 @@
           "success"
         ]
       },
+      "RegisterJai1gentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateJai1gentProfileDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "GenerateInviteCodesDto": {
+        "type": "object",
+        "properties": {}
+      },
       "AddressDto": {
         "type": "object",
         "properties": {
@@ -3541,6 +3871,7 @@
             "enum": [
               "w2",
               "payment_proof",
+              "consent_form",
               "other"
             ],
             "example": "w2"
@@ -3935,6 +4266,99 @@
             "description": "Reason for threshold change (for audit log)"
           }
         }
+      },
+      "ConsentFormStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Consent form status",
+            "enum": [
+              "pending",
+              "signed"
+            ]
+          },
+          "signedAt": {
+            "type": "object",
+            "description": "When the consent form was signed",
+            "nullable": true
+          },
+          "canDownload": {
+            "type": "boolean",
+            "description": "Whether the signed PDF can be downloaded"
+          }
+        },
+        "required": [
+          "status",
+          "signedAt",
+          "canDownload"
+        ]
+      },
+      "ConsentFormPrefilledDto": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "description": "Full name of the client"
+          },
+          "dniPassport": {
+            "type": "object",
+            "description": "DNI or Passport number (masked)",
+            "nullable": true
+          },
+          "street": {
+            "type": "object",
+            "description": "Street address",
+            "nullable": true
+          },
+          "city": {
+            "type": "object",
+            "description": "City",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "description": "Email address"
+          },
+          "date": {
+            "type": "object",
+            "description": "Current date in Spanish format"
+          },
+          "canSign": {
+            "type": "boolean",
+            "description": "Whether the profile is complete enough for signing"
+          },
+          "missingFields": {
+            "description": "Missing fields that need to be completed",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "fullName",
+          "dniPassport",
+          "street",
+          "city",
+          "email",
+          "date",
+          "canSign",
+          "missingFields"
+        ]
+      },
+      "SignConsentFormDto": {
+        "type": "object",
+        "properties": {
+          "signature": {
+            "type": "string",
+            "description": "Client signature as base64 encoded PNG image",
+            "example": "data:image/png;base64,iVBORw0KGgo..."
+          }
+        },
+        "required": [
+          "signature"
+        ]
       }
     }
   }

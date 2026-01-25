@@ -5,6 +5,7 @@ import { Transform } from 'class-transformer';
 export enum DocumentType {
   W2 = 'w2',
   PAYMENT_PROOF = 'payment_proof',
+  CONSENT_FORM = 'consent_form',
   OTHER = 'other',
 }
 

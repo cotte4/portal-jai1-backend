@@ -9,6 +9,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { UsersModule } from '../users/users.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { Jai1gentsModule } from '../jai1gents/jai1gents.module';
 import { EmailService } from '../../common/services';
 import { SupabaseService } from '../../config/supabase.service';
 import { getAuthConfig } from '../../config/auth.config';
@@ -18,6 +19,7 @@ import { getAuthConfig } from '../../config/auth.config';
     UsersModule,
     ReferralsModule,
     NotificationsModule,
+    Jai1gentsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

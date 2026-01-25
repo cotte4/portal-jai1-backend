@@ -32,6 +32,8 @@ import { HealthModule } from './modules/health/health.module';
 import { StorageCleanupModule } from './modules/storage-cleanup/storage-cleanup.module';
 import { AlarmsModule } from './modules/alarms/alarms.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
+import { Jai1gentsModule } from './modules/jai1gents/jai1gents.module';
+import { ConsentFormModule } from './modules/consent-form/consent-form.module';
 
 @Module({
   imports: [
@@ -60,6 +62,8 @@ import { ChatbotModule } from './modules/chatbot/chatbot.module';
     StorageCleanupModule,
     AlarmsModule,
     ChatbotModule,
+    Jai1gentsModule,
+    ConsentFormModule,
   ],
   controllers: [],
   providers: [

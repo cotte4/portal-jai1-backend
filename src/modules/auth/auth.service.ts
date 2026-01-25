@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { Jai1gentsService } from '../jai1gents/jai1gents.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../../common/services';
@@ -43,6 +44,7 @@ export class AuthService {
   constructor(
     private usersService: UsersService,
     private referralsService: ReferralsService,
+    private jai1gentsService: Jai1gentsService,
     private auditLogsService: AuditLogsService,
     private notificationsService: NotificationsService,
     private jwtService: JwtService,
@@ -78,17 +80,34 @@ export class AuthService {
 
     // Validate referral code if provided
     let referrerInfo: { referrerId: string; referrerName: string } | null = null;
+    let isJai1gentReferral = false;
+
     if (registerDto.referral_code) {
-      const validation = await this.referralsService.validateCode(
-        registerDto.referral_code,
-      );
-      if (!validation.valid) {
-        throw new BadRequestException('Invalid referral code');
+      const code = registerDto.referral_code.toUpperCase();
+
+      // Check if it's a JAI1GENT referral code (starts with JAI)
+      if (code.startsWith('JAI')) {
+        const jai1gentValidation = await this.jai1gentsService.validateReferralCode(code);
+        if (jai1gentValidation.valid) {
+          isJai1gentReferral = true;
+          referrerInfo = {
+            referrerId: jai1gentValidation.jai1gentId!,
+            referrerName: jai1gentValidation.jai1gentName!,
+          };
+        } else {
+          throw new BadRequestException('Invalid referral code');
+        }
+      } else {
+        // Regular client referral code
+        const validation = await this.referralsService.validateCode(code);
+        if (!validation.valid) {
+          throw new BadRequestException('Invalid referral code');
+        }
+        referrerInfo = {
+          referrerId: validation.referrerId!,
+          referrerName: validation.referrerName!,
+        };
       }
-      referrerInfo = {
-        referrerId: validation.referrerId!,
-        referrerName: validation.referrerName!,
-      };
     }
 
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
@@ -105,14 +124,26 @@ export class AuthService {
     // Create referral record if user was referred
     if (referrerInfo) {
       try {
-        await this.referralsService.createReferral(
-          referrerInfo.referrerId,
-          user.id,
-          registerDto.referral_code!,
-        );
-        this.logger.log(
-          `Referral created for user ${redactUserId(user.id)}`,
-        );
+        if (isJai1gentReferral) {
+          // JAI1GENT referral
+          await this.jai1gentsService.createReferral(
+            registerDto.referral_code!,
+            user.id,
+          );
+          this.logger.log(
+            `JAI1GENT referral created for user ${redactUserId(user.id)}`,
+          );
+        } else {
+          // Regular client referral
+          await this.referralsService.createReferral(
+            referrerInfo.referrerId,
+            user.id,
+            registerDto.referral_code!,
+          );
+          this.logger.log(
+            `Referral created for user ${redactUserId(user.id)}`,
+          );
+        }
       } catch (err) {
         this.logger.error('Failed to create referral record', err);
         // Don't fail registration if referral creation fails
