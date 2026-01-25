@@ -342,6 +342,7 @@ enum PaymentMethod {
 enum CaseStatus {
   awaiting_form
   awaiting_docs
+  documentos_enviados
   preparing
   taxes_filed
   case_issues

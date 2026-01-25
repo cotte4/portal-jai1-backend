@@ -96,6 +96,28 @@ export class ClientsService {
   }
 
   /**
+   * Parse E.164 phone number format back to separate country code and number.
+   * E.164 format: +[country code][number] (e.g., +5491112345678, +12025551234)
+   *
+   * @param phone - Phone number in E.164 format
+   * @returns Object with countryCode and number, or null if invalid/empty
+   */
+  private parseE164Phone(
+    phone: string | null | undefined,
+  ): { countryCode: string; number: string } | null {
+    if (!phone) return null;
+
+    // E.164 format: +[1-3 digit country code][subscriber number]
+    // Common country codes: +1 (US/Canada), +54 (Argentina), +52 (Mexico), +34 (Spain), etc.
+    // Use a regex that captures 1-3 digit country codes followed by the remaining number
+    const match = phone.match(/^(\+\d{1,3})(\d+)$/);
+    if (match) {
+      return { countryCode: match[1], number: match[2] };
+    }
+    return null;
+  }
+
+  /**
    * Updates computed status fields (isReadyToPresent, isIncomplete) for a client profile.
    * Call this whenever documents are added/removed or profile completion status changes.
    *
@@ -872,6 +894,11 @@ export class ClientsService {
         isDraft: true,
         createdAt: true,
         updatedAt: true,
+        user: {
+          select: {
+            phone: true,
+          },
+        },
         taxCases: {
           select: {
             bankName: true,
@@ -890,6 +917,9 @@ export class ClientsService {
     if (!profile) return null;
 
     const taxCase = profile.taxCases[0];
+
+    // Parse E.164 phone back to separate country code and number
+    const parsedPhone = this.parseE164Phone(profile.user?.phone);
 
     // Return formatted response with decrypted data for editing
     return {
@@ -923,6 +953,9 @@ export class ClientsService {
         ? this.encryption.decrypt(profile.turbotaxEmail)
         : null,
       turbotaxPassword: profile.turbotaxPassword ? '********' : null,
+      // Phone number parsed from E.164 format
+      phoneCountryCode: parsedPhone?.countryCode || null,
+      phoneNumber: parsedPhone?.number || null,
       profileComplete: profile.profileComplete,
       isDraft: profile.isDraft,
       createdAt: profile.createdAt,

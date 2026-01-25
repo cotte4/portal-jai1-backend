@@ -4,12 +4,13 @@ import { UserRole } from '@prisma/client';
 
 interface CreateUserData {
   email: string;
-  passwordHash: string;
+  passwordHash?: string; // Optional for Google OAuth users
   firstName: string;
   lastName: string;
   phone?: string;
   role?: UserRole;
   googleId?: string;
+  emailVerified?: boolean;
   referredByCode?: string;
 }
 
@@ -27,6 +28,7 @@ export class UsersService {
         phone: data.phone,
         role: data.role || 'client',
         googleId: data.googleId,
+        emailVerified: data.emailVerified ?? false,
         referredByCode: data.referredByCode,
       },
     });

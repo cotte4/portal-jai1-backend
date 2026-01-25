@@ -299,16 +299,16 @@ export class ProgressAutomationService {
     this.logger.log(`Documentation check: hasW2=${hasW2}, hasPaymentProof=${hasPaymentProof}, declarationSubmitted=${declarationSubmitted}`);
     this.logger.log(`Current caseStatus: ${taxCase.caseStatus}`);
 
-    // If all conditions met AND current status is awaiting_docs, auto-transition to preparing
+    // If all conditions met AND current status is awaiting_docs, auto-transition to documentos_enviados
     if (hasW2 && hasPaymentProof && declarationSubmitted) {
       if (taxCase.caseStatus === 'awaiting_docs') {
-        this.logger.log(`✓ All documentation complete - auto-transitioning to 'preparing' status`);
+        this.logger.log(`✓ All documentation complete - auto-transitioning to 'documentos_enviados' status`);
 
-        // Update case status to 'preparing'
+        // Update case status to 'documentos_enviados'
         await this.prisma.taxCase.update({
           where: { id: taxCaseId },
           data: {
-            caseStatus: 'preparing',
+            caseStatus: 'documentos_enviados',
             caseStatusChangedAt: new Date(),
             statusUpdatedAt: new Date(),
           },
@@ -319,7 +319,7 @@ export class ProgressAutomationService {
           data: {
             taxCaseId,
             previousStatus: 'awaiting_docs',
-            newStatus: 'preparing',
+            newStatus: 'documentos_enviados',
             comment: 'Automatic transition: All required documents uploaded and declaration submitted',
             changedById: null, // null = automatic system change
           },
@@ -328,11 +328,11 @@ export class ProgressAutomationService {
         // Notify admins
         const clientName = await this.getClientName(userId);
         await this.notifyAdmins(
-          'Documentación Completa - Preparando Declaración',
-          `El cliente ${clientName} ha completado toda la documentación requerida. El estado cambió automáticamente a "Preparando declaración".`,
+          'Documentación Completa - Documentos Enviados',
+          `El cliente ${clientName} ha completado toda la documentación requerida. El estado cambió automáticamente a "Documentos enviados".`,
         );
 
-        this.logger.log(`✓ Successfully auto-transitioned TaxCase ${taxCaseId} to 'preparing' status`);
+        this.logger.log(`✓ Successfully auto-transitioned TaxCase ${taxCaseId} to 'documentos_enviados' status`);
       } else {
         this.logger.log(`Documentation complete but current status is '${taxCase.caseStatus}' (not 'awaiting_docs') - no auto-transition`);
       }

@@ -16,6 +16,7 @@ export function mapCaseStatusToClientDisplay(status: CaseStatus | null | undefin
   const mapping: Record<CaseStatus, string> = {
     [CaseStatus.awaiting_form]: 'Esperando formulario y documentos',
     [CaseStatus.awaiting_docs]: 'Esperando formulario y documentos',
+    [CaseStatus.documentos_enviados]: 'Documentos enviados',
     [CaseStatus.preparing]: 'Información recibida',
     [CaseStatus.taxes_filed]: 'Taxes presentados',
     [CaseStatus.case_issues]: 'Problemas - contactar soporte',
@@ -77,6 +78,7 @@ export function getCaseStatusLabel(status: CaseStatus | null | undefined): strin
   const mapping: Record<CaseStatus, string> = {
     [CaseStatus.awaiting_form]: 'Esperando Formulario',
     [CaseStatus.awaiting_docs]: 'Esperando Documentos',
+    [CaseStatus.documentos_enviados]: 'Documentos Enviados',
     [CaseStatus.preparing]: 'Preparando',
     [CaseStatus.taxes_filed]: 'Taxes Presentados',
     [CaseStatus.case_issues]: 'Problemas',

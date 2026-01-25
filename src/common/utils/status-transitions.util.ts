@@ -14,10 +14,11 @@ import { CaseStatus, FederalStatusNew, StateStatusNew } from '@prisma/client';
  */
 export const CASE_STATUS_TRANSITIONS = new Map<CaseStatus, CaseStatus[]>([
   [CaseStatus.awaiting_form, [CaseStatus.awaiting_docs, CaseStatus.case_issues]],
-  [CaseStatus.awaiting_docs, [CaseStatus.awaiting_form, CaseStatus.preparing, CaseStatus.case_issues]],
-  [CaseStatus.preparing, [CaseStatus.awaiting_docs, CaseStatus.taxes_filed, CaseStatus.case_issues]],
+  [CaseStatus.awaiting_docs, [CaseStatus.awaiting_form, CaseStatus.documentos_enviados, CaseStatus.preparing, CaseStatus.case_issues]],
+  [CaseStatus.documentos_enviados, [CaseStatus.awaiting_docs, CaseStatus.preparing, CaseStatus.case_issues]],
+  [CaseStatus.preparing, [CaseStatus.awaiting_docs, CaseStatus.documentos_enviados, CaseStatus.taxes_filed, CaseStatus.case_issues]],
   [CaseStatus.taxes_filed, [CaseStatus.case_issues]],
-  [CaseStatus.case_issues, [CaseStatus.awaiting_form, CaseStatus.awaiting_docs, CaseStatus.preparing, CaseStatus.taxes_filed]],
+  [CaseStatus.case_issues, [CaseStatus.awaiting_form, CaseStatus.awaiting_docs, CaseStatus.documentos_enviados, CaseStatus.preparing, CaseStatus.taxes_filed]],
 ]);
 
 /**

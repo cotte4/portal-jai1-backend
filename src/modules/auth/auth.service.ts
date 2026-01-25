@@ -558,13 +558,25 @@ export class AuthService {
     let user = await this.usersService.findByEmail(googleUser.email);
 
     if (!user) {
-      // User not found - do not auto-create, require registration first
-      this.logger.log(`Google OAuth login attempted for non-existent email: ${redactEmail(googleUser.email)}`);
-      throw new UnauthorizedException({
-        statusCode: 401,
-        message: 'No account found with this email. Please register first.',
-        error: 'GOOGLE_NO_ACCOUNT',
+      // Auto-create user for Google OAuth
+      user = await this.usersService.create({
+        email: googleUser.email,
+        firstName: googleUser.firstName || '',
+        lastName: googleUser.lastName || '',
+        googleId: googleUser.googleId,
+        emailVerified: true, // Google verified the email
       });
+      this.logger.log(`Auto-created user for Google OAuth: ${redactEmail(googleUser.email)}`);
+
+      // Send welcome in-app notification (async, don't wait)
+      this.notificationsService
+        .createFromTemplate(
+          user.id,
+          'system',
+          'notifications.welcome',
+          { firstName: user.firstName },
+        )
+        .catch((err) => this.logger.error('Failed to send welcome notification', err));
     } else {
       // Update googleId if not set (linking existing account)
       if (!user.googleId) {
