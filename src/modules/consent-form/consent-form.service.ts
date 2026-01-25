@@ -148,11 +148,6 @@ export class ConsentFormService {
       throw new BadRequestException('Profile not found. Please complete your profile first.');
     }
 
-    // Check required fields
-    if (!profile.addressStreet || !profile.addressCity) {
-      throw new BadRequestException('Please complete your address information before signing.');
-    }
-
     // Get or create tax case
     let taxCase = profile.taxCases[0];
     if (!taxCase) {
@@ -173,8 +168,16 @@ export class ConsentFormService {
     const base64Data = signDto.signature.replace(/^data:image\/png;base64,/, '');
     const signatureBuffer = Buffer.from(base64Data, 'base64');
 
-    // Generate PDF
-    const pdfBuffer = await this.generateSignedPdf(user, profile, signatureBuffer);
+    // Generate PDF using form data provided by client
+    const clientData = {
+      fullName: signDto.fullName,
+      dniPassport: signDto.dniPassport,
+      street: signDto.street,
+      city: signDto.city,
+      email: signDto.email,
+    };
+
+    const pdfBuffer = await this.generateSignedPdf(clientData, signatureBuffer);
 
     // Generate storage path
     const storagePath = this.storagePath.generateDocumentPath({
@@ -271,8 +274,13 @@ export class ConsentFormService {
    * Generate the signed PDF document
    */
   private async generateSignedPdf(
-    user: { firstName: string; lastName: string; email: string },
-    profile: { ssn: string | null; addressStreet: string | null; addressCity: string | null },
+    clientData: {
+      fullName: string;
+      dniPassport: string;
+      street: string;
+      city: string;
+      email: string;
+    },
     clientSignature: Buffer,
   ): Promise<Buffer> {
     // Create a new PDF document
@@ -380,13 +388,8 @@ export class ConsentFormService {
     });
     yPosition -= 30;
 
-    // Introduction with client data
-    const fullName = `${user.firstName} ${user.lastName}`;
-    const dniPassport = profile.ssn ? `***-**-${profile.ssn.slice(-4)}` : '_______________';
-    const street = profile.addressStreet || '_______________';
-    const city = profile.addressCity || '_______________';
-
-    const introText = `${CONSENT_FORM_INTRO} ${fullName}, DNI/Pasaporte ${dniPassport}, con domicilio en calle ${street} de la ciudad de ${city} y electronico en la casilla de correo ${user.email}, en adelante el cliente, se celebra el presente acuerdo sujeto a las siguientes clausulas y condiciones:`;
+    // Introduction with client data (from form input)
+    const introText = `${CONSENT_FORM_INTRO} ${clientData.fullName}, DNI/Pasaporte ${clientData.dniPassport}, con domicilio en calle ${clientData.street} de la ciudad de ${clientData.city} y electronico en la casilla de correo ${clientData.email}, en adelante el cliente, se celebra el presente acuerdo sujeto a las siguientes clausulas y condiciones:`;
 
     addWrappedText(introText, helvetica, fontSize, textColor, pageWidth - 2 * margin);
     yPosition -= lineHeight;
