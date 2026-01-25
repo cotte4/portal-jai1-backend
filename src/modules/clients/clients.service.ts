@@ -3532,4 +3532,127 @@ export class ClientsService {
       totalWarning,
     };
   }
+
+  /**
+   * Reset W2 estimate for a client (admin only)
+   * This allows the user to recalculate their W2 estimate
+   * Deletes: W2Estimate record, associated Document, and storage file
+   */
+  async resetW2Estimate(clientProfileId: string, adminUserId: string) {
+    const clientProfile = await this.prisma.clientProfile.findUnique({
+      where: { id: clientProfileId },
+      include: {
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+        taxCases: {
+          orderBy: { taxYear: 'desc' },
+          take: 1,
+          include: {
+            documents: {
+              where: { type: 'w2' },
+            },
+          },
+        },
+      },
+    });
+
+    if (!clientProfile) {
+      throw new NotFoundException('Client profile not found');
+    }
+
+    const userId = clientProfile.user.id;
+    const taxCase = clientProfile.taxCases[0];
+
+    // Find all W2 estimates for this user
+    const w2Estimates = await this.prisma.w2Estimate.findMany({
+      where: { userId },
+    });
+
+    if (w2Estimates.length === 0 && (!taxCase?.documents || taxCase.documents.length === 0)) {
+      throw new BadRequestException('No W2 estimate or document found for this client');
+    }
+
+    // Track what was deleted for audit log
+    const deletedItems: string[] = [];
+
+    // Delete W2 estimates and their storage files
+    for (const estimate of w2Estimates) {
+      if (estimate.w2StoragePath) {
+        try {
+          await this.supabase.deleteFile('documents', estimate.w2StoragePath);
+          this.logger.log(`Deleted W2 storage file: ${estimate.w2StoragePath}`);
+        } catch (err) {
+          this.logger.warn(`Failed to delete W2 storage file: ${estimate.w2StoragePath}`, err);
+        }
+      }
+      deletedItems.push(`W2Estimate:${estimate.id}`);
+    }
+
+    // Delete all W2 estimates for this user
+    await this.prisma.w2Estimate.deleteMany({
+      where: { userId },
+    });
+    this.logger.log(`Deleted ${w2Estimates.length} W2 estimate(s) for user ${userId}`);
+
+    // Delete W2 documents and their storage files
+    if (taxCase?.documents) {
+      for (const doc of taxCase.documents) {
+        if (doc.storagePath) {
+          try {
+            await this.supabase.deleteFile('documents', doc.storagePath);
+            this.logger.log(`Deleted W2 document file: ${doc.storagePath}`);
+          } catch (err) {
+            this.logger.warn(`Failed to delete W2 document file: ${doc.storagePath}`, err);
+          }
+        }
+        deletedItems.push(`Document:${doc.id}`);
+      }
+
+      // Delete W2 documents from database
+      await this.prisma.document.deleteMany({
+        where: {
+          taxCaseId: taxCase.id,
+          type: 'w2',
+        },
+      });
+      this.logger.log(`Deleted ${taxCase.documents.length} W2 document(s) for tax case ${taxCase.id}`);
+    }
+
+    // Reset estimated refund on tax case
+    if (taxCase) {
+      await this.prisma.taxCase.update({
+        where: { id: taxCase.id },
+        data: { estimatedRefund: null },
+      });
+      this.logger.log(`Reset estimated refund for tax case ${taxCase.id}`);
+    }
+
+    // Update computed status fields
+    await this.prisma.clientProfile.update({
+      where: { id: clientProfileId },
+      data: {
+        isReadyToPresent: false,
+        isIncomplete: true,
+      },
+    });
+
+    // Audit log
+    await this.auditLogsService.log({
+      action: AuditAction.DOCUMENT_DELETE,
+      userId: adminUserId,
+      targetUserId: userId,
+      details: {
+        action: 'reset_w2_estimate',
+        deletedItems,
+        clientName: `${clientProfile.user.firstName} ${clientProfile.user.lastName}`,
+      },
+    });
+
+    this.logger.log(`Admin ${adminUserId} reset W2 estimate for client ${clientProfileId}`);
+
+    return {
+      message: 'W2 estimate reset successfully. User can now recalculate.',
+      deletedEstimates: w2Estimates.length,
+      deletedDocuments: taxCase?.documents?.length || 0,
+    };
+  }
 }

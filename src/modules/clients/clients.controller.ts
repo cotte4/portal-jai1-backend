@@ -376,4 +376,17 @@ export class ClientsController {
   ) {
     return this.clientsService.sendClientNotification(id, notifyData);
   }
+
+  @Delete('admin/clients/:id/w2-estimate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @ApiOperation({ summary: 'Reset W2 estimate for a client (allows recalculation)' })
+  @ApiResponse({ status: 200, description: 'W2 estimate reset successfully' })
+  @ApiResponse({ status: 404, description: 'Client not found' })
+  async resetW2Estimate(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.clientsService.resetW2Estimate(id, user.id);
+  }
 }

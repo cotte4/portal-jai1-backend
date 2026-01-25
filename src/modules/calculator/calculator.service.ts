@@ -3,11 +3,14 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
 import { StoragePathService } from '../../common/services';
+import { ProgressAutomationService } from '../progress/progress-automation.service';
 import { redactUserId, redactFileName, redactStoragePath } from '../../common/utils/log-sanitizer';
 import OpenAI from 'openai';
 import { pdf } from 'pdf-to-img';
@@ -32,6 +35,8 @@ export class CalculatorService {
     private supabase: SupabaseService,
     private storagePath: StoragePathService,
     private configService: ConfigService,
+    @Inject(forwardRef(() => ProgressAutomationService))
+    private progressAutomation: ProgressAutomationService,
   ) {}
 
   private getOpenAI(): OpenAI {
@@ -93,8 +98,8 @@ export class CalculatorService {
     // Upload file to Supabase Storage using centralized path service
     // Use w2 folder (same as documents upload) for consistency across all W2 uploads
     let w2StoragePath: string | null = null;
+    const taxYear = new Date().getFullYear();
     try {
-      const taxYear = new Date().getFullYear();
       w2StoragePath = this.storagePath.generateDocumentPath({
         userId,
         taxYear,
@@ -139,9 +144,48 @@ export class CalculatorService {
 
     this.logger.log(`W2 estimate created: ${estimate.id} (confidence: ${ocrConfidence})`);
 
-    // Sync estimated refund to TaxCase for cross-component consistency
-    // This ensures Dashboard and Seguimiento always show the same value
-    await this.syncEstimateToTaxCase(userId, estimatedRefund);
+    // Sync estimated refund to TaxCase and create Document record
+    // This eliminates the need for a second upload from the frontend
+    const taxCase = await this.syncEstimateToTaxCase(userId, estimatedRefund);
+
+    // Create Document record if we have a valid storage path and tax case
+    // This makes the W2 visible in "Mis Documentos" without a second upload
+    if (w2StoragePath && taxCase) {
+      try {
+        await this.prisma.document.create({
+          data: {
+            taxCaseId: taxCase.id,
+            type: 'w2',
+            fileName: file.originalname,
+            storagePath: w2StoragePath,
+            mimeType: file.mimetype,
+            fileSize: file.size,
+            taxYear,
+          },
+        });
+        this.logger.log(`Document record created for W2: ${file.originalname}`);
+
+        // Update computed status fields (isReadyToPresent, isIncomplete)
+        await this.updateClientComputedStatus(taxCase.clientProfileId);
+
+        // Emit W2_UPLOADED event for progress automation
+        try {
+          const clientName = await this.progressAutomation.getClientName(userId);
+          await this.progressAutomation.processEvent({
+            type: 'W2_UPLOADED',
+            userId,
+            taxCaseId: taxCase.id,
+            metadata: { clientName, fileName: file.originalname },
+          });
+          this.logger.log(`Emitted W2_UPLOADED event for user ${redactUserId(userId)}`);
+        } catch (eventError) {
+          this.logger.error('Failed to emit W2_UPLOADED event (non-fatal):', eventError);
+        }
+      } catch (docError) {
+        this.logger.error('Failed to create Document record (non-fatal):', docError);
+        // Continue - the estimate is still valid, just won't show in "Mis Documentos"
+      }
+    }
 
     return {
       box2Federal,
@@ -337,25 +381,40 @@ EXAMPLE OF A GOOD OUTPUT:
    * Sync estimated refund from W2Estimate to TaxCase
    * This ensures both Dashboard (Inicio) and Seguimiento show the same value
    * Dashboard reads from W2Estimate, Seguimiento reads from TaxCase
+   * Returns the TaxCase for use in Document creation
    */
-  private async syncEstimateToTaxCase(userId: string, estimatedRefund: number): Promise<void> {
+  private async syncEstimateToTaxCase(userId: string, estimatedRefund: number): Promise<{ id: string; clientProfileId: string } | null> {
     try {
-      // Get user's client profile
+      // Get user's client profile, auto-create if doesn't exist
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         include: { clientProfile: true },
       });
 
-      if (!user?.clientProfile) {
-        this.logger.warn(`User ${userId} has no client profile, skipping TaxCase sync`);
-        return;
+      let clientProfile = user?.clientProfile;
+
+      // Auto-create client profile if it doesn't exist (for users who go straight to calculator)
+      if (!clientProfile && user) {
+        this.logger.log(`Auto-creating client profile for user ${userId} during W2 estimate`);
+        clientProfile = await this.prisma.clientProfile.create({
+          data: {
+            userId,
+            isDraft: true,
+            profileComplete: false,
+          },
+        });
+      }
+
+      if (!clientProfile) {
+        this.logger.warn(`User ${userId} not found, skipping TaxCase sync`);
+        return null;
       }
 
       // Get or create TaxCase for current year
       const currentYear = new Date().getFullYear();
       let taxCase = await this.prisma.taxCase.findFirst({
         where: {
-          clientProfileId: user.clientProfile.id,
+          clientProfileId: clientProfile.id,
           taxYear: currentYear,
         },
       });
@@ -364,7 +423,7 @@ EXAMPLE OF A GOOD OUTPUT:
         // Create TaxCase if it doesn't exist
         taxCase = await this.prisma.taxCase.create({
           data: {
-            clientProfileId: user.clientProfile.id,
+            clientProfileId: clientProfile.id,
             taxYear: currentYear,
             estimatedRefund,
           },
@@ -372,15 +431,67 @@ EXAMPLE OF A GOOD OUTPUT:
         this.logger.log(`Created TaxCase ${taxCase.id} with estimated refund $${estimatedRefund}`);
       } else {
         // Update existing TaxCase with new estimated refund
-        await this.prisma.taxCase.update({
+        taxCase = await this.prisma.taxCase.update({
           where: { id: taxCase.id },
           data: { estimatedRefund },
         });
         this.logger.log(`Updated TaxCase ${taxCase.id} with estimated refund $${estimatedRefund}`);
       }
+
+      return { id: taxCase.id, clientProfileId: clientProfile.id };
     } catch (error) {
       // Non-fatal error - estimate is still saved in W2Estimate table
       this.logger.error(`Failed to sync estimate to TaxCase for user ${userId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Update computed status fields for a client profile.
+   * Called after W2 upload to update isReadyToPresent and isIncomplete flags.
+   */
+  private async updateClientComputedStatus(clientProfileId: string): Promise<void> {
+    try {
+      const clientProfile = await this.prisma.clientProfile.findUnique({
+        where: { id: clientProfileId },
+        include: {
+          taxCases: {
+            orderBy: { taxYear: 'desc' },
+            take: 1,
+            include: {
+              documents: {
+                where: { type: 'w2' },
+                select: { id: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!clientProfile) return;
+
+      const taxCase = clientProfile.taxCases[0];
+      const hasW2 = taxCase?.documents && taxCase.documents.length > 0;
+
+      const isReadyToPresent =
+        clientProfile.profileComplete &&
+        !clientProfile.isDraft &&
+        hasW2;
+
+      const isIncomplete = !isReadyToPresent;
+
+      if (
+        clientProfile.isReadyToPresent !== isReadyToPresent ||
+        clientProfile.isIncomplete !== isIncomplete
+      ) {
+        await this.prisma.clientProfile.update({
+          where: { id: clientProfileId },
+          data: { isReadyToPresent, isIncomplete },
+        });
+        this.logger.log(`Updated computed status for client ${clientProfileId}: ready=${isReadyToPresent}`);
+      }
+    } catch (error) {
+      this.logger.error('Failed to update computed status:', error);
     }
   }
 }
