@@ -4051,4 +4051,53 @@ export class ClientsService {
       deletedDocuments: taxCase?.documents?.length || 0,
     };
   }
+
+  /**
+   * Get W2 estimate data for a client (admin only)
+   * Used by visual review to display key W2 fields checklist
+   */
+  async getW2EstimateForClient(clientProfileId: string) {
+    const clientProfile = await this.prisma.clientProfile.findUnique({
+      where: { id: clientProfileId },
+      select: { userId: true },
+    });
+
+    if (!clientProfile) {
+      throw new NotFoundException('Client profile not found');
+    }
+
+    const w2Estimate = await this.prisma.w2Estimate.findFirst({
+      where: { userId: clientProfile.userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        box2Federal: true,
+        box17State: true,
+        estimatedRefund: true,
+        w2FileName: true,
+        ocrConfidence: true,
+        createdAt: true,
+      },
+    });
+
+    if (!w2Estimate) {
+      return {
+        hasEstimate: false,
+        estimate: null,
+      };
+    }
+
+    return {
+      hasEstimate: true,
+      estimate: {
+        id: w2Estimate.id,
+        box2Federal: Number(w2Estimate.box2Federal),
+        box17State: Number(w2Estimate.box17State),
+        estimatedRefund: Number(w2Estimate.estimatedRefund),
+        w2FileName: w2Estimate.w2FileName,
+        ocrConfidence: w2Estimate.ocrConfidence,
+        createdAt: w2Estimate.createdAt,
+      },
+    };
+  }
 }

@@ -433,4 +433,14 @@ export class ClientsController {
   ) {
     return this.clientsService.resetW2Estimate(id, user.id);
   }
+
+  @Get('admin/clients/:id/w2-estimate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @ApiOperation({ summary: 'Get W2 estimate data for a client (for visual review)' })
+  @ApiResponse({ status: 200, description: 'W2 estimate data' })
+  @ApiResponse({ status: 404, description: 'Client not found or no W2 estimate' })
+  async getW2Estimate(@Param('id') id: string) {
+    return this.clientsService.getW2EstimateForClient(id);
+  }
 }
