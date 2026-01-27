@@ -320,3 +320,12 @@ export class AdminUpdateProfileDto {
   @MaxLength(200, { message: 'Employer name must be less than 200 characters' })
   employerName?: string;
 }
+
+/**
+ * DTO for marking commission as paid (admin action)
+ */
+export class MarkCommissionPaidDto {
+  @ApiProperty({ enum: ['federal', 'state'], description: 'Type of commission to mark as paid' })
+  @IsEnum(['federal', 'state'], { message: 'Type must be either federal or state' })
+  type: 'federal' | 'state';
+}

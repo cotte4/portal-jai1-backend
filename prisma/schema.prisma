@@ -172,6 +172,16 @@ model TaxCase {
 
   paymentReceived    Boolean         @default(false) @map("payment_received")
   commissionPaid     Boolean         @default(false) @map("commission_paid")
+  // Separate refund receipt confirmation (client confirms they received money)
+  federalRefundReceived     Boolean    @default(false) @map("federal_refund_received")
+  stateRefundReceived       Boolean    @default(false) @map("state_refund_received")
+  federalRefundReceivedAt   DateTime?  @map("federal_refund_received_at") @db.Timestamptz
+  stateRefundReceivedAt     DateTime?  @map("state_refund_received_at") @db.Timestamptz
+  // Separate commission paid tracking (admin marks when fee is received)
+  federalCommissionPaid     Boolean    @default(false) @map("federal_commission_paid")
+  stateCommissionPaid       Boolean    @default(false) @map("state_commission_paid")
+  federalCommissionPaidAt   DateTime?  @map("federal_commission_paid_at") @db.Timestamptz
+  stateCommissionPaidAt     DateTime?  @map("state_commission_paid_at") @db.Timestamptz
   // Year-specific employment and banking info (SOURCE OF TRUTH - not ClientProfile)
   workState          String?         @map("work_state")
   employerName       String?         @map("employer_name")

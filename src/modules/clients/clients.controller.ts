@@ -27,11 +27,13 @@ import { Roles, CurrentUser } from '../../common/decorators';
 import { PAGINATION_LIMITS, validateLimit } from '../../common/constants';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { UpdateSensitiveProfileDto } from './dto/update-sensitive-profile.dto';
+import { ConfirmRefundDto } from './dto/confirm-refund.dto';
 import {
   UpdateStatusDto,
   SetProblemDto,
   SendNotificationDto,
   AdminUpdateProfileDto,
+  MarkCommissionPaidDto,
 } from './dto/admin-update.dto';
 
 @ApiTags('clients')
@@ -135,6 +137,20 @@ export class ClientsController {
     @Body() dto: UpdateSensitiveProfileDto,
   ) {
     return this.clientsService.updateSensitiveProfile(user.id, dto);
+  }
+
+  @Post('refund/confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Confirm receipt of federal or state refund' })
+  @ApiResponse({ status: 200, description: 'Refund receipt confirmed' })
+  @ApiResponse({ status: 400, description: 'Invalid refund type or already confirmed' })
+  @ApiResponse({ status: 404, description: 'No tax case found' })
+  async confirmRefundReceived(
+    @CurrentUser() user: any,
+    @Body() dto: ConfirmRefundDto,
+  ) {
+    return this.clientsService.confirmRefundReceived(user.id, dto.type);
   }
 
   @Post('profile/mark-onboarding-complete')
@@ -352,6 +368,34 @@ export class ClientsController {
   @Roles(UserRole.admin)
   async markPaid(@Param('id') id: string) {
     return this.clientsService.markPaid(id);
+  }
+
+  @Post('admin/clients/:id/commission')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @ApiOperation({ summary: 'Mark federal or state commission as paid' })
+  @ApiResponse({ status: 200, description: 'Commission marked as paid' })
+  @ApiResponse({ status: 400, description: 'Invalid type or commission already paid' })
+  @ApiResponse({ status: 404, description: 'Client not found' })
+  async markCommissionPaid(
+    @Param('id') id: string,
+    @Body() dto: MarkCommissionPaidDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.clientsService.markCommissionPaid(id, dto.type, user.id);
+  }
+
+  @Get('admin/clients/unpaid-commissions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @ApiOperation({ summary: 'Get clients who confirmed refunds but have not paid commission' })
+  @ApiResponse({ status: 200, description: 'List of clients with unpaid commissions' })
+  async getUnpaidCommissions(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.PAYMENTS);
+    return this.clientsService.getUnpaidCommissions({ cursor, limit: validatedLimit });
   }
 
   // DEPRECATED: adminStep endpoint removed - use internalStatus instead

@@ -2264,6 +2264,300 @@ export class ClientsService {
     return { message: 'Payment marked as received' };
   }
 
+  /**
+   * Client confirms receipt of federal or state refund.
+   * Validates that the refund has a deposit date before allowing confirmation.
+   */
+  async confirmRefundReceived(userId: string, type: 'federal' | 'state') {
+    // Get user's client profile and current tax case
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        clientProfile: {
+          include: {
+            taxCases: { orderBy: { taxYear: 'desc' }, take: 1 },
+          },
+        },
+      },
+    });
+
+    if (!user?.clientProfile) {
+      throw new NotFoundException('Client profile not found');
+    }
+
+    const taxCase = user.clientProfile.taxCases[0];
+    if (!taxCase) {
+      throw new NotFoundException('No tax case found');
+    }
+
+    // Validate based on type
+    if (type === 'federal') {
+      // Check if already confirmed
+      if (taxCase.federalRefundReceived) {
+        throw new BadRequestException('Federal refund already confirmed');
+      }
+      // Check if deposit date is set (meaning refund should have arrived)
+      if (!taxCase.federalDepositDate) {
+        throw new BadRequestException('Federal refund not yet deposited');
+      }
+      // Check if there's an actual refund amount
+      if (!taxCase.federalActualRefund || Number(taxCase.federalActualRefund) <= 0) {
+        throw new BadRequestException('No federal refund amount recorded');
+      }
+    } else {
+      // State
+      if (taxCase.stateRefundReceived) {
+        throw new BadRequestException('State refund already confirmed');
+      }
+      if (!taxCase.stateDepositDate) {
+        throw new BadRequestException('State refund not yet deposited');
+      }
+      if (!taxCase.stateActualRefund || Number(taxCase.stateActualRefund) <= 0) {
+        throw new BadRequestException('No state refund amount recorded');
+      }
+    }
+
+    // Update the confirmation fields
+    const now = new Date();
+    const updateData =
+      type === 'federal'
+        ? { federalRefundReceived: true, federalRefundReceivedAt: now }
+        : { stateRefundReceived: true, stateRefundReceivedAt: now };
+
+    await this.prisma.taxCase.update({
+      where: { id: taxCase.id },
+      data: updateData,
+    });
+
+    // Calculate fee information to return
+    const refundAmount =
+      type === 'federal'
+        ? Number(taxCase.federalActualRefund)
+        : Number(taxCase.stateActualRefund);
+    const fee = refundAmount * 0.11; // 11% fee
+
+    this.logger.log(
+      `Client ${userId} confirmed ${type} refund receipt. Amount: $${refundAmount}, Fee: $${fee.toFixed(2)}`,
+    );
+
+    return {
+      message: `${type === 'federal' ? 'Federal' : 'State'} refund receipt confirmed`,
+      refundAmount,
+      fee: Math.round(fee * 100) / 100, // Round to 2 decimal places
+      confirmedAt: now.toISOString(),
+    };
+  }
+
+  /**
+   * Admin marks commission as paid for federal or state refund.
+   */
+  async markCommissionPaid(clientProfileId: string, type: 'federal' | 'state', adminId: string) {
+    const client = await this.prisma.clientProfile.findUnique({
+      where: { id: clientProfileId },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        taxCases: { orderBy: { taxYear: 'desc' }, take: 1 },
+      },
+    });
+
+    if (!client || !client.taxCases[0]) {
+      throw new NotFoundException('Client or tax case not found');
+    }
+
+    const taxCase = client.taxCases[0];
+
+    // Validate based on type
+    if (type === 'federal') {
+      if (!taxCase.federalRefundReceived) {
+        throw new BadRequestException('Client has not confirmed federal refund receipt');
+      }
+      if (taxCase.federalCommissionPaid) {
+        throw new BadRequestException('Federal commission already marked as paid');
+      }
+      if (!taxCase.federalActualRefund || Number(taxCase.federalActualRefund) <= 0) {
+        throw new BadRequestException('No federal refund amount recorded');
+      }
+    } else {
+      if (!taxCase.stateRefundReceived) {
+        throw new BadRequestException('Client has not confirmed state refund receipt');
+      }
+      if (taxCase.stateCommissionPaid) {
+        throw new BadRequestException('State commission already marked as paid');
+      }
+      if (!taxCase.stateActualRefund || Number(taxCase.stateActualRefund) <= 0) {
+        throw new BadRequestException('No state refund amount recorded');
+      }
+    }
+
+    // Update the commission paid fields
+    const now = new Date();
+    const updateData =
+      type === 'federal'
+        ? { federalCommissionPaid: true, federalCommissionPaidAt: now }
+        : { stateCommissionPaid: true, stateCommissionPaidAt: now };
+
+    // Also update legacy commissionPaid if both are now paid
+    const willBothBePaid =
+      (type === 'federal' && taxCase.stateCommissionPaid) ||
+      (type === 'state' && taxCase.federalCommissionPaid) ||
+      // Or if only one type has a refund
+      (type === 'federal' && (!taxCase.stateActualRefund || Number(taxCase.stateActualRefund) === 0)) ||
+      (type === 'state' && (!taxCase.federalActualRefund || Number(taxCase.federalActualRefund) === 0));
+
+    if (willBothBePaid) {
+      Object.assign(updateData, { commissionPaid: true });
+    }
+
+    await this.prisma.taxCase.update({
+      where: { id: taxCase.id },
+      data: updateData,
+    });
+
+    const refundAmount =
+      type === 'federal'
+        ? Number(taxCase.federalActualRefund)
+        : Number(taxCase.stateActualRefund);
+    const commissionAmount = refundAmount * 0.11;
+
+    this.logger.log(
+      `Admin ${adminId} marked ${type} commission as paid for client ${clientProfileId}. Amount: $${commissionAmount.toFixed(2)}`,
+    );
+
+    return {
+      message: `${type === 'federal' ? 'Federal' : 'State'} commission marked as paid`,
+      refundAmount,
+      commissionAmount: Math.round(commissionAmount * 100) / 100,
+      paidAt: now.toISOString(),
+      clientName: `${client.user.firstName} ${client.user.lastName}`,
+    };
+  }
+
+  /**
+   * Get clients who have confirmed refund receipt but have unpaid commissions.
+   */
+  async getUnpaidCommissions(params: { cursor?: string; limit: number }) {
+    const { cursor, limit } = params;
+
+    // Find clients where:
+    // - federalRefundReceived=true AND federalCommissionPaid=false, OR
+    // - stateRefundReceived=true AND stateCommissionPaid=false
+    const clients = await this.prisma.clientProfile.findMany({
+      where: {
+        taxCases: {
+          some: {
+            OR: [
+              {
+                federalRefundReceived: true,
+                federalCommissionPaid: false,
+                federalActualRefund: { gt: 0 },
+              },
+              {
+                stateRefundReceived: true,
+                stateCommissionPaid: false,
+                stateActualRefund: { gt: 0 },
+              },
+            ],
+          },
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+          },
+        },
+        taxCases: {
+          orderBy: { taxYear: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            taxYear: true,
+            federalActualRefund: true,
+            stateActualRefund: true,
+            federalRefundReceived: true,
+            stateRefundReceived: true,
+            federalRefundReceivedAt: true,
+            stateRefundReceivedAt: true,
+            federalCommissionPaid: true,
+            stateCommissionPaid: true,
+            federalCommissionPaidAt: true,
+            stateCommissionPaidAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    });
+
+    const hasMore = clients.length > limit;
+    const clientsToReturn = hasMore ? clients.slice(0, limit) : clients;
+    const nextCursor = hasMore ? clientsToReturn[clientsToReturn.length - 1].id : null;
+
+    // Calculate totals
+    let totalUnpaidFederal = 0;
+    let totalUnpaidState = 0;
+
+    const formattedClients = clientsToReturn.map((client) => {
+      const taxCase = client.taxCases[0];
+      const federalRefund = Number(taxCase?.federalActualRefund || 0);
+      const stateRefund = Number(taxCase?.stateActualRefund || 0);
+      const federalCommission = federalRefund * 0.11;
+      const stateCommission = stateRefund * 0.11;
+
+      // Track unpaid amounts
+      const federalUnpaid = taxCase?.federalRefundReceived && !taxCase?.federalCommissionPaid;
+      const stateUnpaid = taxCase?.stateRefundReceived && !taxCase?.stateCommissionPaid;
+
+      if (federalUnpaid) totalUnpaidFederal += federalCommission;
+      if (stateUnpaid) totalUnpaidState += stateCommission;
+
+      return {
+        id: client.id,
+        userId: client.user.id,
+        name: `${client.user.firstName} ${client.user.lastName}`,
+        email: client.user.email,
+        phone: client.user.phone,
+        taxYear: taxCase?.taxYear,
+        federal: {
+          refundAmount: federalRefund,
+          commission: Math.round(federalCommission * 100) / 100,
+          refundReceived: taxCase?.federalRefundReceived || false,
+          refundReceivedAt: taxCase?.federalRefundReceivedAt?.toISOString() || null,
+          commissionPaid: taxCase?.federalCommissionPaid || false,
+          commissionPaidAt: taxCase?.federalCommissionPaidAt?.toISOString() || null,
+        },
+        state: {
+          refundAmount: stateRefund,
+          commission: Math.round(stateCommission * 100) / 100,
+          refundReceived: taxCase?.stateRefundReceived || false,
+          refundReceivedAt: taxCase?.stateRefundReceivedAt?.toISOString() || null,
+          commissionPaid: taxCase?.stateCommissionPaid || false,
+          commissionPaidAt: taxCase?.stateCommissionPaidAt?.toISOString() || null,
+        },
+        totalUnpaidCommission: Math.round(
+          ((federalUnpaid ? federalCommission : 0) + (stateUnpaid ? stateCommission : 0)) * 100
+        ) / 100,
+      };
+    });
+
+    return {
+      clients: formattedClients,
+      nextCursor,
+      hasMore,
+      totals: {
+        unpaidFederalCommission: Math.round(totalUnpaidFederal * 100) / 100,
+        unpaidStateCommission: Math.round(totalUnpaidState * 100) / 100,
+        totalUnpaidCommission: Math.round((totalUnpaidFederal + totalUnpaidState) * 100) / 100,
+        clientCount: formattedClients.length,
+      },
+    };
+  }
+
   async updateAdminStep(id: string, step: number, changedById: string) {
     if (step < 1 || step > 5) {
       throw new BadRequestException('Step must be between 1 and 5');
