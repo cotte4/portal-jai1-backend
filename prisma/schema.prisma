@@ -500,12 +500,12 @@ enum NotificationType {
 enum ProblemType {
   missing_documents
   incorrect_information
-  irs_verification
   bank_issue
   state_issue
   federal_issue
   client_unresponsive
   other
+  // NOTE: irs_verification removed per engineer spec - verification handled via status, not problem flags
 }
 
 model W2Estimate {

@@ -3,11 +3,14 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
 import { StoragePathService } from '../../common/services';
+import { ProgressAutomationService } from '../progress/progress-automation.service';
 import {
   ConsentFormStatusDto,
   ConsentFormPrefilledDto,
@@ -36,6 +39,8 @@ export class ConsentFormService {
     private prisma: PrismaService,
     private supabase: SupabaseService,
     private storagePath: StoragePathService,
+    @Inject(forwardRef(() => ProgressAutomationService))
+    private progressAutomation: ProgressAutomationService,
   ) {
     // Load JAI-1 signatures on startup
     this.loadJai1Signatures();
@@ -227,6 +232,9 @@ export class ConsentFormService {
     );
 
     this.logger.log(`Consent form signed by user ${userId}`);
+
+    // Check if all 4 documentation items are now complete for auto-transition
+    await this.progressAutomation.checkDocumentationCompleteAndTransition(taxCase.id, userId);
 
     return {
       success: true,

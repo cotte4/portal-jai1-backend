@@ -266,14 +266,15 @@ export class ProgressAutomationService {
   }
 
   /**
-   * Check if documentation is complete and auto-transition to "preparing" status
+   * Check if documentation is complete and auto-transition to "documentos_enviados" status
    *
-   * Completion conditions:
-   * - At least 1 W2 uploaded
-   * - Payment proof uploaded
-   * - "Mi declaración" submitted (profileComplete = true, isDraft = false)
+   * Completion conditions (ALL 4 required):
+   * 1. Form submission - "Mi declaración" submitted (profileComplete = true, isDraft = false)
+   * 2. W2 upload - At least 1 W2 document uploaded
+   * 3. Payment proof upload - Payment receipt uploaded
+   * 4. Consent form signed - consentFormStatus = 'signed'
    *
-   * If all conditions are met, automatically update caseStatus to 'preparing'
+   * If all conditions are met, automatically update caseStatus to 'documentos_enviados'
    */
   async checkDocumentationCompleteAndTransition(taxCaseId: string, userId: string): Promise<void> {
     this.logger.log(`=== CHECKING DOCUMENTATION COMPLETION for TaxCase ${taxCaseId} ===`);
@@ -291,18 +292,19 @@ export class ProgressAutomationService {
       return;
     }
 
-    // Check all three conditions
+    // Check all FOUR conditions
+    const declarationSubmitted = taxCase.clientProfile.profileComplete && !taxCase.clientProfile.isDraft;
     const hasW2 = taxCase.documents.some((d) => d.type === 'w2');
     const hasPaymentProof = taxCase.documents.some((d) => d.type === 'payment_proof');
-    const declarationSubmitted = taxCase.clientProfile.profileComplete && !taxCase.clientProfile.isDraft;
+    const consentSigned = taxCase.consentFormStatus === 'signed';
 
-    this.logger.log(`Documentation check: hasW2=${hasW2}, hasPaymentProof=${hasPaymentProof}, declarationSubmitted=${declarationSubmitted}`);
+    this.logger.log(`Documentation check: declarationSubmitted=${declarationSubmitted}, hasW2=${hasW2}, hasPaymentProof=${hasPaymentProof}, consentSigned=${consentSigned}`);
     this.logger.log(`Current caseStatus: ${taxCase.caseStatus}`);
 
-    // If all conditions met AND current status is awaiting_docs, auto-transition to documentos_enviados
-    if (hasW2 && hasPaymentProof && declarationSubmitted) {
+    // If all 4 conditions met AND current status is awaiting_docs, auto-transition to documentos_enviados
+    if (declarationSubmitted && hasW2 && hasPaymentProof && consentSigned) {
       if (taxCase.caseStatus === 'awaiting_docs') {
-        this.logger.log(`✓ All documentation complete - auto-transitioning to 'documentos_enviados' status`);
+        this.logger.log(`✓ All 4 items complete - auto-transitioning to 'documentos_enviados' status`);
 
         // Update case status to 'documentos_enviados'
         await this.prisma.taxCase.update({
@@ -320,7 +322,7 @@ export class ProgressAutomationService {
             taxCaseId,
             previousStatus: 'awaiting_docs',
             newStatus: 'documentos_enviados',
-            comment: 'Automatic transition: All required documents uploaded and declaration submitted',
+            comment: 'Automatic transition: Form submitted, W2 uploaded, payment proof uploaded, and consent form signed',
             changedById: null, // null = automatic system change
           },
         });
@@ -328,16 +330,21 @@ export class ProgressAutomationService {
         // Notify admins
         const clientName = await this.getClientName(userId);
         await this.notifyAdmins(
-          'Documentación Completa - Documentos Enviados',
-          `El cliente ${clientName} ha completado toda la documentación requerida. El estado cambió automáticamente a "Documentos enviados".`,
+          'Documentación Completa - Listo para Revisión',
+          `El cliente ${clientName} ha completado los 4 pasos requeridos (formulario, W2, comprobante de pago, consentimiento). El estado cambió automáticamente a "Documentos enviados".`,
         );
 
         this.logger.log(`✓ Successfully auto-transitioned TaxCase ${taxCaseId} to 'documentos_enviados' status`);
       } else {
-        this.logger.log(`Documentation complete but current status is '${taxCase.caseStatus}' (not 'awaiting_docs') - no auto-transition`);
+        this.logger.log(`All 4 items complete but current status is '${taxCase.caseStatus}' (not 'awaiting_docs') - no auto-transition`);
       }
     } else {
-      this.logger.log(`Documentation incomplete - no auto-transition performed`);
+      const missing: string[] = [];
+      if (!declarationSubmitted) missing.push('declaration');
+      if (!hasW2) missing.push('W2');
+      if (!hasPaymentProof) missing.push('payment proof');
+      if (!consentSigned) missing.push('consent form');
+      this.logger.log(`Documentation incomplete (missing: ${missing.join(', ')}) - no auto-transition performed`);
     }
   }
 

@@ -1866,9 +1866,26 @@ export class ClientsService {
         updateData.caseStatusChangedAt = now;
       }
       // When caseStatus changes to taxes_filed, also set taxesFiled flag (for referral code generation)
+      // and auto-calculate estimated refund dates per engineer spec:
+      // - Federal: filing date + 6 weeks
+      // - State: filing date + 9 weeks
       if (statusData.caseStatus === 'taxes_filed' && !(taxCase as any).taxesFiled) {
         updateData.taxesFiled = true;
         updateData.taxesFiledAt = now;
+
+        // Auto-calculate estimated dates if not already set
+        if (!taxCase.federalEstimatedDate) {
+          const federalEstDate = new Date(now);
+          federalEstDate.setDate(federalEstDate.getDate() + 42); // 6 weeks = 42 days
+          updateData.federalEstimatedDate = federalEstDate;
+          this.logger.log(`Auto-calculated federalEstimatedDate: ${federalEstDate.toISOString()}`);
+        }
+        if (!taxCase.stateEstimatedDate) {
+          const stateEstDate = new Date(now);
+          stateEstDate.setDate(stateEstDate.getDate() + 63); // 9 weeks = 63 days
+          updateData.stateEstimatedDate = stateEstDate;
+          this.logger.log(`Auto-calculated stateEstimatedDate: ${stateEstDate.toISOString()}`);
+        }
       }
     }
 
@@ -1913,6 +1930,47 @@ export class ClientsService {
       historyComment = historyComment
         ? `${overridePrefix} | ${historyComment}`
         : overridePrefix;
+    }
+
+    // AUTO-RESOLVE PROBLEMS when status progresses to positive states
+    // Per engineer spec: Problems resolve implicitly when status changes forward
+    const positiveProgressStatuses = [
+      'deposit_pending',
+      'check_in_transit',
+      'taxes_sent',
+      'taxes_completed',
+    ];
+
+    const federalProgressed =
+      statusData.federalStatusNew &&
+      positiveProgressStatuses.includes(statusData.federalStatusNew);
+    const stateProgressed =
+      statusData.stateStatusNew &&
+      positiveProgressStatuses.includes(statusData.stateStatusNew);
+
+    if (taxCase.hasProblem && (federalProgressed || stateProgressed)) {
+      this.logger.log(
+        `Auto-resolving problem for taxCase ${taxCase.id} due to positive status progression`,
+      );
+      updateData.hasProblem = false;
+      updateData.problemResolvedAt = now;
+      updateData.problemType = null;
+      updateData.problemDescription = null;
+      updateData.problemStep = null;
+
+      // Notify client that issue was resolved
+      try {
+        await this.notificationsService.createFromTemplate(
+          client.user.id,
+          'status_change',
+          'notifications.problem_resolved',
+          {
+            firstName: client.user.firstName || 'Cliente',
+          },
+        );
+      } catch (err) {
+        this.logger.error('Failed to send problem resolved notification', err);
+      }
     }
 
     // === DEBUG LOGGING: Log final updateData before database transaction ===
@@ -3628,9 +3686,13 @@ export class ClientsService {
         const federalDepositDate = tc.federalDepositDate ? new Date(tc.federalDepositDate) : null;
         const stateDepositDate = tc.stateDepositDate ? new Date(tc.stateDepositDate) : null;
 
-        // Check if went through verification (irs_verification problem or status history mention)
+        // Check if went through verification (via status or status history mention)
+        // NOTE: irs_verification problem type removed - verification is now tracked via status
         const wentThroughVerification =
-          tc.problemType === 'irs_verification' ||
+          tc.federalStatusNew === 'in_verification' ||
+          tc.federalStatusNew === 'verification_in_progress' ||
+          tc.stateStatusNew === 'in_verification' ||
+          tc.stateStatusNew === 'verification_in_progress' ||
           tc.statusHistory.some(
             (h) =>
               h.newStatus?.toLowerCase().includes('verif') ||
