@@ -187,6 +187,12 @@ export class CalculatorService {
       }
     }
 
+    // Flag $0 results as requiring manual review (likely OCR error)
+    const requiresReview = estimatedRefund <= 0;
+    if (requiresReview) {
+      this.logger.warn(`W2 estimate resulted in $0 for user ${redactUserId(userId)} - flagged for manual review`);
+    }
+
     return {
       box2Federal,
       box17State,
@@ -194,6 +200,7 @@ export class CalculatorService {
       ocrConfidence,
       w2FileName: file.originalname,
       estimateId: estimate.id,
+      requiresReview,
     };
   }
 
@@ -356,13 +363,17 @@ EXAMPLE OF A GOOD OUTPUT:
       return { hasEstimate: false, estimate: null };
     }
 
+    const estimatedRefund = Number(estimate.estimatedRefund);
+
     return {
       hasEstimate: true,
       estimate: {
         ...estimate,
         box2Federal: Number(estimate.box2Federal),
         box17State: Number(estimate.box17State),
-        estimatedRefund: Number(estimate.estimatedRefund),
+        estimatedRefund,
+        // Flag $0 results as requiring manual review
+        requiresReview: estimatedRefund <= 0,
       },
     };
   }

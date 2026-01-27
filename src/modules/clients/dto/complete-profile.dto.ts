@@ -44,10 +44,10 @@ class AddressDto {
   @MaxLength(50, { message: 'State must be less than 50 characters' })
   state?: string;
 
-  @ApiPropertyOptional({ description: 'ZIP code', example: '10001' })
+  @ApiPropertyOptional({ description: 'ZIP/Postal code (international formats accepted)', example: '10001' })
   @IsOptional()
   @IsString()
-  @Matches(/^\d{5}(-\d{4})?$/, { message: 'Invalid ZIP code format' })
+  @Matches(/^[a-zA-Z0-9\s\-]{3,15}$/, { message: 'ZIP code must be 3-15 alphanumeric characters' })
   @MaxLength(20, { message: 'ZIP code must be less than 20 characters' })
   zip?: string;
 }

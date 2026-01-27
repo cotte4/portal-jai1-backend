@@ -18,4 +18,11 @@ export class EstimateResponseDto {
 
   @ApiProperty({ description: 'Unique ID for this estimate' })
   estimateId: string;
+
+  @ApiProperty({
+    description: 'Indicates if result is $0 and needs manual review (likely OCR error)',
+    example: false,
+    required: false
+  })
+  requiresReview?: boolean;
 }

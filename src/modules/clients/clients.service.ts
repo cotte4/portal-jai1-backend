@@ -115,8 +115,30 @@ export class ClientsService {
   }
 
   /**
+   * Known country codes supported by the application.
+   * Sorted by length descending for proper matching (longer codes first).
+   */
+  private readonly KNOWN_COUNTRY_CODES = [
+    '+598', // Uruguay (3 digits)
+    '+595', // Paraguay (3 digits)
+    '+593', // Ecuador (3 digits)
+    '+591', // Bolivia (3 digits)
+    '+54',  // Argentina (2 digits)
+    '+58',  // Venezuela (2 digits)
+    '+57',  // Colombia (2 digits)
+    '+56',  // Chile (2 digits)
+    '+55',  // Brasil (2 digits)
+    '+52',  // Mexico (2 digits)
+    '+51',  // Peru (2 digits)
+    '+1',   // Estados Unidos/Canada (1 digit)
+  ];
+
+  /**
    * Parse E.164 phone number format back to separate country code and number.
    * E.164 format: +[country code][number] (e.g., +5491112345678, +12025551234)
+   *
+   * Uses a known list of country codes to properly separate the code from the number.
+   * This avoids greedy regex issues where +54 would be parsed as +549.
    *
    * @param phone - Phone number in E.164 format
    * @returns Object with countryCode and number, or null if invalid/empty
@@ -124,15 +146,29 @@ export class ClientsService {
   private parseE164Phone(
     phone: string | null | undefined,
   ): { countryCode: string; number: string } | null {
-    if (!phone) return null;
+    if (!phone || !phone.startsWith('+')) return null;
 
-    // E.164 format: +[1-3 digit country code][subscriber number]
-    // Common country codes: +1 (US/Canada), +54 (Argentina), +52 (Mexico), +34 (Spain), etc.
-    // Use a regex that captures 1-3 digit country codes followed by the remaining number
-    const match = phone.match(/^(\+\d{1,3})(\d+)$/);
-    if (match) {
-      return { countryCode: match[1], number: match[2] };
+    // Try to match against known country codes (sorted by length desc)
+    for (const code of this.KNOWN_COUNTRY_CODES) {
+      if (phone.startsWith(code)) {
+        const number = phone.slice(code.length);
+        if (number.length > 0) {
+          return { countryCode: code, number };
+        }
+      }
     }
+
+    // Fallback: try regex for unknown codes (1-3 digits, non-greedy approach)
+    // This handles codes not in our list by trying 3, 2, then 1 digit
+    for (let digits = 3; digits >= 1; digits--) {
+      const regex = new RegExp(`^(\\+\\d{${digits}})(\\d+)$`);
+      const match = phone.match(regex);
+      if (match && match[2].length >= 6) {
+        // Only accept if remaining number is at least 6 digits (reasonable phone number)
+        return { countryCode: match[1], number: match[2] };
+      }
+    }
+
     return null;
   }
 
