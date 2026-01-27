@@ -96,6 +96,25 @@ export class ClientsService {
   }
 
   /**
+   * Get signed URL for profile picture if user has one
+   */
+  private async getProfilePictureUrl(
+    profilePicturePath: string | null,
+  ): Promise<string | null> {
+    if (!profilePicturePath) return null;
+    try {
+      return await this.supabase.getSignedUrl(
+        this.PROFILE_PICTURES_BUCKET,
+        profilePicturePath,
+        3600, // 1 hour expiry
+      );
+    } catch (err) {
+      this.logger.error('Failed to get profile picture signed URL', err);
+      return null;
+    }
+  }
+
+  /**
    * Parse E.164 phone number format back to separate country code and number.
    * E.164 format: +[country code][number] (e.g., +5491112345678, +12025551234)
    *
@@ -1454,6 +1473,11 @@ export class ClientsService {
       throw new NotFoundException('Client not found');
     }
 
+    // Get profile picture URL if exists
+    const profilePictureUrl = await this.getProfilePictureUrl(
+      client.user.profilePicturePath,
+    );
+
     // Collect all documents from all tax cases
     const allDocuments = client.taxCases.flatMap((tc) => tc.documents);
 
@@ -1481,6 +1505,7 @@ export class ClientsService {
         firstName: client.user.firstName,
         lastName: client.user.lastName,
         phone: client.user.phone,
+        profilePictureUrl,
         isActive: client.user.isActive,
         lastLoginAt: client.user.lastLoginAt,
         createdAt: client.user.createdAt,
