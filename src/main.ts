@@ -45,8 +45,35 @@ async function bootstrap() {
 
   // Enable CORS
   const isDev = configService.get<string>('NODE_ENV') !== 'production';
+  const frontendUrl = configService.get<string>('FRONTEND_URL');
+
+  // Allow multiple origins: configured FRONTEND_URL + Vercel preview URLs
+  const allowedOrigins = isDev
+    ? true
+    : (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+
+        // Check if origin matches FRONTEND_URL or is a Vercel preview URL
+        const isAllowed =
+          origin === frontendUrl ||
+          origin === frontendUrl?.replace(/\/$/, '') || // Without trailing slash
+          origin.endsWith('.vercel.app') || // Vercel preview/production URLs
+          origin.includes('localhost'); // Local development
+
+        if (isAllowed) {
+          callback(null, true);
+        } else {
+          console.warn(`CORS blocked origin: ${origin}`);
+          callback(new Error('Not allowed by CORS'));
+        }
+      };
+
   app.enableCors({
-    origin: isDev ? true : configService.get<string>('FRONTEND_URL'),
+    origin: allowedOrigins,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,

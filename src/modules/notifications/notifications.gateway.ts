@@ -20,7 +20,21 @@ import { ConfigService } from '@nestjs/config';
 @WebSocketGateway({
   namespace: 'notifications',
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:4200',
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      const frontendUrl = process.env.FRONTEND_URL;
+      const isDev = process.env.NODE_ENV !== 'production';
+
+      // Allow in dev, or if origin matches allowed patterns
+      const isAllowed =
+        isDev ||
+        !origin ||
+        origin === frontendUrl ||
+        origin === frontendUrl?.replace(/\/$/, '') ||
+        origin.endsWith('.vercel.app') ||
+        origin.includes('localhost');
+
+      callback(null, isAllowed);
+    },
     credentials: true,
   },
   transports: ['websocket', 'polling'], // Prefer WebSocket, fallback to polling
