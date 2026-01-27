@@ -716,6 +716,23 @@ enum Jai1gentReferralStatus {
   expired           // No activity after timeout
 }
 
+// ============= KNOWLEDGE BASE (RAG) =============
+
+// Knowledge chunks for chatbot RAG
+// Note: embedding field uses pgvector (handled via raw SQL)
+model KnowledgeChunk {
+  id        String   @id @default(uuid()) @db.Uuid
+  section   String   @db.VarChar(200)
+  content   String
+  // embedding vector(1536) - handled via raw SQL, not in Prisma
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([section])
+  @@map("knowledge_chunks")
+}
+
 // Individual referral tracking for JAI1GENTS
 model Jai1gentReferral {
   id                  String                  @id @default(uuid()) @db.Uuid
