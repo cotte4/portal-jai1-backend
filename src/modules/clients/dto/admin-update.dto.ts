@@ -24,6 +24,52 @@ import {
 } from '@prisma/client';
 
 /**
+ * Custom validator to ensure a date string represents a valid calendar date.
+ * JavaScript's Date constructor auto-corrects invalid dates (Feb 30 → Mar 1),
+ * so we need to explicitly check that the parsed date matches the input.
+ */
+@ValidatorConstraint({ name: 'isValidCalendarDate', async: false })
+export class IsValidCalendarDateConstraint implements ValidatorConstraintInterface {
+  validate(value: string, _args: ValidationArguments): boolean {
+    if (!value) return true; // Let @IsOptional handle null/undefined
+
+    // Parse the date string (expected format: YYYY-MM-DD)
+    const parts = value.split('-');
+    if (parts.length !== 3) return false;
+
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+
+    // Create date and check if it matches the input
+    // If input was Feb 30, JS creates Mar 1, so comparison will fail
+    const date = new Date(year, month - 1, day);
+
+    return (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
+    );
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} is not a valid calendar date`;
+  }
+}
+
+export function IsValidCalendarDate(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      constraints: [],
+      validator: IsValidCalendarDateConstraint,
+    });
+  };
+}
+
+/**
  * Custom validator to ensure a date string is not in the future.
  * Used for deposit dates - you can't have deposited money in the future.
  */
@@ -77,6 +123,7 @@ export class UpdateStatusDto {
   @ApiPropertyOptional({ description: 'Estimated federal refund date', example: '2024-03-15' })
   @IsOptional()
   @IsDateString()
+  @IsValidCalendarDate({ message: 'Fecha estimada federal no es valida' })
   federalEstimatedDate?: string;
 
   @ApiPropertyOptional({ description: 'Actual federal refund amount', example: 2500 })
@@ -88,12 +135,13 @@ export class UpdateStatusDto {
   @ApiPropertyOptional({ description: 'Federal refund deposit date', example: '2024-03-10' })
   @IsOptional()
   @IsDateString()
-  @IsNotFutureDate({ message: 'Federal deposit date cannot be in the future' })
+  @IsValidCalendarDate({ message: 'Fecha de deposito federal no es valida (ej: 30 de febrero)' })
   federalDepositDate?: string;
 
   @ApiPropertyOptional({ description: 'Estimated state refund date', example: '2024-04-01' })
   @IsOptional()
   @IsDateString()
+  @IsValidCalendarDate({ message: 'Fecha estimada estatal no es valida' })
   stateEstimatedDate?: string;
 
   @ApiPropertyOptional({ description: 'Actual state refund amount', example: 800 })
@@ -105,7 +153,7 @@ export class UpdateStatusDto {
   @ApiPropertyOptional({ description: 'State refund deposit date', example: '2024-03-25' })
   @IsOptional()
   @IsDateString()
-  @IsNotFutureDate({ message: 'State deposit date cannot be in the future' })
+  @IsValidCalendarDate({ message: 'Fecha de deposito estatal no es valida (ej: 30 de febrero)' })
   stateDepositDate?: string;
 
   @ApiPropertyOptional({ description: 'Case status (pre-filing workflow)' })
