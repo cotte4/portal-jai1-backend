@@ -1969,14 +1969,33 @@ export class ClientsService {
         this.logger.log(
           `Generated referral code ${code} for user ${client.user.id} (taxes marked as filed)`,
         );
-
-        // Also update referral status if this user was referred
-        await this.referralsService.updateReferralOnTaxFormSubmit(
-          client.user.id,
-        );
+        // Note: Referral status update removed - now triggered by taxes_completed status
       } catch (err) {
         this.logger.error('Failed to generate referral code', err);
         // Don't fail the status update if referral code generation fails
+      }
+    }
+
+    // Mark referral as successful when federal or state status becomes taxes_completed
+    const isFederalCompleted =
+      statusData.federalStatusNew === 'taxes_completed' &&
+      previousFederalStatusNew !== 'taxes_completed';
+    const isStateCompleted =
+      statusData.stateStatusNew === 'taxes_completed' &&
+      previousStateStatusNew !== 'taxes_completed';
+
+    if (isFederalCompleted || isStateCompleted) {
+      try {
+        await this.referralsService.markReferralSuccessful(
+          client.user.id,
+          taxCase.id,
+        );
+        this.logger.log(
+          `Marked referral as successful for user ${client.user.id} (taxes_completed)`,
+        );
+      } catch (err) {
+        this.logger.error('Failed to mark referral as successful on taxes_completed', err);
+        // Don't fail status update if referral marking fails
       }
     }
 
@@ -2264,11 +2283,7 @@ export class ClientsService {
         this.logger.log(
           `Generated referral code ${code} for user ${client.user.id}`,
         );
-
-        // Also update referral status if this user was referred
-        await this.referralsService.updateReferralOnTaxFormSubmit(
-          client.user.id,
-        );
+        // Note: Referral status update removed - now triggered by taxes_completed status
       } catch (err) {
         this.logger.error('Failed to generate referral code', err);
         // Don't fail the step update if referral code generation fails

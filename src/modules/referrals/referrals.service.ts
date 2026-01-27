@@ -316,19 +316,16 @@ export class ReferralsService {
   }
 
   /**
+   * @deprecated No longer used - referral status now goes directly from 'pending' to 'successful'
+   * when federal/state status becomes 'taxes_completed'. Kept for backwards compatibility.
    * Update referral status when referred user submits tax form
    */
   async updateReferralOnTaxFormSubmit(referredUserId: string): Promise<void> {
-    const referral = await this.prisma.referral.findUnique({
-      where: { referredUserId },
-    });
-
-    if (referral && referral.status === 'pending') {
-      await this.prisma.referral.update({
-        where: { id: referral.id },
-        data: { status: 'tax_form_submitted' },
-      });
-    }
+    // Deprecated: No-op - intermediate statuses removed
+    // Referrals now transition directly: pending -> successful (on taxes_completed)
+    this.logger.debug(
+      `updateReferralOnTaxFormSubmit called for ${referredUserId} - deprecated, skipping`,
+    );
   }
 
   /**
@@ -1027,10 +1024,12 @@ export class ReferralsService {
     expirationDate.setDate(expirationDate.getDate() - REFERRAL_EXPIRATION_DAYS);
 
     try {
-      // Expire both 'pending' and 'tax_form_submitted' referrals that are too old
+      // Expire 'pending' referrals that are too old
+      // Note: 'tax_form_submitted' and 'awaiting_refund' included for backwards compatibility
+      // with existing data, but new referrals only use 'pending' -> 'successful' flow
       const result = await this.prisma.referral.updateMany({
         where: {
-          status: { in: ['pending', 'tax_form_submitted'] },
+          status: { in: ['pending', 'tax_form_submitted', 'awaiting_refund'] },
           createdAt: {
             lt: expirationDate,
           },

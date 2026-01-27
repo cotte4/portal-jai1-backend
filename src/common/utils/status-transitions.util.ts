@@ -60,44 +60,15 @@ export type StatusTransitionType = 'case' | 'federal' | 'state';
  * @param type - The type of status (case, federal, or state)
  * @param from - Current status (null/undefined for first status)
  * @param to - Target status
- * @returns true if transition is valid, false otherwise
+ * @returns true - all transitions are allowed (admin has full control)
  */
 export function isValidTransition(
   type: StatusTransitionType,
   from: string | null | undefined,
   to: string,
 ): boolean {
-  // null/undefined current status allows any first status
-  if (from === null || from === undefined) {
-    return true;
-  }
-
-  // Same status is always valid (no change)
-  if (from === to) {
-    return true;
-  }
-
-  let transitions: Map<string, string[]>;
-  switch (type) {
-    case 'case':
-      transitions = CASE_STATUS_TRANSITIONS as Map<string, string[]>;
-      break;
-    case 'federal':
-      transitions = FEDERAL_STATUS_TRANSITIONS as Map<string, string[]>;
-      break;
-    case 'state':
-      transitions = STATE_STATUS_TRANSITIONS as Map<string, string[]>;
-      break;
-    default:
-      return false;
-  }
-
-  const allowedTransitions = transitions.get(from);
-  if (!allowedTransitions) {
-    return false;
-  }
-
-  return allowedTransitions.includes(to);
+  // Allow all transitions - admin has full control
+  return true;
 }
 
 /**
