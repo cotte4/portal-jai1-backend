@@ -35,8 +35,6 @@ export function mapFederalStatusToClientDisplay(status: FederalStatusNew | null 
     [FederalStatusNew.in_process]: 'Taxes en proceso',
     [FederalStatusNew.in_verification]: 'En verificación',
     [FederalStatusNew.verification_in_progress]: 'En verificación',
-    [FederalStatusNew.verification_letter_sent]: 'En verificación',
-    [FederalStatusNew.deposit_pending]: 'Esperando depósito',
     [FederalStatusNew.check_in_transit]: 'Cheque en camino',
     [FederalStatusNew.issues]: 'Problemas - contactar soporte',
     [FederalStatusNew.taxes_sent]: 'Reembolso enviado',
@@ -56,8 +54,6 @@ export function mapStateStatusToClientDisplay(status: StateStatusNew | null | un
     [StateStatusNew.in_process]: 'Taxes en proceso',
     [StateStatusNew.in_verification]: 'En verificación',
     [StateStatusNew.verification_in_progress]: 'En verificación',
-    [StateStatusNew.verification_letter_sent]: 'En verificación',
-    [StateStatusNew.deposit_pending]: 'Esperando depósito',
     [StateStatusNew.check_in_transit]: 'Cheque en camino',
     [StateStatusNew.issues]: 'Problemas - contactar soporte',
     [StateStatusNew.taxes_sent]: 'Reembolso enviado',
@@ -97,8 +93,6 @@ export function getFederalStatusNewLabel(status: FederalStatusNew | null | undef
     [FederalStatusNew.in_process]: 'En Proceso',
     [FederalStatusNew.in_verification]: 'En Verificación',
     [FederalStatusNew.verification_in_progress]: 'Verificación en Progreso',
-    [FederalStatusNew.verification_letter_sent]: 'Carta de Verificación Enviada',
-    [FederalStatusNew.deposit_pending]: 'Depósito Pendiente',
     [FederalStatusNew.check_in_transit]: 'Cheque en Camino',
     [FederalStatusNew.issues]: 'Problemas',
     [FederalStatusNew.taxes_sent]: 'Reembolso Enviado',
@@ -118,8 +112,6 @@ export function getStateStatusNewLabel(status: StateStatusNew | null | undefined
     [StateStatusNew.in_process]: 'En Proceso',
     [StateStatusNew.in_verification]: 'En Verificación',
     [StateStatusNew.verification_in_progress]: 'Verificación en Progreso',
-    [StateStatusNew.verification_letter_sent]: 'Carta de Verificación Enviada',
-    [StateStatusNew.deposit_pending]: 'Depósito Pendiente',
     [StateStatusNew.check_in_transit]: 'Cheque en Camino',
     [StateStatusNew.issues]: 'Problemas',
     [StateStatusNew.taxes_sent]: 'Reembolso Enviado',
@@ -141,6 +133,9 @@ export interface StatusAlarm {
   daysSinceStatusChange: number;
   threshold: number;
 }
+
+// Note: letter_sent_timeout kept in type for backward compat with existing alarm_history records.
+// New alarms will only use verification_timeout (covers all verification sub-states).
 
 // Default alarm thresholds in days
 export const DEFAULT_ALARM_THRESHOLDS = {
@@ -229,18 +224,8 @@ export function calculateAlarms(
       });
     }
 
-    // Letter sent timeout (verification_letter_sent > threshold days)
-    if (federalStatus === FederalStatusNew.verification_letter_sent &&
-        daysSinceChange > thresholds.letterSentTimeout) {
-      alarms.push({
-        type: 'letter_sent_timeout',
-        level: 'critical',
-        track: 'federal',
-        message: `Federal: Carta sin respuesta (${daysSinceChange} días)`,
-        daysSinceStatusChange: daysSinceChange,
-        threshold: thresholds.letterSentTimeout,
-      });
-    }
+    // Note: letter_sent_timeout removed — verification_letter_sent merged into verification_in_progress
+    // The verification_timeout alarm above now covers all verification sub-states
   }
 
   // State alarms (if not disabled)
@@ -273,18 +258,8 @@ export function calculateAlarms(
       });
     }
 
-    // Letter sent timeout (verification_letter_sent > threshold days)
-    if (stateStatus === StateStatusNew.verification_letter_sent &&
-        daysSinceChange > thresholds.letterSentTimeout) {
-      alarms.push({
-        type: 'letter_sent_timeout',
-        level: 'critical',
-        track: 'state',
-        message: `Estatal: Carta sin respuesta (${daysSinceChange} días)`,
-        daysSinceStatusChange: daysSinceChange,
-        threshold: thresholds.letterSentTimeout,
-      });
-    }
+    // Note: letter_sent_timeout removed — verification_letter_sent merged into verification_in_progress
+    // The verification_timeout alarm above now covers all verification sub-states
   }
 
   return alarms;

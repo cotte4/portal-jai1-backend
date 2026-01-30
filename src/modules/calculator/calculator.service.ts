@@ -78,11 +78,38 @@ export class CalculatorService {
     }
 
     // Call OpenAI Vision API with retry logic
-    const { ocrResult, rawResponse } = await this.callOpenAIWithRetry(base64Image, mimeType);
+    let { ocrResult, rawResponse } = await this.callOpenAIWithRetry(base64Image, mimeType);
 
     // Parse values
-    const box2Federal = parseFloat(ocrResult.box_2) || 0;
-    const box17State = parseFloat(ocrResult.box_17) || 0;
+    let box2Federal = parseFloat(ocrResult.box_2) || 0;
+    let box17State = parseFloat(ocrResult.box_17) || 0;
+
+    // Auto-retry once if one value is 0 but the other is valid (partial OCR failure)
+    if ((box2Federal === 0) !== (box17State === 0)) {
+      const missingBox = box2Federal === 0 ? 'box_2 (Federal income Tax withheld)' : 'box_17 (State income Tax)';
+      this.logger.warn(`Partial OCR result: missing ${missingBox}. Retrying with focused prompt...`);
+
+      try {
+        const retryResult = await this.callOpenAIWithRetry(base64Image, mimeType, missingBox);
+        const retryFederal = parseFloat(retryResult.ocrResult.box_2) || 0;
+        const retryState = parseFloat(retryResult.ocrResult.box_17) || 0;
+
+        // Use retry result if it found the missing value
+        if (box2Federal === 0 && retryFederal > 0) {
+          box2Federal = retryFederal;
+          rawResponse = retryResult.rawResponse;
+          this.logger.log(`Retry found box_2: $${retryFederal}`);
+        }
+        if (box17State === 0 && retryState > 0) {
+          box17State = retryState;
+          rawResponse = retryResult.rawResponse;
+          this.logger.log(`Retry found box_17: $${retryState}`);
+        }
+      } catch (retryError) {
+        this.logger.warn('Retry for missing value failed, using original result');
+      }
+    }
+
     const estimatedRefund = box2Federal + box17State;
 
     // Determine confidence level
@@ -211,22 +238,11 @@ export class CalculatorService {
   private async callOpenAIWithRetry(
     base64Image: string,
     mimeType: string,
+    focusOnMissingBox?: string,
   ): Promise<{ ocrResult: OcrResult; rawResponse: any }> {
     let lastError: Error | null = null;
 
-    for (let attempt = 1; attempt <= OCR_MAX_RETRIES; attempt++) {
-      try {
-        this.logger.log(`OpenAI OCR attempt ${attempt}/${OCR_MAX_RETRIES}`);
-
-        const response = await this.getOpenAI().chat.completions.create({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `Your task is to correctly extract the numerical values from [box 2] and [box 17] from this W2 document.
+    const basePrompt = `Your task is to correctly extract the numerical values from [box 2] and [box 17] from this W2 document.
 [box 2] corresponds to: Federal income Tax withheld
 [box 17] corresponds to: State income Tax
 In most cases you will find both values inside of their respective boxes.
@@ -237,7 +253,25 @@ EXAMPLE OF A GOOD OUTPUT:
 {
   "box_2": "1110.02",
   "box_17": "410.11"
-}`,
+}`;
+
+    const retryPrompt = focusOnMissingBox
+      ? `IMPORTANT: A previous scan could not find the value for ${focusOnMissingBox}. Look very carefully at the document. The value is almost certainly present — it may be in a slightly different position, faint, or overlapping with other text. Extract BOTH values.\n\n${basePrompt}`
+      : basePrompt;
+
+    for (let attempt = 1; attempt <= OCR_MAX_RETRIES; attempt++) {
+      try {
+        this.logger.log(`OpenAI OCR attempt ${attempt}/${OCR_MAX_RETRIES}${focusOnMissingBox ? ' (focused retry)' : ''}`);
+
+        const response = await this.getOpenAI().chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: retryPrompt,
                 },
                 {
                   type: 'image_url',

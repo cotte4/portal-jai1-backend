@@ -128,6 +128,7 @@ export class UpdateStatusDto {
 
   @ApiPropertyOptional({ description: 'Actual federal refund amount', example: 2500 })
   @IsOptional()
+  @ValidateIf((o) => o.federalActualRefund !== null && o.federalActualRefund !== undefined)
   @IsNumber()
   @Min(0, { message: 'Federal refund cannot be negative' })
   federalActualRefund?: number;
@@ -146,6 +147,7 @@ export class UpdateStatusDto {
 
   @ApiPropertyOptional({ description: 'Actual state refund amount', example: 800 })
   @IsOptional()
+  @ValidateIf((o) => o.stateActualRefund !== null && o.stateActualRefund !== undefined)
   @IsNumber()
   @Min(0, { message: 'State refund cannot be negative' })
   stateActualRefund?: number;

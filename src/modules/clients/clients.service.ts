@@ -1215,7 +1215,7 @@ export class ClientsService {
           some: {
             ...existingTaxCaseFilters,
             caseStatus: 'taxes_filed',
-            federalStatusNew: { in: ['in_process', 'deposit_pending', 'check_in_transit'] },
+            federalStatusNew: { in: ['in_process', 'check_in_transit', 'taxes_sent'] },
           },
         };
       } else if (options.status === 'group_completed') {
@@ -1961,7 +1961,6 @@ export class ClientsService {
     // AUTO-RESOLVE PROBLEMS when status progresses to positive states
     // Per engineer spec: Problems resolve implicitly when status changes forward
     const positiveProgressStatuses = [
-      'deposit_pending',
       'check_in_transit',
       'taxes_sent',
       'taxes_completed',
@@ -2144,7 +2143,6 @@ export class ClientsService {
     // Map v2 status values to notification templates
     const templateMap: Record<string, string> = {
       in_process: 'notifications.status_federal_processing',
-      deposit_pending: 'notifications.status_federal_deposit_pending',
       check_in_transit: 'notifications.status_federal_approved',
       issues: 'notifications.status_federal_rejected',
       taxes_sent: 'notifications.status_federal_approved',
@@ -2159,7 +2157,7 @@ export class ClientsService {
         variables.amount = refundAmount.toLocaleString();
       }
 
-      if (status === 'deposit_pending' || status === 'check_in_transit' || status === 'taxes_sent') {
+      if (status === 'check_in_transit' || status === 'taxes_sent') {
         variables.estimatedDate = 'próximamente';
       }
 
@@ -2185,7 +2183,6 @@ export class ClientsService {
     // Map v2 status values to notification templates
     const templateMap: Record<string, string> = {
       in_process: 'notifications.status_state_processing',
-      deposit_pending: 'notifications.status_state_deposit_pending',
       check_in_transit: 'notifications.status_state_approved',
       issues: 'notifications.status_state_rejected',
       taxes_sent: 'notifications.status_state_approved',
@@ -2200,7 +2197,7 @@ export class ClientsService {
         variables.amount = refundAmount.toLocaleString();
       }
 
-      if (status === 'deposit_pending' || status === 'check_in_transit' || status === 'taxes_sent') {
+      if (status === 'check_in_transit' || status === 'taxes_sent') {
         variables.estimatedDate = 'próximamente';
       }
 
@@ -2929,7 +2926,7 @@ export class ClientsService {
       } else if (options.status === 'group_in_review') {
         // V2: Use caseStatus instead of taxesFiled
         where.taxCases = {
-          some: { ...existingTaxCaseFilters, caseStatus: 'taxes_filed', federalStatusNew: { in: ['in_process', 'deposit_pending', 'check_in_transit'] } },
+          some: { ...existingTaxCaseFilters, caseStatus: 'taxes_filed', federalStatusNew: { in: ['in_process', 'check_in_transit', 'taxes_sent'] } },
         };
       } else if (options.status === 'group_completed') {
         where.taxCases = {
