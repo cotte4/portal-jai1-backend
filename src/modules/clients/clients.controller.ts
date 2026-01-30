@@ -27,6 +27,7 @@ import { Roles, CurrentUser } from '../../common/decorators';
 import { PAGINATION_LIMITS, validateLimit } from '../../common/constants';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { UpdateSensitiveProfileDto } from './dto/update-sensitive-profile.dto';
+import { UpdateUserInfoDto } from './dto/update-user-info.dto';
 import { ConfirmRefundDto } from './dto/confirm-refund.dto';
 import {
   UpdateStatusDto,
@@ -80,20 +81,7 @@ export class ClientsController {
   @ApiResponse({ status: 200, description: 'User info updated' })
   async updateUserInfo(
     @CurrentUser() user: any,
-    @Body()
-    updateData: {
-      phone?: string;
-      firstName?: string;
-      lastName?: string;
-      dateOfBirth?: string;
-      preferredLanguage?: string;
-      address?: {
-        street?: string;
-        city?: string;
-        state?: string;
-        zip?: string;
-      };
-    },
+    @Body() updateData: UpdateUserInfoDto,
   ) {
     return this.clientsService.updateUserInfo(user.id, updateData);
   }

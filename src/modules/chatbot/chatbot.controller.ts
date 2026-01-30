@@ -1,16 +1,7 @@
 import { Controller, Post, Body, UseGuards, Logger } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { KnowledgeService } from '../knowledge/knowledge.service';
-
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-interface ChatRequest {
-  message: string;
-  history?: ChatMessage[];
-}
+import { ChatRequestDto } from './dto/chat.dto';
 
 @Controller('chatbot')
 @UseGuards(JwtAuthGuard)
@@ -22,7 +13,7 @@ export class ChatbotController {
   constructor(private readonly knowledgeService: KnowledgeService) {}
 
   @Post()
-  async chat(@Body() body: ChatRequest) {
+  async chat(@Body() body: ChatRequestDto) {
     try {
       // Get relevant context from knowledge base
       let context = '';

@@ -256,9 +256,6 @@ export class UsersService {
     return this.prisma.user.findFirst({
       where: {
         verificationToken: tokenHash,
-        verificationTokenExpiresAt: {
-          gt: new Date(),
-        },
       },
     });
   }
@@ -271,7 +268,7 @@ export class UsersService {
       where: { id: userId },
       data: {
         emailVerified: true,
-        verificationToken: null,
+        // Keep verificationToken so re-clicks can identify the user
         verificationTokenExpiresAt: null,
       },
     });

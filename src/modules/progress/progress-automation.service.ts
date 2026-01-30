@@ -4,7 +4,7 @@ import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '@nestjs/config';
 import { CaseStatus } from '@prisma/client';
-import { redactUserId, sanitizeMetadata } from '../../common/utils/log-sanitizer';
+import { redactUserId, redactName, sanitizeMetadata } from '../../common/utils/log-sanitizer';
 
 export type ProgressEventType =
   | 'PROFILE_COMPLETED'
@@ -517,7 +517,7 @@ export class ProgressAutomationService {
           },
         );
 
-        this.logger.log(`Sent docs_missing notification to client ${redactUserId(user.id)} (${user.firstName} ${user.lastName})`);
+        this.logger.log(`Sent docs_missing notification to client ${redactUserId(user.id)} (${redactName(user.firstName + ' ' + user.lastName)})`);
         notified++;
       }
     } catch (error) {

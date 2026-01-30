@@ -5,13 +5,14 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import * as Joi from 'joi';
 
 // Config
 import { PrismaService } from './config/prisma.service';
 import { SupabaseService } from './config/supabase.service';
 
 // Common
-import { HttpExceptionFilter } from './common/filters';
+import { HttpExceptionFilter, PrismaExceptionFilter } from './common/filters';
 import { EncryptionService, EmailService, StoragePathService } from './common/services';
 
 // i18n
@@ -41,6 +42,24 @@ import { ConsentFormModule } from './modules/consent-form/consent-form.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      validationSchema: Joi.object({
+        DATABASE_URL: Joi.string().required(),
+        JWT_SECRET: Joi.string().min(32).required(),
+        ENCRYPTION_KEY: Joi.string().min(32).required(),
+        SUPABASE_URL: Joi.string().uri().required(),
+        SUPABASE_SERVICE_KEY: Joi.string().required(),
+        RESEND_API_KEY: Joi.string().optional(),
+        OPENAI_API_KEY: Joi.string().optional(),
+        GOOGLE_CLIENT_ID: Joi.string().optional(),
+        GOOGLE_CLIENT_SECRET: Joi.string().optional(),
+        NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
+        PORT: Joi.number().default(3000),
+        FRONTEND_URL: Joi.string().required(),
+      }),
+      validationOptions: {
+        allowUnknown: true,
+        abortEarly: false,
+      },
     }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{
@@ -75,6 +94,10 @@ import { ConsentFormModule } from './modules/consent-form/consent-form.module';
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: PrismaExceptionFilter,
     },
     {
       provide: APP_PIPE,

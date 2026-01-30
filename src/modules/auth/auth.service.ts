@@ -207,7 +207,7 @@ export class AuthService {
       // Log failed login attempt (unknown email)
       this.auditLogsService.log({
         action: AuditAction.LOGIN_FAILED,
-        details: { email: loginDto.email, reason: 'Email not found' },
+        details: { reason: 'Email not found' },
         ipAddress,
         userAgent,
       });
@@ -306,6 +306,9 @@ export class AuthService {
       await this.usersService.revokeAllUserRefreshTokens(userId);
       this.logger.log(`User ${userId} logged out - all tokens revoked`);
     }
+
+    // Increment token version to invalidate all existing access tokens
+    await this.usersService.incrementTokenVersion(userId);
 
     return { message: 'Logged out successfully' };
   }
@@ -425,7 +428,7 @@ export class AuthService {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       // Don't reveal if email exists - return same message
-      this.logger.log(`Password reset requested for non-existent email: ${email}`);
+      this.logger.log(`Password reset requested for non-existent email: ${redactEmail(email)}`);
       return { message: 'If the email exists, a reset link has been sent' };
     }
 
@@ -444,9 +447,9 @@ export class AuthService {
       .sendPasswordResetEmail(user.email, user.firstName, resetToken)
       .then((success) => {
         if (success) {
-          this.logger.log(`Password reset email sent to: ${user.email}`);
+          this.logger.log(`Password reset email sent to: ${redactEmail(user.email)}`);
         } else {
-          this.logger.error(`Failed to send password reset email to: ${user.email}`);
+          this.logger.error(`Failed to send password reset email to: ${redactEmail(user.email)}`);
         }
       })
       .catch((err) => this.logger.error('Failed to send password reset email', err));
@@ -487,7 +490,7 @@ export class AuthService {
       details: { method: 'email_token' },
     });
 
-    this.logger.log(`Password reset successful for user: ${user.email}`);
+    this.logger.log(`Password reset successful for user: ${redactEmail(user.email)}`);
 
     return { message: 'Password has been reset successfully' };
   }
@@ -540,7 +543,7 @@ export class AuthService {
       details: { method: 'user_change' },
     });
 
-    this.logger.log(`Password changed successfully for user: ${user.email}`);
+    this.logger.log(`Password changed successfully for user: ${redactEmail(user.email)}`);
 
     return { message: 'Password has been changed successfully' };
   }
@@ -641,7 +644,7 @@ export class AuthService {
       expiresAt: Date.now() + this.authConfig.oauthCodeTtlMs,
     });
 
-    this.logger.log(`Created OAuth code for user: ${user.email}`);
+    this.logger.log(`Created OAuth code for user: ${redactEmail(user.email)}`);
     return code;
   }
 
@@ -728,7 +731,7 @@ export class AuthService {
     });
 
     this.logger.log(
-      `Generated tokens for ${email} (rememberMe: ${rememberMe}, accessExpiry: ${accessTokenExpirySeconds}s)`,
+      `Generated tokens for ${redactEmail(email)} (rememberMe: ${rememberMe}, accessExpiry: ${accessTokenExpirySeconds}s)`,
     );
 
     return {
@@ -758,6 +761,11 @@ export class AuthService {
     const user = await this.usersService.findByVerificationToken(hashedToken);
     if (!user) {
       throw new BadRequestException('Invalid or expired verification token');
+    }
+
+    // If already verified, return friendly message instead of re-verifying
+    if (user.emailVerified) {
+      return { message: 'Email already verified. You can log in.' };
     }
 
     // Mark email as verified

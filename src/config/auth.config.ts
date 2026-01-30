@@ -69,7 +69,7 @@ export function parseDurationToSeconds(duration: string): number {
  */
 export function getAuthConfig(configService: ConfigService): AuthConfig {
   const accessTokenExpiry = configService.get<string>('JWT_ACCESS_EXPIRY') || '15m';
-  const accessTokenExpiryRememberMe = configService.get<string>('JWT_ACCESS_EXPIRY_REMEMBER') || '7d';
+  const accessTokenExpiryRememberMe = configService.get<string>('JWT_ACCESS_EXPIRY_REMEMBER') || '1h';
   const refreshTokenExpiry = configService.get<string>('JWT_REFRESH_EXPIRY') || '7d';
   const refreshTokenExpiryRememberMe = configService.get<string>('JWT_REFRESH_EXPIRY_REMEMBER') || '30d';
   const oauthCodeTtl = configService.get<string>('OAUTH_CODE_TTL') || '5m';

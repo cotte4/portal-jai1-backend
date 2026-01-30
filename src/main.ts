@@ -61,8 +61,7 @@ async function bootstrap() {
         const isAllowed =
           origin === frontendUrl ||
           origin === frontendUrl?.replace(/\/$/, '') || // Without trailing slash
-          origin.endsWith('.vercel.app') || // Vercel preview/production URLs
-          origin.includes('localhost'); // Local development
+          (origin.includes('portal-jai1') && origin.endsWith('.vercel.app')); // Vercel preview/production URLs
 
         if (isAllowed) {
           callback(null, true);

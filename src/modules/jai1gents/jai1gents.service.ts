@@ -12,6 +12,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
 import { RegisterJai1gentDto, UpdateJai1gentProfileDto, GenerateInviteCodesDto } from './dto';
 import { getCommissionPercent, getCurrentTierInfo, getNextTierInfo, COMMISSION_TIERS } from './jai1gent.constants';
+import { redactEmail } from '../../common/utils/log-sanitizer';
 
 @Injectable()
 export class Jai1gentsService {
@@ -157,7 +158,7 @@ export class Jai1gentsService {
       'jai1gent',
     );
 
-    this.logger.log(`New JAI1GENT registered: ${result.user.email}`);
+    this.logger.log(`New JAI1GENT registered: ${redactEmail(result.user.email)}`);
 
     return {
       user: {

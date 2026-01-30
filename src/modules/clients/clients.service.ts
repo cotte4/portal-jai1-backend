@@ -13,6 +13,7 @@ import { ProgressAutomationService } from '../progress/progress-automation.servi
 import { ReferralsService } from '../referrals/referrals.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { UpdateUserInfoDto } from './dto/update-user-info.dto';
 import {
   UpdateStatusDto,
   SetProblemDto,
@@ -28,6 +29,7 @@ import {
   mapFederalStatusToClientDisplay,
   mapStateStatusToClientDisplay,
 } from '../../common/utils/status-mapping.util';
+import { redactEmail } from '../../common/utils/log-sanitizer';
 import {
   isValidTransition,
   getValidNextStatuses,
@@ -582,19 +584,7 @@ export class ClientsService {
    */
   async updateUserInfo(
     userId: string,
-    data: {
-      phone?: string;
-      firstName?: string;
-      lastName?: string;
-      dateOfBirth?: string;
-      preferredLanguage?: string;
-      address?: {
-        street?: string;
-        city?: string;
-        state?: string;
-        zip?: string;
-      };
-    },
+    data: UpdateUserInfoDto,
   ) {
     this.logger.log(`Updating user info for ${userId}: fields=[${Object.keys(data).join(', ')}]`);
 
@@ -2832,15 +2822,15 @@ export class ClientsService {
           notifyData.message,
         );
         if (emailSent) {
-          this.logger.log(`Notification email sent to ${client.user.email}`);
+          this.logger.log(`Notification email sent to ${redactEmail(client.user.email)}`);
         } else {
           this.logger.warn(
-            `Email not sent to ${client.user.email} (service not configured or failed)`,
+            `Email not sent to ${redactEmail(client.user.email)} (service not configured or failed)`,
           );
         }
       } catch (err) {
         this.logger.error(
-          `Failed to send notification email to ${client.user.email}`,
+          `Failed to send notification email to ${redactEmail(client.user.email)}`,
           err,
         );
         // Don't throw - in-app notification was still created successfully

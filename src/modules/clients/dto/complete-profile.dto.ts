@@ -47,6 +47,7 @@ class AddressDto {
   @ApiPropertyOptional({ description: 'ZIP/Postal code (international formats accepted)', example: '10001' })
   @IsOptional()
   @IsString()
+  @ValidateIf((o, v) => v !== undefined && v !== null && v !== '')
   @Matches(/^[a-zA-Z0-9\s\-]{3,15}$/, { message: 'ZIP code must be 3-15 alphanumeric characters' })
   @MaxLength(20, { message: 'ZIP code must be less than 20 characters' })
   zip?: string;
@@ -62,6 +63,7 @@ class BankDto {
   @ApiPropertyOptional({ description: 'Bank routing number (9 digits)', example: '123456789' })
   @IsOptional()
   @IsString()
+  @ValidateIf((o, v) => v !== undefined && v !== null && v !== '')
   @Matches(/^\d{9}$/, { message: 'Routing number must be 9 digits' })
   @MaxLength(20, { message: 'Routing number must be less than 20 characters' })
   routing_number?: string;

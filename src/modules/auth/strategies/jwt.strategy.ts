@@ -8,6 +8,7 @@ interface JwtPayload {
   sub: string;
   email: string;
   role: string;
+  tokenVersion?: number;
 }
 
 @Injectable()
@@ -33,6 +34,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException();
+    }
+
+    if (payload.tokenVersion !== undefined && payload.tokenVersion !== user.tokenVersion) {
+      throw new UnauthorizedException('Token has been invalidated');
     }
 
     return {
