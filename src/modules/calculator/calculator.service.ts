@@ -80,27 +80,35 @@ export class CalculatorService {
     // Call OpenAI Vision API with retry logic
     let { ocrResult, rawResponse } = await this.callOpenAIWithRetry(base64Image, mimeType);
 
-    // Parse values
-    let box2Federal = parseFloat(ocrResult.box_2) || 0;
-    let box17State = parseFloat(ocrResult.box_17) || 0;
+    // Parse values with not_found sentinel handling
+    const parseOcrValue = (val: string): number => {
+      if (!val || val === 'not_found') return 0;
+      return parseFloat(val.replace(/[$,\s]/g, '')) || 0;
+    };
 
-    // Auto-retry once if one value is 0 but the other is valid (partial OCR failure)
-    if ((box2Federal === 0) !== (box17State === 0)) {
-      const missingBox = box2Federal === 0 ? 'box_2 (Federal income Tax withheld)' : 'box_17 (State income Tax)';
+    let box2Federal = parseOcrValue(ocrResult.box_2);
+    let box17State = parseOcrValue(ocrResult.box_17);
+
+    // Auto-retry once if one value is not_found but the other is valid (partial OCR failure)
+    const box2NotFound = !ocrResult.box_2 || ocrResult.box_2 === 'not_found';
+    const box17NotFound = !ocrResult.box_17 || ocrResult.box_17 === 'not_found';
+
+    if (box2NotFound !== box17NotFound) {
+      const missingBox = box2NotFound ? 'box_2 (Federal income Tax withheld)' : 'box_17 (State income Tax)';
       this.logger.warn(`Partial OCR result: missing ${missingBox}. Retrying with focused prompt...`);
 
       try {
         const retryResult = await this.callOpenAIWithRetry(base64Image, mimeType, missingBox);
-        const retryFederal = parseFloat(retryResult.ocrResult.box_2) || 0;
-        const retryState = parseFloat(retryResult.ocrResult.box_17) || 0;
+        const retryFederal = parseOcrValue(retryResult.ocrResult.box_2);
+        const retryState = parseOcrValue(retryResult.ocrResult.box_17);
 
         // Use retry result if it found the missing value
-        if (box2Federal === 0 && retryFederal > 0) {
+        if (box2NotFound && retryFederal > 0) {
           box2Federal = retryFederal;
           rawResponse = retryResult.rawResponse;
           this.logger.log(`Retry found box_2: $${retryFederal}`);
         }
-        if (box17State === 0 && retryState > 0) {
+        if (box17NotFound && retryState > 0) {
           box17State = retryState;
           rawResponse = retryResult.rawResponse;
           this.logger.log(`Retry found box_17: $${retryState}`);
@@ -112,11 +120,14 @@ export class CalculatorService {
 
     const estimatedRefund = box2Federal + box17State;
 
-    // Determine confidence level
+    // Determine confidence level using not_found sentinel (distinguishes "OCR couldn't read" from "genuinely $0")
+    const box2FoundAfterRetry = !box2NotFound || box2Federal > 0;
+    const box17FoundAfterRetry = !box17NotFound || box17State > 0;
+
     let ocrConfidence: 'high' | 'medium' | 'low';
-    if (box2Federal > 0 && box17State > 0) {
+    if (box2FoundAfterRetry && box17FoundAfterRetry) {
       ocrConfidence = 'high';
-    } else if (box2Federal > 0 || box17State > 0) {
+    } else if (box2FoundAfterRetry || box17FoundAfterRetry) {
       ocrConfidence = 'medium';
     } else {
       ocrConfidence = 'low';
@@ -246,14 +257,12 @@ export class CalculatorService {
 [box 2] corresponds to: Federal income Tax withheld
 [box 17] corresponds to: State income Tax
 In most cases you will find both values inside of their respective boxes.
-If you do not find a value on those boxes, make a second try in searching the correct value. If you didnt find one of the values, use the value as a last resource: [0.00]
+If you do not find a value on those boxes, make a second try in searching the correct value. If you cannot find a value after careful inspection, use the string "not_found" for that field instead of guessing.
 Format the response as JSON.
 FORMAT: Only output the response in JSON
-EXAMPLE OF A GOOD OUTPUT:
-{
-  "box_2": "1110.02",
-  "box_17": "410.11"
-}`;
+EXAMPLE OUTPUTS:
+Both found:    { "box_2": "1110.02", "box_17": "410.11" }
+One missing:   { "box_2": "1110.02", "box_17": "not_found" }`;
 
     const retryPrompt = focusOnMissingBox
       ? `IMPORTANT: A previous scan could not find the value for ${focusOnMissingBox}. Look very carefully at the document. The value is almost certainly present — it may be in a slightly different position, faint, or overlapping with other text. Extract BOTH values.\n\n${basePrompt}`
@@ -266,6 +275,10 @@ EXAMPLE OF A GOOD OUTPUT:
         const response = await this.getOpenAI().chat.completions.create({
           model: 'gpt-4o',
           messages: [
+            {
+              role: 'system',
+              content: 'You are an expert document OCR system specialized in US tax forms (W-2, 1099, etc.). You extract numerical values with high precision. You never guess or fabricate values — if a value is not clearly visible, you report it as not found.',
+            },
             {
               role: 'user',
               content: [
