@@ -306,6 +306,9 @@ export class ClientsService {
                 federalStatusNewChangedAt: true,
                 stateStatusNew: true,
                 stateStatusNewChangedAt: true,
+                // Status comments
+                federalLastComment: true,
+                stateLastComment: true,
                 // Commission rates
                 federalCommissionRate: true,
                 stateCommissionRate: true,
