@@ -147,12 +147,12 @@ export class AlarmsService {
           OR: [
             {
               federalStatusNew: {
-                in: ['in_process', 'in_verification', 'verification_in_progress'],
+                in: ['taxes_en_proceso', 'en_verificacion', 'verificacion_en_progreso'],
               },
             },
             {
               stateStatusNew: {
-                in: ['in_process', 'in_verification', 'verification_in_progress'],
+                in: ['taxes_en_proceso', 'en_verificacion', 'verificacion_en_progreso'],
               },
             },
           ],
@@ -249,18 +249,18 @@ export class AlarmsService {
           {
             federalStatusNew: {
               in: [
-                'in_process',
-                'in_verification',
-                'verification_in_progress',
+                'taxes_en_proceso',
+                'en_verificacion',
+                'verificacion_en_progreso',
               ],
             },
           },
           {
             stateStatusNew: {
               in: [
-                'in_process',
-                'in_verification',
-                'verification_in_progress',
+                'taxes_en_proceso',
+                'en_verificacion',
+                'verificacion_en_progreso',
               ],
             },
           },
@@ -274,13 +274,13 @@ export class AlarmsService {
         AND: [
           {
             OR: [
-              { federalStatusNew: { not: 'taxes_completed' } },
+              { federalStatusNew: { not: 'taxes_completados' } },
               { federalStatusNew: null },
             ],
           },
           {
             OR: [
-              { stateStatusNew: { not: 'taxes_completed' } },
+              { stateStatusNew: { not: 'taxes_completados' } },
               { stateStatusNew: null },
             ],
           },
@@ -788,7 +788,7 @@ export class AlarmsService {
   }
 
   /**
-   * Auto-resolve alarms when status changes (e.g., moves out of in_process)
+   * Auto-resolve alarms when status changes (e.g., moves out of taxes_en_proceso)
    */
   async autoResolveAlarms(
     taxCaseId: string,

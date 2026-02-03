@@ -31,8 +31,8 @@ const mockTaxCase = {
   employerName: 'Test Company',
   federalStatus: 'processing',
   stateStatus: 'processing',
-  federalStatusNew: 'in_process',
-  stateStatusNew: 'in_process',
+  federalStatusNew: 'taxes_en_proceso',
+  stateStatusNew: 'taxes_en_proceso',
   estimatedRefund: 1500,
   hasProblem: false,
   caseStatus: 'in_progress',
@@ -449,14 +449,14 @@ describe('ClientsService', () => {
     });
 
     it('should filter by federal status', async () => {
-      await service.findAll({ limit: 10, federalStatus: 'in_process' });
+      await service.findAll({ limit: 10, federalStatus: 'taxes_en_proceso' });
 
       expect(prisma.clientProfile.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             taxCases: expect.objectContaining({
               some: expect.objectContaining({
-                federalStatusNew: 'in_process',
+                federalStatusNew: 'taxes_en_proceso',
               }),
             }),
           }),
@@ -588,9 +588,9 @@ describe('ClientsService', () => {
           ...mockTaxCase,
           documents: [],
           statusHistory: [],
-          federalStatusNew: 'in_process',
+          federalStatusNew: 'taxes_en_proceso',
           federalStatusNewChangedAt: new Date(),
-          stateStatusNew: 'in_process',
+          stateStatusNew: 'taxes_en_proceso',
           stateStatusNewChangedAt: new Date(),
           caseStatus: 'in_progress',
         },
@@ -634,8 +634,8 @@ describe('ClientsService', () => {
             ...mockTaxCase,
             documents: [{ id: 'doc-1', name: 'test.pdf' }],
             statusHistory: [],
-            federalStatusNew: 'in_process',
-            stateStatusNew: 'in_process',
+            federalStatusNew: 'taxes_en_proceso',
+            stateStatusNew: 'taxes_en_proceso',
           },
         ],
       };
@@ -1051,8 +1051,8 @@ describe('ClientsService', () => {
           stateDepositDate: null,
           hasProblem: false,
           caseStatus: 'in_progress',
-          federalStatusNew: 'in_process',
-          stateStatusNew: 'in_process',
+          federalStatusNew: 'taxes_en_proceso',
+          stateStatusNew: 'taxes_en_proceso',
           federalActualRefund: null,
           stateActualRefund: null,
           taxYear: 2024,
@@ -1337,17 +1337,17 @@ describe('ClientsService', () => {
     });
 
     it('should update new status system fields (federalStatusNew)', async () => {
-      // Valid transition from 'in_process' to 'in_verification'
+      // Valid transition from 'taxes_en_proceso' to 'en_verificacion'
       await service.updateStatus(
         'profile-1',
-        { federalStatusNew: 'in_verification' },
+        { federalStatusNew: 'en_verificacion' },
         'admin-1',
       );
 
       expect(prisma.taxCase.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            federalStatusNew: 'in_verification',
+            federalStatusNew: 'en_verificacion',
             federalStatusNewChangedAt: expect.any(Date),
           }),
         }),
@@ -1355,17 +1355,17 @@ describe('ClientsService', () => {
     });
 
     it('should update new status system fields (stateStatusNew)', async () => {
-      // Valid transition from 'in_process' to 'check_in_transit'
+      // Valid transition from 'taxes_en_proceso' to 'cheque_en_camino'
       await service.updateStatus(
         'profile-1',
-        { stateStatusNew: 'check_in_transit' },
+        { stateStatusNew: 'cheque_en_camino' },
         'admin-1',
       );
 
       expect(prisma.taxCase.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            stateStatusNew: 'check_in_transit',
+            stateStatusNew: 'cheque_en_camino',
             stateStatusNewChangedAt: expect.any(Date),
           }),
         }),
@@ -1401,22 +1401,22 @@ describe('ClientsService', () => {
     });
 
     it('should throw BadRequestException for invalid status transition', async () => {
-      // Invalid transition from 'in_progress' to 'taxes_completed'
+      // Invalid transition from 'in_progress' to 'taxes_completados'
       await expect(
         service.updateStatus(
           'profile-1',
-          { federalStatusNew: 'taxes_completed' },
+          { federalStatusNew: 'taxes_completados' },
           'admin-1',
         ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('should handle force override with reason', async () => {
-      // Force an invalid transition (from in_process to taxes_completed)
+      // Force an invalid transition (from taxes_en_proceso to taxes_completados)
       await service.updateStatus(
         'profile-1',
         {
-          federalStatusNew: 'taxes_completed',
+          federalStatusNew: 'taxes_completados',
           forceTransition: true,
           overrideReason: 'Manual correction',
           comment: 'Admin override',
@@ -1437,7 +1437,7 @@ describe('ClientsService', () => {
         service.updateStatus(
           'profile-1',
           {
-            federalStatusNew: 'taxes_completed',
+            federalStatusNew: 'taxes_completados',
             forceTransition: true,
             overrideReason: 'Emergency fix',
           },

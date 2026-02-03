@@ -27,18 +27,21 @@ export function mapCaseStatusToClientDisplay(status: CaseStatus | null | undefin
 
 /**
  * Maps FederalStatusNew to client-friendly display label (Spanish)
+ * Interno statuses collapse to their parent labels
  */
 export function mapFederalStatusToClientDisplay(status: FederalStatusNew | null | undefined): string {
   if (!status) return 'Sin estado';
 
   const mapping: Record<FederalStatusNew, string> = {
-    [FederalStatusNew.in_process]: 'Taxes en proceso',
-    [FederalStatusNew.in_verification]: 'En verificación',
-    [FederalStatusNew.verification_in_progress]: 'En verificación',
-    [FederalStatusNew.check_in_transit]: 'Cheque en camino',
-    [FederalStatusNew.issues]: 'Problemas - contactar soporte',
-    [FederalStatusNew.taxes_sent]: 'Reembolso enviado',
-    [FederalStatusNew.taxes_completed]: 'Taxes finalizados',
+    [FederalStatusNew.taxes_en_proceso]: 'Taxes en proceso',
+    [FederalStatusNew.en_verificacion]: 'En verificacion',
+    [FederalStatusNew.verificacion_en_progreso]: 'En verificacion', // interno → parent label
+    [FederalStatusNew.problemas]: 'Problemas',
+    [FederalStatusNew.verificacion_rechazada]: 'Verificacion rechazada',
+    [FederalStatusNew.deposito_directo]: 'Reembolso enviado', // interno → parent label
+    [FederalStatusNew.cheque_en_camino]: 'Reembolso enviado', // interno → parent label
+    [FederalStatusNew.comision_pendiente]: 'Comision pendiente de pago',
+    [FederalStatusNew.taxes_completados]: 'Taxes completados',
   };
 
   return mapping[status] || status;
@@ -46,18 +49,21 @@ export function mapFederalStatusToClientDisplay(status: FederalStatusNew | null 
 
 /**
  * Maps StateStatusNew to client-friendly display label (Spanish)
+ * Interno statuses collapse to their parent labels
  */
 export function mapStateStatusToClientDisplay(status: StateStatusNew | null | undefined): string {
   if (!status) return 'Sin estado';
 
   const mapping: Record<StateStatusNew, string> = {
-    [StateStatusNew.in_process]: 'Taxes en proceso',
-    [StateStatusNew.in_verification]: 'En verificación',
-    [StateStatusNew.verification_in_progress]: 'En verificación',
-    [StateStatusNew.check_in_transit]: 'Cheque en camino',
-    [StateStatusNew.issues]: 'Problemas - contactar soporte',
-    [StateStatusNew.taxes_sent]: 'Reembolso enviado',
-    [StateStatusNew.taxes_completed]: 'Taxes finalizados',
+    [StateStatusNew.taxes_en_proceso]: 'Taxes en proceso',
+    [StateStatusNew.en_verificacion]: 'En verificacion',
+    [StateStatusNew.verificacion_en_progreso]: 'En verificacion', // interno → parent label
+    [StateStatusNew.problemas]: 'Problemas',
+    [StateStatusNew.verificacion_rechazada]: 'Verificacion rechazada',
+    [StateStatusNew.deposito_directo]: 'Reembolso enviado', // interno → parent label
+    [StateStatusNew.cheque_en_camino]: 'Reembolso enviado', // interno → parent label
+    [StateStatusNew.comision_pendiente]: 'Comision pendiente de pago',
+    [StateStatusNew.taxes_completados]: 'Taxes completados',
   };
 
   return mapping[status] || status;
@@ -90,13 +96,15 @@ export function getFederalStatusNewLabel(status: FederalStatusNew | null | undef
   if (!status) return 'Sin estado';
 
   const mapping: Record<FederalStatusNew, string> = {
-    [FederalStatusNew.in_process]: 'En Proceso',
-    [FederalStatusNew.in_verification]: 'En Verificación',
-    [FederalStatusNew.verification_in_progress]: 'Verificación en Progreso',
-    [FederalStatusNew.check_in_transit]: 'Cheque en Camino',
-    [FederalStatusNew.issues]: 'Problemas',
-    [FederalStatusNew.taxes_sent]: 'Reembolso Enviado',
-    [FederalStatusNew.taxes_completed]: 'Completado',
+    [FederalStatusNew.taxes_en_proceso]: 'Taxes en Proceso',
+    [FederalStatusNew.en_verificacion]: 'En Verificacion',
+    [FederalStatusNew.verificacion_en_progreso]: 'Verificacion en Progreso',
+    [FederalStatusNew.problemas]: 'Problemas',
+    [FederalStatusNew.verificacion_rechazada]: 'Verificacion Rechazada',
+    [FederalStatusNew.deposito_directo]: 'Deposito Directo',
+    [FederalStatusNew.cheque_en_camino]: 'Cheque en Camino',
+    [FederalStatusNew.comision_pendiente]: 'Comision Pendiente',
+    [FederalStatusNew.taxes_completados]: 'Taxes Completados',
   };
 
   return mapping[status] || status;
@@ -109,13 +117,15 @@ export function getStateStatusNewLabel(status: StateStatusNew | null | undefined
   if (!status) return 'Sin estado';
 
   const mapping: Record<StateStatusNew, string> = {
-    [StateStatusNew.in_process]: 'En Proceso',
-    [StateStatusNew.in_verification]: 'En Verificación',
-    [StateStatusNew.verification_in_progress]: 'Verificación en Progreso',
-    [StateStatusNew.check_in_transit]: 'Cheque en Camino',
-    [StateStatusNew.issues]: 'Problemas',
-    [StateStatusNew.taxes_sent]: 'Reembolso Enviado',
-    [StateStatusNew.taxes_completed]: 'Completado',
+    [StateStatusNew.taxes_en_proceso]: 'Taxes en Proceso',
+    [StateStatusNew.en_verificacion]: 'En Verificacion',
+    [StateStatusNew.verificacion_en_progreso]: 'Verificacion en Progreso',
+    [StateStatusNew.problemas]: 'Problemas',
+    [StateStatusNew.verificacion_rechazada]: 'Verificacion Rechazada',
+    [StateStatusNew.deposito_directo]: 'Deposito Directo',
+    [StateStatusNew.cheque_en_camino]: 'Cheque en Camino',
+    [StateStatusNew.comision_pendiente]: 'Comision Pendiente',
+    [StateStatusNew.taxes_completados]: 'Taxes Completados',
   };
 
   return mapping[status] || status;
@@ -139,10 +149,10 @@ export interface StatusAlarm {
 
 // Default alarm thresholds in days
 export const DEFAULT_ALARM_THRESHOLDS = {
-  POSSIBLE_VERIFICATION_FEDERAL: 25, // Federal in_process > 25 days
-  POSSIBLE_VERIFICATION_STATE: 50,   // State in_process > 50 days
-  VERIFICATION_TIMEOUT: 63,          // verification_in_progress > 63 days
-  LETTER_SENT_TIMEOUT: 63,           // verification_letter_sent > 63 days
+  POSSIBLE_VERIFICATION_FEDERAL: 25, // Federal taxes_en_proceso > 25 days
+  POSSIBLE_VERIFICATION_STATE: 50,   // State taxes_en_proceso > 50 days
+  VERIFICATION_TIMEOUT: 63,          // verificacion_en_progreso > 63 days
+  LETTER_SENT_TIMEOUT: 63,           // kept for backward compat
 };
 
 // Alias for backward compatibility
@@ -198,8 +208,8 @@ export function calculateAlarms(
   if (!disableFederal && federalStatus && federalStatusChangedAt) {
     const daysSinceChange = daysSince(federalStatusChangedAt);
 
-    // Possible verification (federal in_process > threshold days)
-    if (federalStatus === FederalStatusNew.in_process &&
+    // Possible verification (federal taxes_en_proceso > threshold days)
+    if (federalStatus === FederalStatusNew.taxes_en_proceso &&
         daysSinceChange > thresholds.federalInProcess) {
       alarms.push({
         type: 'possible_verification_federal',
@@ -211,8 +221,8 @@ export function calculateAlarms(
       });
     }
 
-    // Verification timeout (verification_in_progress > threshold days)
-    if (federalStatus === FederalStatusNew.verification_in_progress &&
+    // Verification timeout (verificacion_en_progreso > threshold days)
+    if (federalStatus === FederalStatusNew.verificacion_en_progreso &&
         daysSinceChange > thresholds.verificationTimeout) {
       alarms.push({
         type: 'verification_timeout',
@@ -223,17 +233,14 @@ export function calculateAlarms(
         threshold: thresholds.verificationTimeout,
       });
     }
-
-    // Note: letter_sent_timeout removed — verification_letter_sent merged into verification_in_progress
-    // The verification_timeout alarm above now covers all verification sub-states
   }
 
   // State alarms (if not disabled)
   if (!disableState && stateStatus && stateStatusChangedAt) {
     const daysSinceChange = daysSince(stateStatusChangedAt);
 
-    // Possible verification (state in_process > threshold days)
-    if (stateStatus === StateStatusNew.in_process &&
+    // Possible verification (state taxes_en_proceso > threshold days)
+    if (stateStatus === StateStatusNew.taxes_en_proceso &&
         daysSinceChange > thresholds.stateInProcess) {
       alarms.push({
         type: 'possible_verification_state',
@@ -245,8 +252,8 @@ export function calculateAlarms(
       });
     }
 
-    // Verification timeout (verification_in_progress > threshold days)
-    if (stateStatus === StateStatusNew.verification_in_progress &&
+    // Verification timeout (verificacion_en_progreso > threshold days)
+    if (stateStatus === StateStatusNew.verificacion_en_progreso &&
         daysSinceChange > thresholds.verificationTimeout) {
       alarms.push({
         type: 'verification_timeout',
@@ -257,9 +264,6 @@ export function calculateAlarms(
         threshold: thresholds.verificationTimeout,
       });
     }
-
-    // Note: letter_sent_timeout removed — verification_letter_sent merged into verification_in_progress
-    // The verification_timeout alarm above now covers all verification sub-states
   }
 
   return alarms;
@@ -274,4 +278,3 @@ export function getHighestAlarmLevel(alarms: StatusAlarm[]): AlarmLevel | null {
   if (alarms.some(a => a.level === 'critical')) return 'critical';
   return 'warning';
 }
-

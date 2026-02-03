@@ -186,6 +186,18 @@ export class UpdateStatusDto {
   @IsIn([0.11, 0.22], { message: 'Commission rate must be 0.11 or 0.22' })
   stateCommissionRate?: number;
 
+  @ApiPropertyOptional({ description: 'Internal comment for federal track (admin-only, not visible to clients)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000, { message: 'Federal internal comment must be less than 1000 characters' })
+  federalInternalComment?: string;
+
+  @ApiPropertyOptional({ description: 'Internal comment for state track (admin-only, not visible to clients)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000, { message: 'State internal comment must be less than 1000 characters' })
+  stateInternalComment?: string;
+
   @ApiPropertyOptional({ description: 'Force an otherwise invalid status transition', default: false })
   @IsOptional()
   @IsBoolean()

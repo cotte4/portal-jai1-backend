@@ -25,26 +25,30 @@ export const CASE_STATUS_TRANSITIONS = new Map<CaseStatus, CaseStatus[]>([
  * Valid transitions for FederalStatusNew
  */
 export const FEDERAL_STATUS_TRANSITIONS = new Map<FederalStatusNew, FederalStatusNew[]>([
-  [FederalStatusNew.in_process, [FederalStatusNew.in_verification, FederalStatusNew.check_in_transit, FederalStatusNew.taxes_sent, FederalStatusNew.issues]],
-  [FederalStatusNew.in_verification, [FederalStatusNew.verification_in_progress, FederalStatusNew.check_in_transit, FederalStatusNew.taxes_sent, FederalStatusNew.issues]],
-  [FederalStatusNew.verification_in_progress, [FederalStatusNew.check_in_transit, FederalStatusNew.taxes_sent, FederalStatusNew.issues]],
-  [FederalStatusNew.check_in_transit, [FederalStatusNew.taxes_sent, FederalStatusNew.taxes_completed, FederalStatusNew.issues]],
-  [FederalStatusNew.taxes_sent, [FederalStatusNew.taxes_completed, FederalStatusNew.issues]],
-  [FederalStatusNew.taxes_completed, [FederalStatusNew.issues]], // terminal but can have issues
-  [FederalStatusNew.issues, [FederalStatusNew.in_process, FederalStatusNew.in_verification, FederalStatusNew.check_in_transit, FederalStatusNew.taxes_sent]],
+  [FederalStatusNew.taxes_en_proceso, [FederalStatusNew.en_verificacion, FederalStatusNew.deposito_directo, FederalStatusNew.cheque_en_camino, FederalStatusNew.problemas]],
+  [FederalStatusNew.en_verificacion, [FederalStatusNew.verificacion_en_progreso, FederalStatusNew.deposito_directo, FederalStatusNew.cheque_en_camino, FederalStatusNew.problemas, FederalStatusNew.verificacion_rechazada]],
+  [FederalStatusNew.verificacion_en_progreso, [FederalStatusNew.deposito_directo, FederalStatusNew.cheque_en_camino, FederalStatusNew.problemas, FederalStatusNew.verificacion_rechazada]],
+  [FederalStatusNew.problemas, [FederalStatusNew.taxes_en_proceso, FederalStatusNew.en_verificacion, FederalStatusNew.deposito_directo, FederalStatusNew.cheque_en_camino]],
+  [FederalStatusNew.verificacion_rechazada, [FederalStatusNew.en_verificacion, FederalStatusNew.problemas]],
+  [FederalStatusNew.deposito_directo, [FederalStatusNew.comision_pendiente, FederalStatusNew.taxes_completados, FederalStatusNew.problemas]],
+  [FederalStatusNew.cheque_en_camino, [FederalStatusNew.comision_pendiente, FederalStatusNew.taxes_completados, FederalStatusNew.problemas]],
+  [FederalStatusNew.comision_pendiente, [FederalStatusNew.taxes_completados, FederalStatusNew.problemas]],
+  [FederalStatusNew.taxes_completados, [FederalStatusNew.problemas]],
 ]);
 
 /**
- * Valid transitions for StateStatusNew (same as FederalStatusNew)
+ * Valid transitions for StateStatusNew
  */
 export const STATE_STATUS_TRANSITIONS = new Map<StateStatusNew, StateStatusNew[]>([
-  [StateStatusNew.in_process, [StateStatusNew.in_verification, StateStatusNew.check_in_transit, StateStatusNew.taxes_sent, StateStatusNew.issues]],
-  [StateStatusNew.in_verification, [StateStatusNew.verification_in_progress, StateStatusNew.check_in_transit, StateStatusNew.taxes_sent, StateStatusNew.issues]],
-  [StateStatusNew.verification_in_progress, [StateStatusNew.check_in_transit, StateStatusNew.taxes_sent, StateStatusNew.issues]],
-  [StateStatusNew.check_in_transit, [StateStatusNew.taxes_sent, StateStatusNew.taxes_completed, StateStatusNew.issues]],
-  [StateStatusNew.taxes_sent, [StateStatusNew.taxes_completed, StateStatusNew.issues]],
-  [StateStatusNew.taxes_completed, [StateStatusNew.issues]], // terminal but can have issues
-  [StateStatusNew.issues, [StateStatusNew.in_process, StateStatusNew.in_verification, StateStatusNew.check_in_transit, StateStatusNew.taxes_sent]],
+  [StateStatusNew.taxes_en_proceso, [StateStatusNew.en_verificacion, StateStatusNew.deposito_directo, StateStatusNew.cheque_en_camino, StateStatusNew.problemas]],
+  [StateStatusNew.en_verificacion, [StateStatusNew.verificacion_en_progreso, StateStatusNew.deposito_directo, StateStatusNew.cheque_en_camino, StateStatusNew.problemas, StateStatusNew.verificacion_rechazada]],
+  [StateStatusNew.verificacion_en_progreso, [StateStatusNew.deposito_directo, StateStatusNew.cheque_en_camino, StateStatusNew.problemas, StateStatusNew.verificacion_rechazada]],
+  [StateStatusNew.problemas, [StateStatusNew.taxes_en_proceso, StateStatusNew.en_verificacion, StateStatusNew.deposito_directo, StateStatusNew.cheque_en_camino]],
+  [StateStatusNew.verificacion_rechazada, [StateStatusNew.en_verificacion, StateStatusNew.problemas]],
+  [StateStatusNew.deposito_directo, [StateStatusNew.comision_pendiente, StateStatusNew.taxes_completados, StateStatusNew.problemas]],
+  [StateStatusNew.cheque_en_camino, [StateStatusNew.comision_pendiente, StateStatusNew.taxes_completados, StateStatusNew.problemas]],
+  [StateStatusNew.comision_pendiente, [StateStatusNew.taxes_completados, StateStatusNew.problemas]],
+  [StateStatusNew.taxes_completados, [StateStatusNew.problemas]],
 ]);
 
 // ============= VALIDATION FUNCTIONS =============

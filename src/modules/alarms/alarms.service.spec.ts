@@ -15,8 +15,8 @@ const mockUser = {
 
 const mockTaxCase = {
   id: 'taxcase-1',
-  federalStatusNew: 'in_process',
-  stateStatusNew: 'in_process',
+  federalStatusNew: 'taxes_en_proceso',
+  stateStatusNew: 'taxes_en_proceso',
   federalStatusNewChangedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
   stateStatusNewChangedAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000), // 25 days ago
   clientProfile: {
@@ -49,10 +49,10 @@ const mockAlarmHistory = {
   alarmType: AlarmType.possible_verification,
   alarmLevel: AlarmLevel.warning,
   track: 'federal',
-  message: 'Federal status in_process for 30 days',
+  message: 'Federal status taxes_en_proceso for 30 days',
   thresholdDays: 21,
   actualDays: 30,
-  statusAtTrigger: 'in_process',
+  statusAtTrigger: 'taxes_en_proceso',
   statusChangedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
   resolution: AlarmResolution.active,
   resolvedAt: null,
@@ -519,7 +519,7 @@ describe('AlarmsService', () => {
       await service.recordAlarm(
         'taxcase-1',
         alarm,
-        'in_process',
+        'taxes_en_proceso',
         new Date(),
       );
 
@@ -543,7 +543,7 @@ describe('AlarmsService', () => {
       await service.recordAlarm(
         'taxcase-1',
         alarm,
-        'in_process',
+        'taxes_en_proceso',
         new Date(),
       );
 

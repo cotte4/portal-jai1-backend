@@ -1224,7 +1224,7 @@ export class ClientsService {
           some: {
             ...existingTaxCaseFilters,
             caseStatus: 'taxes_filed',
-            federalStatusNew: { in: ['in_process', 'check_in_transit', 'taxes_sent'] },
+            federalStatusNew: { in: ['taxes_en_proceso', 'cheque_en_camino', 'deposito_directo'] },
           },
         };
       } else if (options.status === 'group_completed') {
@@ -1233,8 +1233,8 @@ export class ClientsService {
           some: {
             ...existingTaxCaseFilters,
             OR: [
-              { federalStatusNew: 'taxes_completed' },
-              { stateStatusNew: 'taxes_completed' },
+              { federalStatusNew: 'taxes_completados' },
+              { stateStatusNew: 'taxes_completados' },
             ],
           },
         };
@@ -1646,6 +1646,8 @@ export class ClientsService {
           stateLastComment: (tc as any).stateLastComment,
           stateStatusChangedAt: (tc as any).stateStatusChangedAt,
           stateLastReviewedAt: (tc as any).stateLastReviewedAt,
+          federalInternalComment: (tc as any).federalInternalComment,
+          stateInternalComment: (tc as any).stateInternalComment,
           paymentReceived: tc.paymentReceived,
           commissionPaid: tc.commissionPaid,
           // Commission rates
@@ -1838,6 +1840,14 @@ export class ClientsService {
       updateData.stateLastComment = statusData.stateComment;
     }
 
+    // Handle internal comments
+    if (statusData.federalInternalComment !== undefined) {
+      updateData.federalInternalComment = statusData.federalInternalComment;
+    }
+    if (statusData.stateInternalComment !== undefined) {
+      updateData.stateInternalComment = statusData.stateInternalComment;
+    }
+
     // Handle federal-specific fields
     if (statusData.federalEstimatedDate) {
       updateData.federalEstimatedDate = new Date(
@@ -1981,9 +1991,10 @@ export class ClientsService {
     // AUTO-RESOLVE PROBLEMS when status progresses to positive states
     // Per engineer spec: Problems resolve implicitly when status changes forward
     const positiveProgressStatuses = [
-      'check_in_transit',
-      'taxes_sent',
-      'taxes_completed',
+      'deposito_directo',
+      'cheque_en_camino',
+      'comision_pendiente',
+      'taxes_completados',
     ];
 
     const federalProgressed =
@@ -2097,20 +2108,20 @@ export class ClientsService {
         this.logger.log(
           `Generated referral code ${code} for user ${client.user.id} (taxes marked as filed)`,
         );
-        // Note: Referral status update removed - now triggered by taxes_completed status
+        // Note: Referral status update removed - now triggered by taxes_completados status
       } catch (err) {
         this.logger.error('Failed to generate referral code', err);
         // Don't fail the status update if referral code generation fails
       }
     }
 
-    // Mark referral as successful when federal or state status becomes taxes_completed
+    // Mark referral as successful when federal or state status becomes taxes_completados
     const isFederalCompleted =
-      statusData.federalStatusNew === 'taxes_completed' &&
-      previousFederalStatusNew !== 'taxes_completed';
+      statusData.federalStatusNew === 'taxes_completados' &&
+      previousFederalStatusNew !== 'taxes_completados';
     const isStateCompleted =
-      statusData.stateStatusNew === 'taxes_completed' &&
-      previousStateStatusNew !== 'taxes_completed';
+      statusData.stateStatusNew === 'taxes_completados' &&
+      previousStateStatusNew !== 'taxes_completados';
 
     if (isFederalCompleted || isStateCompleted) {
       try {
@@ -2119,10 +2130,10 @@ export class ClientsService {
           taxCase.id,
         );
         this.logger.log(
-          `Marked referral as successful for user ${client.user.id} (taxes_completed)`,
+          `Marked referral as successful for user ${client.user.id} (taxes_completados)`,
         );
       } catch (err) {
-        this.logger.error('Failed to mark referral as successful on taxes_completed', err);
+        this.logger.error('Failed to mark referral as successful on taxes_completados', err);
         // Don't fail status update if referral marking fails
       }
     }
@@ -2162,22 +2173,23 @@ export class ClientsService {
   ) {
     // Map v2 status values to notification templates
     const templateMap: Record<string, string> = {
-      in_process: 'notifications.status_federal_processing',
-      check_in_transit: 'notifications.status_federal_approved',
-      issues: 'notifications.status_federal_rejected',
-      taxes_sent: 'notifications.status_federal_approved',
-      taxes_completed: 'notifications.status_federal_deposited',
+      taxes_en_proceso: 'notifications.status_federal_processing',
+      deposito_directo: 'notifications.status_federal_approved',
+      cheque_en_camino: 'notifications.status_federal_approved',
+      problemas: 'notifications.status_federal_rejected',
+      comision_pendiente: 'notifications.status_federal_approved',
+      taxes_completados: 'notifications.status_federal_deposited',
     };
 
     const templateKey = templateMap[status];
     if (templateKey) {
       const variables: Record<string, string | number> = { firstName };
 
-      if (status === 'taxes_completed' && refundAmount) {
+      if (status === 'taxes_completados' && refundAmount) {
         variables.amount = refundAmount.toLocaleString();
       }
 
-      if (status === 'check_in_transit' || status === 'taxes_sent') {
+      if (status === 'deposito_directo' || status === 'cheque_en_camino') {
         variables.estimatedDate = 'próximamente';
       }
 
@@ -2202,22 +2214,23 @@ export class ClientsService {
   ) {
     // Map v2 status values to notification templates
     const templateMap: Record<string, string> = {
-      in_process: 'notifications.status_state_processing',
-      check_in_transit: 'notifications.status_state_approved',
-      issues: 'notifications.status_state_rejected',
-      taxes_sent: 'notifications.status_state_approved',
-      taxes_completed: 'notifications.status_state_deposited',
+      taxes_en_proceso: 'notifications.status_state_processing',
+      deposito_directo: 'notifications.status_state_approved',
+      cheque_en_camino: 'notifications.status_state_approved',
+      problemas: 'notifications.status_state_rejected',
+      comision_pendiente: 'notifications.status_state_approved',
+      taxes_completados: 'notifications.status_state_deposited',
     };
 
     const templateKey = templateMap[status];
     if (templateKey) {
       const variables: Record<string, string | number> = { firstName };
 
-      if (status === 'taxes_completed' && refundAmount) {
+      if (status === 'taxes_completados' && refundAmount) {
         variables.amount = refundAmount.toLocaleString();
       }
 
-      if (status === 'check_in_transit' || status === 'taxes_sent') {
+      if (status === 'deposito_directo' || status === 'cheque_en_camino') {
         variables.estimatedDate = 'próximamente';
       }
 
@@ -2715,7 +2728,7 @@ export class ClientsService {
         this.logger.log(
           `Generated referral code ${code} for user ${client.user.id}`,
         );
-        // Note: Referral status update removed - now triggered by taxes_completed status
+        // Note: Referral status update removed - now triggered by taxes_completados status
       } catch (err) {
         this.logger.error('Failed to generate referral code', err);
         // Don't fail the step update if referral code generation fails
@@ -2958,11 +2971,11 @@ export class ClientsService {
       } else if (options.status === 'group_in_review') {
         // V2: Use caseStatus instead of taxesFiled
         where.taxCases = {
-          some: { ...existingTaxCaseFilters, caseStatus: 'taxes_filed', federalStatusNew: { in: ['in_process', 'check_in_transit', 'taxes_sent'] } },
+          some: { ...existingTaxCaseFilters, caseStatus: 'taxes_filed', federalStatusNew: { in: ['taxes_en_proceso', 'cheque_en_camino', 'deposito_directo'] } },
         };
       } else if (options.status === 'group_completed') {
         where.taxCases = {
-          some: { ...existingTaxCaseFilters, OR: [{ federalStatusNew: 'taxes_completed' }, { stateStatusNew: 'taxes_completed' }] },
+          some: { ...existingTaxCaseFilters, OR: [{ federalStatusNew: 'taxes_completados' }, { stateStatusNew: 'taxes_completados' }] },
         };
       } else if (options.status === 'group_needs_attention') {
         where.taxCases = {
@@ -3739,8 +3752,8 @@ export class ClientsService {
 
         // Check verification per track (federal vs state)
         const federalVerification =
-          tc.federalStatusNew === 'in_verification' ||
-          tc.federalStatusNew === 'verification_in_progress' ||
+          tc.federalStatusNew === 'en_verificacion' ||
+          tc.federalStatusNew === 'verificacion_en_progreso' ||
           tc.statusHistory.some(
             (h) =>
               (h.newStatus?.toLowerCase().includes('verif') &&
@@ -3750,8 +3763,8 @@ export class ClientsService {
           );
 
         const stateVerification =
-          tc.stateStatusNew === 'in_verification' ||
-          tc.stateStatusNew === 'verification_in_progress' ||
+          tc.stateStatusNew === 'en_verificacion' ||
+          tc.stateStatusNew === 'verificacion_en_progreso' ||
           tc.statusHistory.some(
             (h) =>
               (h.newStatus?.toLowerCase().includes('verif') &&
@@ -3814,12 +3827,12 @@ export class ClientsService {
       // Total tax cases count
       this.prisma.taxCase.count(),
 
-      // Count completed cases (v2 status = taxes_completed)
+      // Count completed cases (v2 status = taxes_completados)
       this.prisma.taxCase.count({
         where: {
           OR: [
-            { federalStatusNew: 'taxes_completed' },
-            { stateStatusNew: 'taxes_completed' },
+            { federalStatusNew: 'taxes_completados' },
+            { stateStatusNew: 'taxes_completados' },
           ],
         },
       }),
