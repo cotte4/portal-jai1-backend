@@ -13,7 +13,7 @@ import {
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
-import { AlarmsService, AlarmHistoryFilters, AlarmDashboardFilters } from './alarms.service';
+import { AlarmsService, AlarmHistoryFilters, AlarmDashboardFilters, SyncStatusResponse } from './alarms.service';
 import { SetThresholdsDto } from './dto/set-thresholds.dto';
 import type { AlarmType, AlarmLevel, AlarmResolution } from '@prisma/client';
 
@@ -47,6 +47,24 @@ export class AlarmsController {
     if (limit) filters.limit = parseInt(limit, 10);
 
     return this.alarmsService.getDashboard(filters);
+  }
+
+  /**
+   * GET /admin/alarms/sync-status
+   * Get the status of the last alarm sync run
+   */
+  @Get('sync-status')
+  async getSyncStatus(): Promise<SyncStatusResponse> {
+    return this.alarmsService.getSyncStatus();
+  }
+
+  /**
+   * POST /admin/alarms/sync-all
+   * Manually trigger a full alarm sync for all eligible cases
+   */
+  @Post('sync-all')
+  async syncAll(): Promise<SyncStatusResponse> {
+    return this.alarmsService.syncAllAlarms();
   }
 
   /**

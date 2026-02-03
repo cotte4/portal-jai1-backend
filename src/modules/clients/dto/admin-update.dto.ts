@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsEnum,
   IsNumber,
+  IsIn,
   IsDateString,
   ValidatorConstraint,
   ValidatorConstraintInterface,
@@ -172,6 +173,18 @@ export class UpdateStatusDto {
   @IsOptional()
   @IsEnum(StateStatusNew, { message: 'Invalid state status' })
   stateStatusNew?: StateStatusNew;
+
+  @ApiPropertyOptional({ description: 'Federal commission rate (0.11 or 0.22)' })
+  @IsOptional()
+  @IsNumber()
+  @IsIn([0.11, 0.22], { message: 'Commission rate must be 0.11 or 0.22' })
+  federalCommissionRate?: number;
+
+  @ApiPropertyOptional({ description: 'State commission rate (0.11 or 0.22)' })
+  @IsOptional()
+  @IsNumber()
+  @IsIn([0.11, 0.22], { message: 'Commission rate must be 0.11 or 0.22' })
+  stateCommissionRate?: number;
 
   @ApiPropertyOptional({ description: 'Force an otherwise invalid status transition', default: false })
   @IsOptional()

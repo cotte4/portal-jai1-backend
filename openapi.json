@@ -1382,6 +1382,16 @@
       "patch": {
         "operationId": "ClientsController_updateUserInfo",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserInfoDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "User info updated"
@@ -1449,6 +1459,42 @@
             "description": ""
           }
         },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/refund/confirm": {
+      "post": {
+        "operationId": "ClientsController_confirmRefundReceived",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmRefundDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refund receipt confirmed"
+          },
+          "400": {
+            "description": "Invalid refund type or already confirmed"
+          },
+          "404": {
+            "description": "No tax case found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Confirm receipt of federal or state refund",
         "tags": [
           "clients"
         ]
@@ -1980,6 +2026,78 @@
         ]
       }
     },
+    "/v1/admin/clients/{id}/commission": {
+      "post": {
+        "operationId": "ClientsController_markCommissionPaid",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkCommissionPaidDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Commission marked as paid"
+          },
+          "400": {
+            "description": "Invalid type or commission already paid"
+          },
+          "404": {
+            "description": "Client not found"
+          }
+        },
+        "summary": "Mark federal or state commission as paid",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/unpaid-commissions": {
+      "get": {
+        "operationId": "ClientsController_getUnpaidCommissions",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of clients with unpaid commissions"
+          }
+        },
+        "summary": "Get clients who confirmed refunds but have not paid commission",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
     "/v1/admin/clients/{id}/problem": {
       "patch": {
         "operationId": "ClientsController_setProblem",
@@ -2041,6 +2159,58 @@
             "description": ""
           }
         },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/clients/{id}/w2-estimate": {
+      "delete": {
+        "operationId": "ClientsController_resetW2Estimate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "W2 estimate reset successfully"
+          },
+          "404": {
+            "description": "Client not found"
+          }
+        },
+        "summary": "Reset W2 estimate for a client (allows recalculation)",
+        "tags": [
+          "clients"
+        ]
+      },
+      "get": {
+        "operationId": "ClientsController_getW2Estimate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "W2 estimate data"
+          },
+          "404": {
+            "description": "Client not found or no W2 estimate"
+          }
+        },
+        "summary": "Get W2 estimate data for a client (for visual review)",
         "tags": [
           "clients"
         ]
@@ -2731,6 +2901,34 @@
         ]
       }
     },
+    "/v1/admin/alarms/sync-status": {
+      "get": {
+        "operationId": "AlarmsController_getSyncStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
+    "/v1/admin/alarms/sync-all": {
+      "post": {
+        "operationId": "AlarmsController_syncAll",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Alarms"
+        ]
+      }
+    },
     "/v1/admin/alarms/history": {
       "get": {
         "operationId": "AlarmsController_getHistory",
@@ -2996,6 +3194,16 @@
       "post": {
         "operationId": "ChatbotController_chat",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequestDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -3608,7 +3816,7 @@
           },
           "zip": {
             "type": "string",
-            "description": "ZIP code",
+            "description": "ZIP/Postal code (international formats accepted)",
             "example": "10001"
           }
         }
@@ -3700,6 +3908,74 @@
           }
         }
       },
+      "UpdateUserInfoAddressDto": {
+        "type": "object",
+        "properties": {
+          "street": {
+            "type": "string",
+            "description": "Street address",
+            "example": "123 Main St"
+          },
+          "city": {
+            "type": "string",
+            "description": "City",
+            "example": "New York"
+          },
+          "state": {
+            "type": "string",
+            "description": "State",
+            "example": "NY"
+          },
+          "zip": {
+            "type": "string",
+            "description": "ZIP/Postal code",
+            "example": "10001"
+          }
+        }
+      },
+      "UpdateUserInfoDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "Phone number",
+            "example": "+5491112345678"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "First name",
+            "example": "John"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Last name",
+            "example": "Doe"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "description": "Date of birth (ISO 8601)",
+            "example": "1995-06-15"
+          },
+          "preferredLanguage": {
+            "type": "string",
+            "description": "Preferred language",
+            "enum": [
+              "es",
+              "en",
+              "pt"
+            ],
+            "example": "en"
+          },
+          "address": {
+            "description": "Mailing address",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UpdateUserInfoAddressDto"
+              }
+            ]
+          }
+        }
+      },
       "UpdateSensitiveProfileDto": {
         "type": "object",
         "properties": {
@@ -3731,6 +4007,23 @@
             "description": "TurboTax account password"
           }
         }
+      },
+      "ConfirmRefundDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "federal",
+              "state"
+            ],
+            "description": "Type of refund to confirm (federal or state)",
+            "example": "federal"
+          }
+        },
+        "required": [
+          "type"
+        ]
       },
       "AdminUpdateProfileDto": {
         "type": "object",
@@ -3817,6 +4110,22 @@
         },
         "required": [
           "status"
+        ]
+      },
+      "MarkCommissionPaidDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "federal",
+              "state"
+            ],
+            "description": "Type of commission to mark as paid"
+          }
+        },
+        "required": [
+          "type"
         ]
       },
       "SetProblemDto": {
@@ -4267,6 +4576,10 @@
           }
         }
       },
+      "ChatRequestDto": {
+        "type": "object",
+        "properties": {}
+      },
       "ConsentFormStatusDto": {
         "type": "object",
         "properties": {
@@ -4354,10 +4667,40 @@
             "type": "string",
             "description": "Client signature as base64 encoded PNG image",
             "example": "data:image/png;base64,iVBORw0KGgo..."
+          },
+          "fullName": {
+            "type": "string",
+            "description": "Client full name",
+            "example": "Juan Carlos Perez"
+          },
+          "dniPassport": {
+            "type": "string",
+            "description": "Client DNI or Passport number",
+            "example": "12345678"
+          },
+          "street": {
+            "type": "string",
+            "description": "Client street address",
+            "example": "Av. Corrientes 1234"
+          },
+          "city": {
+            "type": "string",
+            "description": "Client city",
+            "example": "Buenos Aires"
+          },
+          "email": {
+            "type": "string",
+            "description": "Client email",
+            "example": "juan@email.com"
           }
         },
         "required": [
-          "signature"
+          "signature",
+          "fullName",
+          "dniPassport",
+          "street",
+          "city",
+          "email"
         ]
       }
     }

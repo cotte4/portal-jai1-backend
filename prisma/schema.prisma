@@ -182,6 +182,9 @@ model TaxCase {
   stateCommissionPaid       Boolean    @default(false) @map("state_commission_paid")
   federalCommissionPaidAt   DateTime?  @map("federal_commission_paid_at") @db.Timestamptz
   stateCommissionPaidAt     DateTime?  @map("state_commission_paid_at") @db.Timestamptz
+  // Per-track commission rates (11% normal, 22% verification)
+  federalCommissionRate     Decimal    @default(0.11) @map("federal_commission_rate") @db.Decimal(3, 2)
+  stateCommissionRate       Decimal    @default(0.11) @map("state_commission_rate") @db.Decimal(3, 2)
   // Year-specific employment and banking info (SOURCE OF TRUTH - not ClientProfile)
   workState          String?         @map("work_state")
   employerName       String?         @map("employer_name")

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -98,15 +99,140 @@ export interface ThresholdsResponse {
   updatedAt: Date | null;
 }
 
+export interface SyncStatusResponse {
+  lastSyncAt: string | null;
+  casesProcessed: number;
+  alarmsTriggered: number;
+  alarmsAutoResolved: number;
+  errors: number;
+  isRunning: boolean;
+}
+
 @Injectable()
 export class AlarmsService {
   private readonly logger = new Logger(AlarmsService.name);
+
+  // Sync tracking
+  private lastSyncAt: Date | null = null;
+  private lastSyncStats = { casesProcessed: 0, alarmsTriggered: 0, alarmsAutoResolved: 0, errors: 0 };
+  private isSyncRunning = false;
 
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private i18n: I18nService,
   ) {}
+
+  // ===== CRON: Daily Alarm Sync =====
+
+  @Cron('0 7 * * *', {
+    name: 'sync-all-alarms',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  })
+  async syncAllAlarms(): Promise<SyncStatusResponse> {
+    if (this.isSyncRunning) {
+      this.logger.warn('Alarm sync already running, skipping');
+      return this.getSyncStatus();
+    }
+
+    this.isSyncRunning = true;
+    const stats = { casesProcessed: 0, alarmsTriggered: 0, alarmsAutoResolved: 0, errors: 0 };
+
+    try {
+      this.logger.log('Starting daily alarm sync...');
+
+      // Query all tax cases with alarm-triggering statuses
+      const eligibleCases = await this.prisma.taxCase.findMany({
+        where: {
+          OR: [
+            {
+              federalStatusNew: {
+                in: ['in_process', 'in_verification', 'verification_in_progress'],
+              },
+            },
+            {
+              stateStatusNew: {
+                in: ['in_process', 'in_verification', 'verification_in_progress'],
+              },
+            },
+          ],
+        },
+        select: { id: true },
+      });
+
+      this.logger.log(`Found ${eligibleCases.length} eligible cases for alarm sync`);
+
+      // Process in batches of 20
+      const BATCH_SIZE = 20;
+      for (let i = 0; i < eligibleCases.length; i += BATCH_SIZE) {
+        const batch = eligibleCases.slice(i, i + BATCH_SIZE);
+
+        // Count alarms before sync for this batch
+        const beforeCounts = await Promise.all(
+          batch.map((tc) =>
+            this.prisma.alarmHistory.count({
+              where: { taxCaseId: tc.id, resolution: { in: ['active', 'acknowledged'] } },
+            }),
+          ),
+        );
+
+        // Sync each case in the batch in parallel
+        const results = await Promise.allSettled(
+          batch.map((tc) => this.syncAlarmsForCase(tc.id)),
+        );
+
+        // Count alarms after sync for this batch
+        const afterCounts = await Promise.all(
+          batch.map((tc) =>
+            this.prisma.alarmHistory.count({
+              where: { taxCaseId: tc.id, resolution: { in: ['active', 'acknowledged'] } },
+            }),
+          ),
+        );
+
+        for (let j = 0; j < results.length; j++) {
+          if (results[j].status === 'fulfilled') {
+            stats.casesProcessed++;
+            const diff = afterCounts[j] - beforeCounts[j];
+            if (diff > 0) stats.alarmsTriggered += diff;
+            else if (diff < 0) stats.alarmsAutoResolved += Math.abs(diff);
+          } else {
+            stats.errors++;
+            this.logger.error(
+              `Failed to sync alarms for case ${batch[j].id}:`,
+              (results[j] as PromiseRejectedResult).reason,
+            );
+          }
+        }
+      }
+
+      this.lastSyncAt = new Date();
+      this.lastSyncStats = stats;
+
+      this.logger.log(
+        `Alarm sync complete: ${stats.casesProcessed} cases processed, ` +
+          `${stats.alarmsTriggered} new alarms, ${stats.alarmsAutoResolved} auto-resolved, ` +
+          `${stats.errors} errors`,
+      );
+    } catch (error) {
+      this.logger.error('Alarm sync failed:', error);
+    } finally {
+      this.isSyncRunning = false;
+    }
+
+    return this.getSyncStatus();
+  }
+
+  getSyncStatus(): SyncStatusResponse {
+    return {
+      lastSyncAt: this.lastSyncAt?.toISOString() ?? null,
+      casesProcessed: this.lastSyncStats.casesProcessed,
+      alarmsTriggered: this.lastSyncStats.alarmsTriggered,
+      alarmsAutoResolved: this.lastSyncStats.alarmsAutoResolved,
+      errors: this.lastSyncStats.errors,
+      isRunning: this.isSyncRunning,
+    };
+  }
 
   /**
    * Get alarm dashboard with all cases that have active alarms

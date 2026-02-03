@@ -306,6 +306,9 @@ export class ClientsService {
                 federalStatusNewChangedAt: true,
                 stateStatusNew: true,
                 stateStatusNewChangedAt: true,
+                // Commission rates
+                federalCommissionRate: true,
+                stateCommissionRate: true,
               },
               orderBy: { taxYear: 'desc' },
               take: 1,
@@ -404,6 +407,9 @@ export class ClientsService {
             estimatedRefund: user.clientProfile.taxCases[0].estimatedRefund
               ? Number(user.clientProfile.taxCases[0].estimatedRefund)
               : null,
+            // Commission rates (Decimal → number)
+            federalCommissionRate: Number(user.clientProfile.taxCases[0].federalCommissionRate || 0.11),
+            stateCommissionRate: Number(user.clientProfile.taxCases[0].stateCommissionRate || 0.11),
           }
         : null,
     };
@@ -1639,6 +1645,9 @@ export class ClientsService {
           stateLastReviewedAt: (tc as any).stateLastReviewedAt,
           paymentReceived: tc.paymentReceived,
           commissionPaid: tc.commissionPaid,
+          // Commission rates
+          federalCommissionRate: tc.federalCommissionRate ? Number(tc.federalCommissionRate) : 0.11,
+          stateCommissionRate: tc.stateCommissionRate ? Number(tc.stateCommissionRate) : 0.11,
           statusUpdatedAt: tc.statusUpdatedAt,
           adminStep: tc.adminStep,
           hasProblem: tc.hasProblem,
@@ -1921,6 +1930,14 @@ export class ClientsService {
       if (statusData.federalStatusNew !== previousFederalStatusNew) {
         updateData.federalStatusNewChangedAt = now;
       }
+    }
+
+    // Update commission rates if provided
+    if (statusData.federalCommissionRate !== undefined) {
+      updateData.federalCommissionRate = statusData.federalCommissionRate;
+    }
+    if (statusData.stateCommissionRate !== undefined) {
+      updateData.stateCommissionRate = statusData.stateCommissionRate;
     }
 
     // Update stateStatusNew field
@@ -2410,12 +2427,16 @@ export class ClientsService {
       data: updateData,
     });
 
-    // Calculate fee information to return
+    // Calculate fee information to return (using stored per-track commission rate)
     const refundAmount =
       type === 'federal'
         ? Number(taxCase.federalActualRefund)
         : Number(taxCase.stateActualRefund);
-    const fee = refundAmount * 0.11; // 11% fee
+    const commissionRate =
+      type === 'federal'
+        ? Number(taxCase.federalCommissionRate || 0.11)
+        : Number(taxCase.stateCommissionRate || 0.11);
+    const fee = refundAmount * commissionRate;
 
     this.logger.log(
       `Client ${userId} confirmed ${type} refund receipt. Amount: $${refundAmount}, Fee: $${fee.toFixed(2)}`,
@@ -2498,7 +2519,11 @@ export class ClientsService {
       type === 'federal'
         ? Number(taxCase.federalActualRefund)
         : Number(taxCase.stateActualRefund);
-    const commissionAmount = refundAmount * 0.11;
+    const commissionRate =
+      type === 'federal'
+        ? Number(taxCase.federalCommissionRate || 0.11)
+        : Number(taxCase.stateCommissionRate || 0.11);
+    const commissionAmount = refundAmount * commissionRate;
 
     this.logger.log(
       `Admin ${adminId} marked ${type} commission as paid for client ${clientProfileId}. Amount: $${commissionAmount.toFixed(2)}`,
@@ -2567,6 +2592,8 @@ export class ClientsService {
             stateCommissionPaid: true,
             federalCommissionPaidAt: true,
             stateCommissionPaidAt: true,
+            federalCommissionRate: true,
+            stateCommissionRate: true,
           },
         },
       },
@@ -2587,8 +2614,10 @@ export class ClientsService {
       const taxCase = client.taxCases[0];
       const federalRefund = Number(taxCase?.federalActualRefund || 0);
       const stateRefund = Number(taxCase?.stateActualRefund || 0);
-      const federalCommission = federalRefund * 0.11;
-      const stateCommission = stateRefund * 0.11;
+      const fedRate = Number(taxCase?.federalCommissionRate || 0.11);
+      const stateRate = Number(taxCase?.stateCommissionRate || 0.11);
+      const federalCommission = federalRefund * fedRate;
+      const stateCommission = stateRefund * stateRate;
 
       // Track unpaid amounts
       const federalUnpaid = taxCase?.federalRefundReceived && !taxCase?.federalCommissionPaid;
@@ -3508,8 +3537,6 @@ export class ClientsService {
    * OPTIMIZED: Uses cursor pagination to prevent memory issues with large datasets
    */
   async getPaymentsSummary(options: { cursor?: string; limit: number }) {
-    const COMMISSION_RATE = 0.11; // 11%
-
     // Fetch clients with pagination (limit + 1 to check if there's more)
     const clients = await this.prisma.clientProfile.findMany({
       take: options.limit + 1,
@@ -3536,6 +3563,8 @@ export class ClientsService {
             stateDepositDate: true,
             paymentReceived: true,
             commissionPaid: true,
+            federalCommissionRate: true,
+            stateCommissionRate: true,
           },
         },
       },
@@ -3545,15 +3574,17 @@ export class ClientsService {
     const hasMore = clients.length > options.limit;
     const results = hasMore ? clients.slice(0, -1) : clients;
 
-    // Map to payments data
+    // Map to payments data (using per-client commission rates)
     const paymentsData = results.map((client) => {
       const tc = client.taxCases[0];
       const federalTaxes = Number(tc?.federalActualRefund || 0);
       const stateTaxes = Number(tc?.stateActualRefund || 0);
       const totalTaxes = federalTaxes + stateTaxes;
-      const federalCommission = Math.round(federalTaxes * COMMISSION_RATE * 100) / 100;
-      const stateCommission = Math.round(stateTaxes * COMMISSION_RATE * 100) / 100;
-      const totalCommission = Math.round(totalTaxes * COMMISSION_RATE * 100) / 100;
+      const fedRate = Number(tc?.federalCommissionRate || 0.11);
+      const stateRate = Number(tc?.stateCommissionRate || 0.11);
+      const federalCommission = Math.round(federalTaxes * fedRate * 100) / 100;
+      const stateCommission = Math.round(stateTaxes * stateRate * 100) / 100;
+      const totalCommission = Math.round((federalCommission + stateCommission) * 100) / 100;
       const clientReceives = Math.round((totalTaxes - totalCommission) * 100) / 100;
 
       return {
@@ -3574,43 +3605,37 @@ export class ClientsService {
       };
     });
 
-    // Calculate totals using database aggregation (separate query for accuracy)
-    const aggregates = await this.prisma.taxCase.aggregate({
-      where: {
-        clientProfile: {
-          taxCases: {
-            some: {
-              OR: [
-                { federalActualRefund: { not: null } },
-                { stateActualRefund: { not: null } },
-              ],
-            },
-          },
-        },
+    // Calculate totals by summing per-client results (rates vary per case)
+    const totals = paymentsData.reduce(
+      (acc, client) => {
+        acc.federalTaxes += client.federalTaxes;
+        acc.stateTaxes += client.stateTaxes;
+        acc.totalTaxes += client.totalTaxes;
+        acc.federalCommission += client.federalCommission;
+        acc.stateCommission += client.stateCommission;
+        acc.totalCommission += client.totalCommission;
+        acc.clientReceives += client.clientReceives;
+        return acc;
       },
-      _sum: {
-        federalActualRefund: true,
-        stateActualRefund: true,
+      {
+        federalTaxes: 0,
+        stateTaxes: 0,
+        totalTaxes: 0,
+        federalCommission: 0,
+        stateCommission: 0,
+        totalCommission: 0,
+        clientReceives: 0,
       },
-    });
+    );
 
-    const totalFederal = Number(aggregates._sum.federalActualRefund || 0);
-    const totalState = Number(aggregates._sum.stateActualRefund || 0);
-    const totalTaxes = totalFederal + totalState;
-    const totalFederalCommission = totalFederal * COMMISSION_RATE;
-    const totalStateCommission = totalState * COMMISSION_RATE;
-    const totalCommission = totalTaxes * COMMISSION_RATE;
-    const totalClientReceives = totalTaxes - totalCommission;
-
-    const totals = {
-      federalTaxes: Math.round(totalFederal * 100) / 100,
-      stateTaxes: Math.round(totalState * 100) / 100,
-      totalTaxes: Math.round(totalTaxes * 100) / 100,
-      federalCommission: Math.round(totalFederalCommission * 100) / 100,
-      stateCommission: Math.round(totalStateCommission * 100) / 100,
-      totalCommission: Math.round(totalCommission * 100) / 100,
-      clientReceives: Math.round(totalClientReceives * 100) / 100,
-    };
+    // Round all totals
+    totals.federalTaxes = Math.round(totals.federalTaxes * 100) / 100;
+    totals.stateTaxes = Math.round(totals.stateTaxes * 100) / 100;
+    totals.totalTaxes = Math.round(totals.totalTaxes * 100) / 100;
+    totals.federalCommission = Math.round(totals.federalCommission * 100) / 100;
+    totals.stateCommission = Math.round(totals.stateCommission * 100) / 100;
+    totals.totalCommission = Math.round(totals.totalCommission * 100) / 100;
+    totals.clientReceives = Math.round(totals.clientReceives * 100) / 100;
 
     return {
       clients: paymentsData,
@@ -3709,18 +3734,32 @@ export class ClientsService {
         const federalDepositDate = tc.federalDepositDate ? new Date(tc.federalDepositDate) : null;
         const stateDepositDate = tc.stateDepositDate ? new Date(tc.stateDepositDate) : null;
 
-        // Check if went through verification (via status or status history mention)
-        // NOTE: irs_verification problem type removed - verification is now tracked via status
-        const wentThroughVerification =
+        // Check verification per track (federal vs state)
+        const federalVerification =
           tc.federalStatusNew === 'in_verification' ||
           tc.federalStatusNew === 'verification_in_progress' ||
+          tc.statusHistory.some(
+            (h) =>
+              (h.newStatus?.toLowerCase().includes('verif') &&
+                h.newStatus?.toLowerCase().includes('federal')) ||
+              (h.comment?.toLowerCase().includes('verif') &&
+                h.comment?.toLowerCase().includes('federal')),
+          );
+
+        const stateVerification =
           tc.stateStatusNew === 'in_verification' ||
           tc.stateStatusNew === 'verification_in_progress' ||
           tc.statusHistory.some(
             (h) =>
-              h.newStatus?.toLowerCase().includes('verif') ||
-              h.comment?.toLowerCase().includes('verif'),
+              (h.newStatus?.toLowerCase().includes('verif') &&
+                (h.newStatus?.toLowerCase().includes('state') ||
+                  h.newStatus?.toLowerCase().includes('estat'))) ||
+              (h.comment?.toLowerCase().includes('verif') &&
+                (h.comment?.toLowerCase().includes('state') ||
+                  h.comment?.toLowerCase().includes('estat'))),
           );
+
+        const wentThroughVerification = federalVerification || stateVerification;
 
         // Documentation complete date - we use taxesFiledAt as the documentation was complete before filing
         const documentationCompleteDate = taxesFiledAt; // Approximation
@@ -3733,6 +3772,8 @@ export class ClientsService {
           federalDepositDate,
           stateDepositDate,
           wentThroughVerification,
+          federalVerification,
+          stateVerification,
           federalDelayDays: daysBetween(taxesFiledAt, federalDepositDate),
           stateDelayDays: daysBetween(taxesFiledAt, stateDepositDate),
           federalStatus: tc.federalStatusNew,
@@ -3753,7 +3794,7 @@ export class ClientsService {
    * OPTIMIZED: Uses database aggregations instead of full-table scans
    */
   async getSeasonStats() {
-    const COMMISSION_RATE = 0.11; // 11%
+    const DEFAULT_COMMISSION_RATE = 0.11; // 11% default for projections
 
     // Use parallel aggregate queries for maximum performance
     const [
@@ -3761,7 +3802,7 @@ export class ClientsService {
       totalTaxCases,
       completedCases,
       depositedCases,
-      actualRefundAggregates,
+      earningsResult,
       projectedRefundResult,
     ] = await Promise.all([
       // Total clients count
@@ -3790,44 +3831,38 @@ export class ClientsService {
         },
       }),
 
-      // Sum of actual refunds for deposited cases (earnings to date)
-      this.prisma.taxCase.aggregate({
-        where: {
-          OR: [
-            { federalDepositDate: { not: null } },
-            { stateDepositDate: { not: null } },
-          ],
-        },
-        _sum: {
-          federalActualRefund: true,
-          stateActualRefund: true,
-        },
-      }),
+      // Earnings to date: uses per-case stored commission rates
+      this.prisma.$queryRaw<[{ earnings: number | null }]>`
+        SELECT SUM(
+          COALESCE("federal_actual_refund", 0) * COALESCE("federal_commission_rate", 0.11) +
+          COALESCE("state_actual_refund", 0) * COALESCE("state_commission_rate", 0.11)
+        ) as "earnings"
+        FROM "tax_cases"
+        WHERE "federal_deposit_date" IS NOT NULL OR "state_deposit_date" IS NOT NULL
+      `,
 
       // Sum of projected refunds for all cases (per-client: use estimatedRefund if available, else actual)
       // This raw query properly handles the per-row fallback logic
       this.prisma.$queryRaw<[{ projectedBase: number | null }]>`
         SELECT SUM(
           COALESCE(
-            "estimatedRefund",
-            COALESCE("federalActualRefund", 0) + COALESCE("stateActualRefund", 0)
+            "estimated_refund",
+            COALESCE("federal_actual_refund", 0) + COALESCE("state_actual_refund", 0)
           )
         ) as "projectedBase"
-        FROM "TaxCase"
+        FROM "tax_cases"
       `,
     ]);
 
     // Calculate completed count (max of status-based or date-based)
     const taxesCompletedCount = Math.max(completedCases, depositedCases);
 
-    // Calculate earnings to date from deposited cases
-    const actualFederal = Number(actualRefundAggregates._sum.federalActualRefund || 0);
-    const actualState = Number(actualRefundAggregates._sum.stateActualRefund || 0);
-    const earningsToDate = (actualFederal + actualState) * COMMISSION_RATE;
+    // Earnings to date from raw SQL (already uses per-case rates)
+    const earningsToDate = Number(earningsResult[0]?.earnings || 0);
 
-    // Calculate projected earnings from per-client projected refunds
+    // Projected earnings uses default rate (most cases won't have custom rates yet)
     const projectedBase = Number(projectedRefundResult[0]?.projectedBase || 0);
-    const projectedEarnings = projectedBase * COMMISSION_RATE;
+    const projectedEarnings = projectedBase * DEFAULT_COMMISSION_RATE;
 
     return {
       totalClients,
