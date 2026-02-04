@@ -239,6 +239,16 @@ export class DocumentsService {
           metadata: { clientName, fileName: file.originalname },
         });
         this.logger.log(`Emitted PAYMENT_PROOF_UPLOADED event for user ${userId}`);
+      } else if (uploadDto.type === 'commission_proof_federal' || uploadDto.type === 'commission_proof_state') {
+        // Commission proof uploaded - notify admins (admin verifies manually)
+        const track = uploadDto.type === 'commission_proof_federal' ? 'federal' : 'state';
+        await this.progressAutomation.processEvent({
+          type: 'COMMISSION_PROOF_UPLOADED',
+          userId,
+          taxCaseId: taxCase.id,
+          metadata: { clientName, fileName: file.originalname, track },
+        });
+        this.logger.log(`Emitted COMMISSION_PROOF_UPLOADED (${track}) event for user ${userId}`);
       } else {
         // Other document - just notify admins
         await this.progressAutomation.processEvent({

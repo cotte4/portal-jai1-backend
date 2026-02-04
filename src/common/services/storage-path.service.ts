@@ -123,7 +123,7 @@ export class StoragePathService {
     const parsed = this.parseDocumentPath(path);
     if (!parsed) return false;
 
-    const validTypes = ['w2', 'payment_proof', 'other', 'estimates'];
+    const validTypes = ['w2', 'payment_proof', 'consent_form', 'commission_proof_federal', 'commission_proof_state', 'other', 'estimates'];
     return (
       parsed.userId.length > 0 &&
       !isNaN(parsed.taxYear) &&

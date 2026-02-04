@@ -312,6 +312,15 @@ export class ClientsService {
                 // Commission rates
                 federalCommissionRate: true,
                 stateCommissionRate: true,
+                // Refund confirmation
+                federalRefundReceived: true,
+                stateRefundReceived: true,
+                federalRefundReceivedAt: true,
+                stateRefundReceivedAt: true,
+                // Commission payment tracking
+                commissionPaid: true,
+                federalCommissionPaid: true,
+                stateCommissionPaid: true,
               },
               orderBy: { taxYear: 'desc' },
               take: 1,

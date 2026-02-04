@@ -10,6 +10,7 @@ export type ProgressEventType =
   | 'PROFILE_COMPLETED'
   | 'W2_UPLOADED'
   | 'PAYMENT_PROOF_UPLOADED'
+  | 'COMMISSION_PROOF_UPLOADED'
   | 'ALL_DOCS_COMPLETE'
   | 'DOCUMENT_UPLOADED';
 
@@ -51,6 +52,9 @@ export class ProgressAutomationService {
           break;
         case 'ALL_DOCS_COMPLETE':
           await this.handleAllDocsComplete(event);
+          break;
+        case 'COMMISSION_PROOF_UPLOADED':
+          await this.handleCommissionProofUploaded(event);
           break;
         case 'DOCUMENT_UPLOADED':
           await this.handleDocumentUploaded(event);
@@ -133,6 +137,20 @@ export class ProgressAutomationService {
     await this.notifyAdmins(
       'Documentación Completa',
       `El cliente ${event.metadata?.clientName || 'Unknown'} ha completado toda la documentación requerida. Listo para revisión.`,
+    );
+  }
+
+  /**
+   * Handle commission proof upload - notify admins (does NOT auto-set commissionPaid)
+   */
+  private async handleCommissionProofUploaded(event: ProgressEvent): Promise<void> {
+    this.logger.log('Handling COMMISSION_PROOF_UPLOADED event');
+
+    const track = event.metadata?.track === 'state' ? 'Estatal' : 'Federal';
+
+    await this.notifyAdmins(
+      `Comprobante de Comision ${track} Recibido`,
+      `El cliente ${event.metadata?.clientName || 'Unknown'} ha subido comprobante de pago de comision ${track.toLowerCase()}.`,
     );
   }
 

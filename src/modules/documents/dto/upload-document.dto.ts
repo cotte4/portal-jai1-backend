@@ -6,6 +6,8 @@ export enum DocumentType {
   W2 = 'w2',
   PAYMENT_PROOF = 'payment_proof',
   CONSENT_FORM = 'consent_form',
+  COMMISSION_PROOF_FEDERAL = 'commission_proof_federal',
+  COMMISSION_PROOF_STATE = 'commission_proof_state',
   OTHER = 'other',
 }
 

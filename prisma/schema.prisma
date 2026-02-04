@@ -481,6 +481,8 @@ enum DocumentType {
   w2
   payment_proof
   consent_form
+  commission_proof_federal
+  commission_proof_state
   other
 }
 
