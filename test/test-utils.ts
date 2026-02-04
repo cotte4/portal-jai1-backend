@@ -168,6 +168,8 @@ export function createMockUsersService() {
     setVerificationToken: jest.fn(),
     findByVerificationToken: jest.fn(),
     markEmailVerified: jest.fn(),
+    // Profile check
+    hasCompletedProfile: jest.fn().mockResolvedValue(false),
   };
 }
 

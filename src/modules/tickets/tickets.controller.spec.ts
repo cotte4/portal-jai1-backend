@@ -102,7 +102,7 @@ describe('TicketsController', () => {
 
       const result = await controller.findAll(mockAdminUser, undefined, undefined);
 
-      expect(ticketsService.findAll).toHaveBeenCalledWith({ status: undefined, userId: undefined });
+      expect(ticketsService.findAll).toHaveBeenCalledWith({ status: undefined, userId: undefined, cursor: undefined, limit: 20 });
       expect(result).toEqual(mockTicketsList);
     });
 
@@ -111,7 +111,7 @@ describe('TicketsController', () => {
 
       const result = await controller.findAll(mockClientUser, undefined, undefined);
 
-      expect(ticketsService.findAll).toHaveBeenCalledWith({ status: undefined, userId: mockClientUser.id });
+      expect(ticketsService.findAll).toHaveBeenCalledWith({ status: undefined, userId: mockClientUser.id, cursor: undefined, limit: 20 });
       expect(result).toEqual(mockTicketsList);
     });
 
@@ -120,7 +120,7 @@ describe('TicketsController', () => {
 
       const result = await controller.findAll(mockAdminUser, 'open', undefined);
 
-      expect(ticketsService.findAll).toHaveBeenCalledWith({ status: 'open', userId: undefined });
+      expect(ticketsService.findAll).toHaveBeenCalledWith({ status: 'open', userId: undefined, cursor: undefined, limit: 20 });
       expect(result).toEqual(mockTicketsList);
     });
 
@@ -129,7 +129,7 @@ describe('TicketsController', () => {
 
       const result = await controller.findAll(mockAdminUser, undefined, 'client-456');
 
-      expect(ticketsService.findAll).toHaveBeenCalledWith({ status: undefined, userId: 'client-456' });
+      expect(ticketsService.findAll).toHaveBeenCalledWith({ status: undefined, userId: 'client-456', cursor: undefined, limit: 20 });
     });
 
     it('should throw BadRequestException for invalid status', async () => {

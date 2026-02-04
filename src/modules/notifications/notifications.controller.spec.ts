@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
+import { NotificationsGateway } from './notifications.gateway';
 
 /**
  * Notifications Controller Unit Tests
@@ -50,10 +51,15 @@ describe('NotificationsController', () => {
       deleteAllRead: jest.fn(),
     };
 
+    const mockNotificationsGateway = {
+      sendToUser: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [NotificationsController],
       providers: [
         { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: NotificationsGateway, useValue: mockNotificationsGateway },
       ],
     }).compile();
 
@@ -71,7 +77,7 @@ describe('NotificationsController', () => {
 
       const result = await controller.findAll(mockUser, undefined, undefined);
 
-      expect(notificationsService.findAll).toHaveBeenCalledWith(mockUser.id, false, false);
+      expect(notificationsService.findAll).toHaveBeenCalledWith(mockUser.id, false, false, undefined, 20);
       expect(result).toEqual(mockNotificationsList);
     });
 
@@ -80,7 +86,7 @@ describe('NotificationsController', () => {
 
       const result = await controller.findAll(mockUser, 'true', undefined);
 
-      expect(notificationsService.findAll).toHaveBeenCalledWith(mockUser.id, true, false);
+      expect(notificationsService.findAll).toHaveBeenCalledWith(mockUser.id, true, false, undefined, 20);
       expect(result).toEqual(mockNotificationsList);
     });
 
@@ -89,7 +95,7 @@ describe('NotificationsController', () => {
 
       const result = await controller.findAll(mockUser, undefined, 'true');
 
-      expect(notificationsService.findAll).toHaveBeenCalledWith(mockUser.id, false, true);
+      expect(notificationsService.findAll).toHaveBeenCalledWith(mockUser.id, false, true, undefined, 20);
       expect(result).toEqual(mockNotificationsList);
     });
 
@@ -98,7 +104,7 @@ describe('NotificationsController', () => {
 
       await controller.findAll(mockUser, 'true', 'true');
 
-      expect(notificationsService.findAll).toHaveBeenCalledWith(mockUser.id, true, true);
+      expect(notificationsService.findAll).toHaveBeenCalledWith(mockUser.id, true, true, undefined, 20);
     });
 
     it('should return empty array when no notifications', async () => {

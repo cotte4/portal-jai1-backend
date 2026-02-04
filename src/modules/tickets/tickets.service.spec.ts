@@ -7,6 +7,7 @@ import {
 import { TicketsService } from './tickets.service';
 import { PrismaService } from '../../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 // Mock data
 const mockUser = {
@@ -84,6 +85,13 @@ describe('TicketsService', () => {
 
     notificationsService = {
       create: jest.fn().mockResolvedValue(undefined),
+      createFromTemplate: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const notificationsGateway = {
+      sendToUser: jest.fn(),
+      emitTicketMessage: jest.fn(),
+      emitTicketStatusChange: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -91,6 +99,7 @@ describe('TicketsService', () => {
         TicketsService,
         { provide: PrismaService, useValue: prisma },
         { provide: NotificationsService, useValue: notificationsService },
+        { provide: NotificationsGateway, useValue: notificationsGateway },
       ],
     }).compile();
 
@@ -148,8 +157,8 @@ describe('TicketsService', () => {
           orderBy: { updatedAt: 'desc' },
         }),
       );
-      expect(result).toHaveLength(1);
-      expect(result[0].messageCount).toBe(5);
+      expect(result.tickets).toHaveLength(1);
+      expect(result.tickets[0].messageCount).toBe(5);
     });
 
     it('should filter by status', async () => {
@@ -243,10 +252,24 @@ describe('TicketsService', () => {
 
   describe('addMessage', () => {
     beforeEach(() => {
-      // Setup findOne mock for the return value
-      prisma.ticket.findUnique
-        .mockResolvedValueOnce({ ...mockTicket, user: mockUser }) // First call in addMessage
-        .mockResolvedValueOnce({ ...mockTicket, messages: [mockMessage, mockAdminMessage] }); // Second call in findOne
+      // Inside $transaction: findUnique returns ticket with user+messages, then create returns new message, then update returns updated ticket
+      prisma.ticket.findUnique.mockResolvedValue({
+        ...mockTicket,
+        user: { ...mockUser, role: 'client' },
+        messages: [mockMessage],
+      });
+      prisma.ticketMessage.create.mockResolvedValue({
+        id: 'msg-new',
+        message: 'New message',
+        senderId: 'user-1',
+        isRead: false,
+        createdAt: new Date(),
+        sender: { id: 'user-1', firstName: 'John', lastName: 'Doe', role: 'client' },
+      });
+      prisma.ticket.update.mockResolvedValue({
+        updatedAt: new Date(),
+        unreadCount: 1,
+      });
     });
 
     it('should add message to ticket by owner', async () => {
@@ -262,21 +285,30 @@ describe('TicketsService', () => {
     });
 
     it('should add message to ticket by admin', async () => {
-      prisma.ticket.findUnique
-        .mockReset()
-        .mockResolvedValueOnce({ ...mockTicket, user: mockUser })
-        .mockResolvedValueOnce({ ...mockTicket, messages: [mockMessage] });
+      prisma.ticket.findUnique.mockReset().mockResolvedValue({
+        ...mockTicket,
+        user: { ...mockUser, role: 'client' },
+        messages: [mockMessage],
+      });
+      prisma.ticketMessage.create.mockResolvedValue({
+        id: 'msg-new',
+        message: 'Admin reply',
+        senderId: 'admin-1',
+        isRead: false,
+        createdAt: new Date(),
+        sender: { id: 'admin-1', firstName: 'Admin', lastName: 'User', role: 'admin' },
+      });
 
       await service.addMessage('ticket-1', 'admin-1', 'admin', {
         message: 'Admin reply',
       });
 
-      // Admin replying to client should trigger notification
-      expect(notificationsService.create).toHaveBeenCalledWith(
+      // Admin replying to client should trigger notification via template
+      expect(notificationsService.createFromTemplate).toHaveBeenCalledWith(
         'user-1',
         'message',
-        'Respuesta a tu ticket',
-        expect.stringContaining('Help with my tax form'),
+        'notifications.ticket_response',
+        expect.objectContaining({ subject: 'Help with my tax form' }),
       );
     });
 

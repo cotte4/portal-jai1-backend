@@ -13,7 +13,8 @@ import { StoragePathService } from '../../common/services';
 import { ProgressAutomationService } from '../progress/progress-automation.service';
 import { redactUserId, redactFileName, redactStoragePath } from '../../common/utils/log-sanitizer';
 import OpenAI from 'openai';
-import { pdf } from 'pdf-to-img';
+// Dynamically imported below — pdf-to-img is ESM-only
+type PdfFn = typeof import('pdf-to-img')['pdf'];
 
 interface OcrResult {
   box_2: string;
@@ -350,8 +351,9 @@ One missing:   { "box_2": "1110.02", "box_17": "not_found" }`;
    */
   private async convertPdfToImage(pdfBuffer: Buffer): Promise<{ imageBuffer: Buffer; imageMimeType: string }> {
     try {
-      // pdf-to-img returns an async iterator of page images
-      const pdfDocument = await pdf(pdfBuffer, { scale: 2.0 }); // Higher scale for better OCR
+      // pdf-to-img is ESM-only, so we use dynamic import
+      const { pdf } = await import('pdf-to-img');
+      const pdfDocument = await (pdf as PdfFn)(pdfBuffer, { scale: 2.0 }); // Higher scale for better OCR
 
       // Get only the first page
       for await (const image of pdfDocument) {

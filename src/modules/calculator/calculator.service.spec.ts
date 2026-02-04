@@ -8,6 +8,7 @@ import { CalculatorService } from './calculator.service';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
 import { StoragePathService } from '../../common/services';
+import { ProgressAutomationService } from '../progress/progress-automation.service';
 
 // Mock data
 const mockEstimate = {
@@ -66,6 +67,10 @@ describe('CalculatorService', () => {
       get: jest.fn().mockReturnValue('fake-openai-key'),
     };
 
+    const progressAutomation = {
+      processEvent: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CalculatorService,
@@ -73,6 +78,7 @@ describe('CalculatorService', () => {
         { provide: SupabaseService, useValue: supabase },
         { provide: StoragePathService, useValue: storagePath },
         { provide: ConfigService, useValue: configService },
+        { provide: ProgressAutomationService, useValue: progressAutomation },
       ],
     }).compile();
 
@@ -85,7 +91,7 @@ describe('CalculatorService', () => {
 
   describe('estimateRefund', () => {
     it('should throw BadRequestException for invalid file type', async () => {
-      const invalidFile = { ...mockFile, mimetype: 'application/pdf' };
+      const invalidFile = { ...mockFile, mimetype: 'text/plain' };
 
       await expect(service.estimateRefund('user-1', invalidFile)).rejects.toThrow(
         BadRequestException,
@@ -325,6 +331,7 @@ describe('CalculatorService', () => {
           { provide: SupabaseService, useValue: supabase },
           { provide: StoragePathService, useValue: storagePath },
           { provide: ConfigService, useValue: configService },
+          { provide: ProgressAutomationService, useValue: { processEvent: jest.fn() } },
         ],
       }).compile();
 

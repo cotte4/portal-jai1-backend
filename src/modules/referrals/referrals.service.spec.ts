@@ -74,6 +74,7 @@ describe('ReferralsService', () => {
 
     notificationsService = {
       create: jest.fn().mockResolvedValue(undefined),
+      createFromTemplate: jest.fn().mockResolvedValue(undefined),
     };
 
     const supabaseService = {
@@ -219,6 +220,7 @@ describe('ReferralsService', () => {
     it('should create referral and notify referrer', async () => {
       prisma.referral.findUnique.mockResolvedValue(null);
       prisma.referral.create.mockResolvedValue(mockReferral);
+      prisma.user.findUnique.mockResolvedValue(mockUser);
 
       await service.createReferral('referrer-1', 'user-1', 'jan1234');
 
@@ -232,11 +234,13 @@ describe('ReferralsService', () => {
         },
       });
 
-      expect(notificationsService.create).toHaveBeenCalledWith(
+      expect(notificationsService.createFromTemplate).toHaveBeenCalledWith(
         'referrer-1',
         'message',
-        'Nuevo referido',
-        expect.any(String),
+        'notifications.referral_new',
+        {
+          referredName: 'John',
+        },
       );
     });
   });
@@ -344,24 +348,25 @@ describe('ReferralsService', () => {
   describe('getMyDiscount', () => {
     it('should return correct discount info', async () => {
       prisma.referral.count
-        .mockResolvedValueOnce(3) // successful count
-        .mockResolvedValueOnce(2); // pending count
+        .mockResolvedValueOnce(3) // total count (getTotalReferralCount)
+        .mockResolvedValueOnce(2); // successful count (getSuccessfulReferralCount)
 
       const result = await service.getMyDiscount('referrer-1');
 
       expect(result).toEqual({
-        successfulReferrals: 3,
-        pendingReferrals: 2,
-        currentDiscountPercent: 20, // 3 referrals = 20%
+        totalReferrals: 3,
+        successfulReferrals: 2,
+        pendingReferrals: 1, // totalCount - successfulCount = 3 - 2
+        currentDiscountPercent: 20, // 3 total referrals = 20%
         nextTierAt: 4, // Next tier at 4 referrals
         discountTiers: expect.any(Array),
       });
     });
 
-    it('should return 0% for no successful referrals', async () => {
+    it('should return 0% for no referrals', async () => {
       prisma.referral.count
-        .mockResolvedValueOnce(0) // successful count
-        .mockResolvedValueOnce(5); // pending count
+        .mockResolvedValueOnce(0) // total count (getTotalReferralCount)
+        .mockResolvedValueOnce(0); // successful count (getSuccessfulReferralCount)
 
       const result = await service.getMyDiscount('referrer-1');
 
@@ -467,36 +472,10 @@ describe('ReferralsService', () => {
   });
 
   describe('updateReferralOnTaxFormSubmit', () => {
-    it('should do nothing if no referral exists', async () => {
-      prisma.referral.findUnique.mockResolvedValue(null);
-
+    it('should be a no-op (deprecated method)', async () => {
       await service.updateReferralOnTaxFormSubmit('user-1');
 
-      expect(prisma.referral.update).not.toHaveBeenCalled();
-    });
-
-    it('should update status to tax_form_submitted for pending referral', async () => {
-      prisma.referral.findUnique.mockResolvedValue({
-        ...mockReferral,
-        status: 'pending',
-      });
-
-      await service.updateReferralOnTaxFormSubmit('user-1');
-
-      expect(prisma.referral.update).toHaveBeenCalledWith({
-        where: { id: 'referral-1' },
-        data: { status: 'tax_form_submitted' },
-      });
-    });
-
-    it('should not update if status is not pending', async () => {
-      prisma.referral.findUnique.mockResolvedValue({
-        ...mockReferral,
-        status: 'successful',
-      });
-
-      await service.updateReferralOnTaxFormSubmit('user-1');
-
+      expect(prisma.referral.findUnique).not.toHaveBeenCalled();
       expect(prisma.referral.update).not.toHaveBeenCalled();
     });
   });
@@ -527,7 +506,8 @@ describe('ReferralsService', () => {
         status: 'tax_form_submitted',
         referrer: mockReferrer,
       });
-      prisma.referral.count.mockResolvedValue(1); // First successful referral
+      prisma.referral.count.mockResolvedValue(1); // getTotalReferralCount
+      prisma.user.findUnique.mockResolvedValue({ firstName: 'Jane' }); // referrer name lookup + referred name lookup
 
       await service.markReferralSuccessful('user-1', 'tax-case-1');
 
@@ -549,11 +529,14 @@ describe('ReferralsService', () => {
         }),
       });
 
-      expect(notificationsService.create).toHaveBeenCalledWith(
+      expect(notificationsService.createFromTemplate).toHaveBeenCalledWith(
         'referrer-1',
         'status_change',
-        'Referido exitoso',
-        expect.stringContaining('1 referido'),
+        'notifications.referral_successful',
+        expect.objectContaining({
+          firstName: 'Jane',
+          amount: '11',
+        }),
       );
     });
   });

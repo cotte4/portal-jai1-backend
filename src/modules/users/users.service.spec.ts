@@ -94,6 +94,7 @@ describe('UsersService', () => {
           phone: undefined,
           role: 'client',
           googleId: undefined,
+          emailVerified: false,
           referredByCode: undefined,
         },
       });
@@ -196,6 +197,7 @@ describe('UsersService', () => {
           googleId: true,
           profilePicturePath: true,
           tokenVersion: true,
+          referralOnboardingCompleted: true,
           createdAt: true,
           updatedAt: true,
         },

@@ -1,7 +1,14 @@
 import { Module } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { ClientsController } from './clients.controller';
-import { ClientsService } from './clients.service';
+import {
+  ClientProfileService,
+  ClientQueryService,
+  ClientStatusService,
+  ClientAdminService,
+  ClientExportService,
+  ClientReportingService,
+} from './services';
 import { PrismaService } from '../../config/prisma.service';
 import { SupabaseService } from '../../config/supabase.service';
 import { EncryptionService, EmailService } from '../../common/services';
@@ -21,7 +28,25 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
     }),
   ],
   controllers: [ClientsController],
-  providers: [ClientsService, PrismaService, SupabaseService, EncryptionService, EmailService],
-  exports: [ClientsService],
+  providers: [
+    ClientProfileService,
+    ClientQueryService,
+    ClientStatusService,
+    ClientAdminService,
+    ClientExportService,
+    ClientReportingService,
+    PrismaService,
+    SupabaseService,
+    EncryptionService,
+    EmailService,
+  ],
+  exports: [
+    ClientProfileService,
+    ClientQueryService,
+    ClientStatusService,
+    ClientAdminService,
+    ClientExportService,
+    ClientReportingService,
+  ],
 })
 export class ClientsModule {}

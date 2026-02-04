@@ -21,7 +21,14 @@ import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { UserRole } from '@prisma/client';
-import { ClientsService } from './clients.service';
+import {
+  ClientProfileService,
+  ClientQueryService,
+  ClientStatusService,
+  ClientAdminService,
+  ClientExportService,
+  ClientReportingService,
+} from './services';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
 import { PAGINATION_LIMITS, validateLimit } from '../../common/constants';
@@ -40,7 +47,14 @@ import {
 @ApiTags('clients')
 @Controller()
 export class ClientsController {
-  constructor(private readonly clientsService: ClientsService) {}
+  constructor(
+    private readonly profileService: ClientProfileService,
+    private readonly queryService: ClientQueryService,
+    private readonly statusService: ClientStatusService,
+    private readonly adminService: ClientAdminService,
+    private readonly exportService: ClientExportService,
+    private readonly reportingService: ClientReportingService,
+  ) {}
 
   // Client endpoints
   @Get('profile')
@@ -49,7 +63,7 @@ export class ClientsController {
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({ status: 200, description: 'User profile data' })
   async getProfile(@CurrentUser() user: any) {
-    return this.clientsService.getProfile(user.id);
+    return this.profileService.getProfile(user.id);
   }
 
   @Post('profile/complete')
@@ -62,7 +76,7 @@ export class ClientsController {
     @CurrentUser() user: any,
     @Body() completeProfileDto: CompleteProfileDto,
   ) {
-    return this.clientsService.completeProfile(user.id, completeProfileDto);
+    return this.profileService.completeProfile(user.id, completeProfileDto);
   }
 
   @Get('profile/draft')
@@ -71,7 +85,7 @@ export class ClientsController {
   @ApiOperation({ summary: 'Get profile draft data' })
   @ApiResponse({ status: 200, description: 'Draft data' })
   async getDraft(@CurrentUser() user: any) {
-    return this.clientsService.getDraft(user.id);
+    return this.profileService.getDraft(user.id);
   }
 
   @Patch('profile/user-info')
@@ -83,7 +97,7 @@ export class ClientsController {
     @CurrentUser() user: any,
     @Body() updateData: UpdateUserInfoDto,
   ) {
-    return this.clientsService.updateUserInfo(user.id, updateData);
+    return this.profileService.updateUserInfo(user.id, updateData);
   }
 
   @Post('profile/picture')
@@ -105,7 +119,7 @@ export class ClientsController {
     )
     file: Express.Multer.File,
   ) {
-    return this.clientsService.uploadProfilePicture(
+    return this.profileService.uploadProfilePicture(
       user.id,
       file.buffer,
       file.mimetype,
@@ -115,7 +129,7 @@ export class ClientsController {
   @Delete('profile/picture')
   @UseGuards(JwtAuthGuard)
   async deleteProfilePicture(@CurrentUser() user: any) {
-    return this.clientsService.deleteProfilePicture(user.id);
+    return this.profileService.deleteProfilePicture(user.id);
   }
 
   @Patch('profile/sensitive')
@@ -124,7 +138,7 @@ export class ClientsController {
     @CurrentUser() user: any,
     @Body() dto: UpdateSensitiveProfileDto,
   ) {
-    return this.clientsService.updateSensitiveProfile(user.id, dto);
+    return this.profileService.updateSensitiveProfile(user.id, dto);
   }
 
   @Post('refund/confirm')
@@ -138,13 +152,13 @@ export class ClientsController {
     @CurrentUser() user: any,
     @Body() dto: ConfirmRefundDto,
   ) {
-    return this.clientsService.confirmRefundReceived(user.id, dto.type);
+    return this.statusService.confirmRefundReceived(user.id, dto.type);
   }
 
   @Post('profile/mark-onboarding-complete')
   @UseGuards(JwtAuthGuard)
   async markOnboardingComplete(@CurrentUser() user: any) {
-    return this.clientsService.markOnboardingComplete(user.id);
+    return this.profileService.markOnboardingComplete(user.id);
   }
 
   // Admin endpoints
@@ -153,7 +167,7 @@ export class ClientsController {
   @Roles(UserRole.admin)
   @Throttle({ default: { limit: 100, ttl: 60000 } })
   async getSeasonStats() {
-    return this.clientsService.getSeasonStats();
+    return this.reportingService.getSeasonStats();
   }
 
   @Get('admin/accounts')
@@ -165,7 +179,7 @@ export class ClientsController {
     @Query('limit') limit?: string,
   ) {
     const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.ACCOUNTS);
-    return this.clientsService.getAllClientAccounts({ cursor, limit: validatedLimit });
+    return this.queryService.getAllClientAccounts({ cursor, limit: validatedLimit });
   }
 
   @Get('admin/clients/:id/credentials')
@@ -175,9 +189,8 @@ export class ClientsController {
   async getClientCredentials(
     @Param('id') id: string,
     @CurrentUser() user: any,
-    // TODO: Add IP address and user agent from request headers if needed
   ) {
-    return this.clientsService.getClientCredentials(id, user.id);
+    return this.queryService.getClientCredentials(id, user.id);
   }
 
   @Get('admin/payments')
@@ -189,7 +202,7 @@ export class ClientsController {
     @Query('limit') limit?: string,
   ) {
     const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.PAYMENTS);
-    return this.clientsService.getPaymentsSummary({ cursor, limit: validatedLimit });
+    return this.reportingService.getPaymentsSummary({ cursor, limit: validatedLimit });
   }
 
   @Get('admin/delays')
@@ -204,7 +217,7 @@ export class ClientsController {
     @Query('status') status?: string,
   ) {
     const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.DELAYS);
-    return this.clientsService.getDelaysData({
+    return this.reportingService.getDelaysData({
       cursor,
       limit: validatedLimit,
       dateFrom,
@@ -217,7 +230,7 @@ export class ClientsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
   async getClientsWithAlarms() {
-    return this.clientsService.getClientsWithAlarms();
+    return this.reportingService.getClientsWithAlarms();
   }
 
   @Get('admin/clients')
@@ -248,7 +261,7 @@ export class ClientsController {
     // Validate sort order
     const validSortOrder = sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc';
 
-    return this.clientsService.findAll({
+    return this.queryService.findAll({
       status,
       search,
       cursor,
@@ -285,7 +298,7 @@ export class ClientsController {
     const hasProblemBool = hasProblem === 'true' ? true : hasProblem === 'false' ? false : undefined;
 
     // Use streaming export to handle large datasets without timeout
-    const stream = await this.clientsService.exportToExcelStream({
+    const stream = await this.exportService.exportToExcelStream({
       status,
       search,
       hasProblem: hasProblemBool,
@@ -301,11 +314,8 @@ export class ClientsController {
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${filename}"`,
-      // Chunked transfer encoding for streaming (no Content-Length since we don't know final size)
       'Transfer-Encoding': 'chunked',
-      // Prevent timeout during large exports
       Connection: 'keep-alive',
-      // Cache control - don't cache exports
       'Cache-Control': 'no-cache, no-store, must-revalidate',
     });
 
@@ -316,14 +326,14 @@ export class ClientsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
   async findOne(@Param('id') id: string) {
-    return this.clientsService.findOne(id);
+    return this.queryService.findOne(id);
   }
 
   @Patch('admin/clients/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
   async update(@Param('id') id: string, @Body() updateData: AdminUpdateProfileDto) {
-    return this.clientsService.update(id, updateData);
+    return this.statusService.update(id, updateData);
   }
 
   @Patch('admin/clients/:id/status')
@@ -334,28 +344,28 @@ export class ClientsController {
     @Body() statusData: UpdateStatusDto,
     @CurrentUser() user: any,
   ) {
-    return this.clientsService.updateStatus(id, statusData, user.id);
+    return this.statusService.updateStatus(id, statusData, user.id);
   }
 
   @Get('admin/clients/:id/valid-transitions')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
   async getValidTransitions(@Param('id') id: string) {
-    return this.clientsService.getValidTransitions(id);
+    return this.statusService.getValidTransitions(id);
   }
 
   @Delete('admin/clients/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
   async remove(@Param('id') id: string) {
-    return this.clientsService.remove(id);
+    return this.adminService.remove(id);
   }
 
   @Post('admin/clients/:id/mark-paid')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)
   async markPaid(@Param('id') id: string) {
-    return this.clientsService.markPaid(id);
+    return this.adminService.markPaid(id);
   }
 
   @Post('admin/clients/:id/commission')
@@ -370,7 +380,7 @@ export class ClientsController {
     @Body() dto: MarkCommissionPaidDto,
     @CurrentUser() user: any,
   ) {
-    return this.clientsService.markCommissionPaid(id, dto.type, user.id);
+    return this.adminService.markCommissionPaid(id, dto.type, user.id);
   }
 
   @Get('admin/clients/unpaid-commissions')
@@ -383,11 +393,10 @@ export class ClientsController {
     @Query('limit') limit?: string,
   ) {
     const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.PAYMENTS);
-    return this.clientsService.getUnpaidCommissions({ cursor, limit: validatedLimit });
+    return this.adminService.getUnpaidCommissions({ cursor, limit: validatedLimit });
   }
 
   // DEPRECATED: adminStep endpoint removed - use internalStatus instead
-  // Referral code generation now triggers when internalStatus changes to EN_PROCESO
 
   @Patch('admin/clients/:id/problem')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -396,7 +405,7 @@ export class ClientsController {
     @Param('id') id: string,
     @Body() problemData: SetProblemDto,
   ) {
-    return this.clientsService.setProblem(id, problemData);
+    return this.adminService.setProblem(id, problemData);
   }
 
   @Post('admin/clients/:id/notify')
@@ -406,7 +415,7 @@ export class ClientsController {
     @Param('id') id: string,
     @Body() notifyData: SendNotificationDto,
   ) {
-    return this.clientsService.sendClientNotification(id, notifyData);
+    return this.adminService.sendClientNotification(id, notifyData);
   }
 
   @Delete('admin/clients/:id/w2-estimate')
@@ -419,7 +428,7 @@ export class ClientsController {
     @Param('id') id: string,
     @CurrentUser() user: any,
   ) {
-    return this.clientsService.resetW2Estimate(id, user.id);
+    return this.reportingService.resetW2Estimate(id, user.id);
   }
 
   @Get('admin/clients/:id/w2-estimate')
@@ -429,6 +438,6 @@ export class ClientsController {
   @ApiResponse({ status: 200, description: 'W2 estimate data' })
   @ApiResponse({ status: 404, description: 'Client not found or no W2 estimate' })
   async getW2Estimate(@Param('id') id: string) {
-    return this.clientsService.getW2EstimateForClient(id);
+    return this.reportingService.getW2EstimateForClient(id);
   }
 }

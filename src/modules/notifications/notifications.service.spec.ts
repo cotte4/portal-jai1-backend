@@ -193,10 +193,14 @@ describe('NotificationsService', () => {
           deletedAt: null,
           isArchived: false,
         },
+        take: 21,
+        cursor: undefined,
         orderBy: { createdAt: 'desc' },
       });
-      expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
+      expect(result.notifications).toHaveLength(2);
+      expect(result.hasMore).toBe(false);
+      expect(result.nextCursor).toBeNull();
+      expect(result.notifications[0]).toEqual({
         id: 'notif-1',
         type: 'message',
         title: 'Test Title',
@@ -219,6 +223,8 @@ describe('NotificationsService', () => {
           isArchived: false,
           isRead: false,
         },
+        take: 21,
+        cursor: undefined,
         orderBy: { createdAt: 'desc' },
       });
     });
@@ -236,6 +242,8 @@ describe('NotificationsService', () => {
           userId: 'user-1',
           deletedAt: null,
         },
+        take: 21,
+        cursor: undefined,
         orderBy: { createdAt: 'desc' },
       });
     });

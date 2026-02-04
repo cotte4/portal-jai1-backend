@@ -20,6 +20,7 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../../common/services';
 import { SupabaseService } from '../../config/supabase.service';
+import { Jai1gentsService } from '../jai1gents/jai1gents.service';
 
 import {
   createMockUser,
@@ -52,12 +53,18 @@ describe('AuthService', () => {
     auditLogsService = createMockAuditLogsService();
     const supabaseService = createMockSupabaseService();
 
+    const jai1gentsService = {
+      validateReferralCode: jest.fn().mockResolvedValue({ valid: false }),
+      createReferral: jest.fn().mockResolvedValue(undefined),
+    };
+
     // Build the testing module with mocked dependencies
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: UsersService, useValue: usersService },
         { provide: ReferralsService, useValue: referralsService },
+        { provide: Jai1gentsService, useValue: jai1gentsService },
         { provide: JwtService, useValue: jwtService },
         { provide: ConfigService, useValue: configService },
         { provide: EmailService, useValue: emailService },
@@ -121,7 +128,7 @@ describe('AuthService', () => {
         ConflictException,
       );
       await expect(authService.register(validRegisterDto)).rejects.toThrow(
-        'Email already registered',
+        'Este email ya está registrado. Por favor, iniciá sesión o usá otro email.',
       );
 
       // Verify create was NOT called

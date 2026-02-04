@@ -69,6 +69,8 @@ describe('ProgressAutomationService', () => {
 
     notificationsService = {
       create: jest.fn().mockResolvedValue(undefined),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      createFromTemplate: jest.fn().mockResolvedValue(undefined),
     };
 
     configService = {
@@ -95,11 +97,11 @@ describe('ProgressAutomationService', () => {
     it('should handle PROFILE_COMPLETED event', async () => {
       prisma.taxCase.findUnique.mockResolvedValue({
         ...mockTaxCase,
-        preFilingStatus: 'awaiting_registration',
+        caseStatus: 'awaiting_form',
       });
       prisma.taxCase.update.mockResolvedValue({
         ...mockTaxCase,
-        preFilingStatus: 'awaiting_documents',
+        caseStatus: 'awaiting_docs',
       });
       prisma.user.findMany.mockResolvedValue([mockAdmin]);
 
@@ -116,8 +118,8 @@ describe('ProgressAutomationService', () => {
       expect(prisma.taxCase.update).toHaveBeenCalled();
       const updateCall = prisma.taxCase.update.mock.calls[0][0];
       expect(updateCall.where.id).toBe('taxcase-1');
-      expect(updateCall.data.preFilingStatus).toBe('awaiting_documents');
-      expect(notificationsService.create).toHaveBeenCalled();
+      expect(updateCall.data.caseStatus).toBe('awaiting_docs');
+      expect(notificationsService.createMany).toHaveBeenCalled();
     });
 
     it('should handle W2_UPLOADED event', async () => {
@@ -137,8 +139,8 @@ describe('ProgressAutomationService', () => {
 
       await service.processEvent(event);
 
-      expect(notificationsService.create).toHaveBeenCalledWith(
-        'admin-1',
+      expect(notificationsService.createMany).toHaveBeenCalledWith(
+        ['admin-1'],
         'system',
         'Documento W2 Subido',
         expect.stringContaining('John Doe'),
@@ -162,7 +164,7 @@ describe('ProgressAutomationService', () => {
         where: { id: 'taxcase-1' },
         data: { paymentReceived: true },
       });
-      expect(notificationsService.create).toHaveBeenCalled();
+      expect(notificationsService.createMany).toHaveBeenCalled();
     });
 
     it('should handle ALL_DOCS_COMPLETE event', async () => {
@@ -177,8 +179,8 @@ describe('ProgressAutomationService', () => {
 
       await service.processEvent(event);
 
-      expect(notificationsService.create).toHaveBeenCalledWith(
-        'admin-1',
+      expect(notificationsService.createMany).toHaveBeenCalledWith(
+        ['admin-1'],
         'system',
         'Documentación Completa',
         expect.stringContaining('completado toda la documentación'),
@@ -197,8 +199,8 @@ describe('ProgressAutomationService', () => {
 
       await service.processEvent(event);
 
-      expect(notificationsService.create).toHaveBeenCalledWith(
-        'admin-1',
+      expect(notificationsService.createMany).toHaveBeenCalledWith(
+        ['admin-1'],
         'system',
         'Nuevo Documento Subido',
         expect.stringContaining('id.pdf'),
@@ -233,7 +235,12 @@ describe('ProgressAutomationService', () => {
 
       await service.processEvent(event);
 
-      expect(notificationsService.create).toHaveBeenCalledTimes(2);
+      expect(notificationsService.createMany).toHaveBeenCalledWith(
+        ['admin-1', 'admin-2'],
+        'system',
+        expect.any(String),
+        expect.any(String),
+      );
     });
   });
 
@@ -307,8 +314,8 @@ describe('ProgressAutomationService', () => {
 
       await service.checkAllDocsComplete('taxcase-1', 'user-1');
 
-      expect(notificationsService.create).toHaveBeenCalledWith(
-        expect.any(String),
+      expect(notificationsService.createMany).toHaveBeenCalledWith(
+        ['admin-1'],
         'system',
         'Documentación Completa',
         expect.any(String),
@@ -429,7 +436,7 @@ describe('ProgressAutomationService', () => {
       prisma.taxCase.findMany.mockResolvedValue([
         {
           ...mockTaxCase,
-          preFilingStatus: 'awaiting_documents',
+          caseStatus: 'awaiting_docs',
           createdAt: oldDate,
           documents: [], // No W2
           clientProfile: {
@@ -444,11 +451,14 @@ describe('ProgressAutomationService', () => {
       const result = await service.checkAndNotifyMissingDocuments(3, 3);
 
       expect(result.notified).toBe(1);
-      expect(notificationsService.create).toHaveBeenCalledWith(
+      expect(notificationsService.createFromTemplate).toHaveBeenCalledWith(
         'user-1',
         'docs_missing',
-        'Documentos pendientes',
-        expect.stringContaining('completar tu perfil'),
+        'notifications.docs_missing',
+        expect.objectContaining({
+          firstName: 'John',
+          missingDocs: expect.stringContaining('completar tu perfil'),
+        }),
       );
     });
 
@@ -456,7 +466,7 @@ describe('ProgressAutomationService', () => {
       prisma.taxCase.findMany.mockResolvedValue([
         {
           ...mockTaxCase,
-          preFilingStatus: 'awaiting_documents',
+          caseStatus: 'awaiting_docs',
           documents: [{ type: 'w2' }],
           clientProfile: {
             ...mockClientProfile,
@@ -469,7 +479,7 @@ describe('ProgressAutomationService', () => {
       const result = await service.checkAndNotifyMissingDocuments();
 
       expect(result.notified).toBe(0);
-      expect(notificationsService.create).not.toHaveBeenCalled();
+      expect(notificationsService.createFromTemplate).not.toHaveBeenCalled();
     });
 
     it('should respect max notifications per client', async () => {
@@ -479,7 +489,7 @@ describe('ProgressAutomationService', () => {
       prisma.taxCase.findMany.mockResolvedValue([
         {
           ...mockTaxCase,
-          preFilingStatus: 'awaiting_documents',
+          caseStatus: 'awaiting_docs',
           createdAt: oldDate,
           documents: [],
           clientProfile: {
@@ -510,11 +520,14 @@ describe('ProgressAutomationService', () => {
       const result = await service.sendMissingDocsNotification('user-1');
 
       expect(result).toBe(true);
-      expect(notificationsService.create).toHaveBeenCalledWith(
+      expect(notificationsService.createFromTemplate).toHaveBeenCalledWith(
         'user-1',
         'docs_missing',
-        'Documentos pendientes',
-        expect.any(String),
+        'notifications.docs_missing',
+        expect.objectContaining({
+          firstName: 'John',
+          missingDocs: expect.any(String),
+        }),
       );
     });
 
