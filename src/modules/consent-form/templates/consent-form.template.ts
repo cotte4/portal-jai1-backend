@@ -70,7 +70,7 @@ export const CONSENT_FORM_SIGNATURE_LABELS = {
 };
 
 export const CONSENT_FORM_FOOTER = {
-  website: 'www.jai1.tax',
+  website: 'www.jai1taxes.com',
   phone: '+54 9 2236 68 8497',
   email: 'jai1@memas.agency',
 };

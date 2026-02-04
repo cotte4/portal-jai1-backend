@@ -13,6 +13,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
 import { UpdateReferralStatusDto } from './dto/update-referral-status.dto';
+import { formatUSDAmount } from '../../common/utils/currency-format.util';
 
 // Discount tiers: # successful referrals -> % discount
 const DISCOUNT_TIERS = [
@@ -390,7 +391,7 @@ export class ReferralsService {
       {
         firstName: referrer?.firstName || 'Cliente',
         referredName: await this.getReferredName(referral.referredUserId),
-        amount: REFERRED_BONUS.toString(),
+        amount: formatUSDAmount(REFERRED_BONUS),
       },
     );
   }
@@ -955,7 +956,7 @@ export class ReferralsService {
       'notifications.discount_applied',
       {
         firstName: user.firstName || 'Cliente',
-        amount: discountAmount.toString(),
+        amount: formatUSDAmount(discountAmount),
       },
     );
 

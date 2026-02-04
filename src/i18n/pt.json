@@ -14,7 +14,7 @@
     },
     "ticket_response": {
       "title": "Você tem uma resposta do suporte",
-      "message": "{{firstName}}, respondemos sua consulta sobre: {{subject}}. Veja a mensagem completa na seção Mensagens."
+      "message": "{{firstName}}, respondemos sua consulta sobre: {{subject}}. Veja a mensagem completa na seção Suporte."
     },
     "referral_new": {
       "title": "Alguém usou seu código de indicação!",
@@ -30,7 +30,7 @@
     },
     "problem_set": {
       "title": "{{firstName}}, precisamos de sua atenção",
-      "message": "{{description}}. Vá para Mensagens para resolver isso com nossa equipe."
+      "message": "{{description}}. Vá para Suporte para resolver isso com nossa equipe."
     },
     "problem_resolved": {
       "title": "Problema resolvido",
@@ -38,15 +38,15 @@
     },
     "alarm_verification_timeout": {
       "title": "Atualização sobre sua verificação",
-      "message": "{{firstName}}, sua declaração {{track}} está em verificação há {{days}} dias. Vá para Mensagens para revisar os próximos passos com nossa equipe."
+      "message": "{{firstName}}, sua declaração {{track}} está em verificação há {{days}} dias. Vá para Suporte para revisar os próximos passos com nossa equipe."
     },
     "alarm_letter_sent": {
       "title": "Lembrete: verifique seu correio",
-      "message": "Há {{days}} dias, uma carta foi enviada sobre sua declaração {{track}}. Se a recebeu, entre em contato conosco em Mensagens para orientação sobre como responder."
+      "message": "Há {{days}} dias, uma carta foi enviada sobre sua declaração {{track}}. Se a recebeu, entre em contato conosco em Suporte para orientação sobre como responder."
     },
     "alarm_general": {
       "title": "Há novidades sobre seu caso",
-      "message": "{{firstName}}, temos uma atualização importante sobre sua declaração {{track}}. Verifique seu status em Rastreamento ou escreva para nós em Mensagens."
+      "message": "{{firstName}}, temos uma atualização importante sobre sua declaração {{track}}. Verifique seu status em Rastreamento ou escreva para nós em Suporte."
     },
     "status_federal_filed": {
       "title": "Declaração federal enviada ao IRS",

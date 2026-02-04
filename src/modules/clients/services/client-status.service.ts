@@ -16,6 +16,7 @@ import {
   getValidNextStatuses,
   createInvalidTransitionError,
 } from '../../../common/utils/status-transitions.util';
+import { formatUSDAmount } from '../../../common/utils/currency-format.util';
 
 @Injectable()
 export class ClientStatusService {
@@ -529,10 +530,10 @@ export class ClientStatusService {
       const variables: Record<string, string | number> = { firstName };
 
       if (status === 'taxes_completados' && refundAmount) {
-        variables.amount = refundAmount.toLocaleString();
+        variables.amount = formatUSDAmount(refundAmount);
       }
 
-      if (status === 'deposito_directo' || status === 'cheque_en_camino') {
+      if (status === 'deposito_directo' || status === 'cheque_en_camino' || status === 'comision_pendiente') {
         variables.estimatedDate = 'próximamente';
       }
 
@@ -569,10 +570,10 @@ export class ClientStatusService {
       const variables: Record<string, string | number> = { firstName };
 
       if (status === 'taxes_completados' && refundAmount) {
-        variables.amount = refundAmount.toLocaleString();
+        variables.amount = formatUSDAmount(refundAmount);
       }
 
-      if (status === 'deposito_directo' || status === 'cheque_en_camino') {
+      if (status === 'deposito_directo' || status === 'cheque_en_camino' || status === 'comision_pendiente') {
         variables.estimatedDate = 'próximamente';
       }
 

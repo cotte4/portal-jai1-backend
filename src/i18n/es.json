@@ -14,7 +14,7 @@
     },
     "ticket_response": {
       "title": "Tienes una respuesta de soporte",
-      "message": "{{firstName}}, respondimos tu consulta sobre: {{subject}}. Revisa el mensaje completo en la sección Mensajes."
+      "message": "{{firstName}}, respondimos tu consulta sobre: {{subject}}. Revisa el mensaje completo en la sección Soporte."
     },
     "referral_new": {
       "title": "¡Alguien usó tu código de referido!",
@@ -30,7 +30,7 @@
     },
     "problem_set": {
       "title": "{{firstName}}, necesitamos tu atención",
-      "message": "{{description}}. Ve a Mensajes para resolver esto con nuestro equipo."
+      "message": "{{description}}. Ve a Soporte para resolver esto con nuestro equipo."
     },
     "problem_resolved": {
       "title": "Problema resuelto",
@@ -38,15 +38,15 @@
     },
     "alarm_verification_timeout": {
       "title": "Actualización sobre tu verificación",
-      "message": "{{firstName}}, tu declaración {{track}} lleva {{days}} días en verificación. Ve a Mensajes para revisar los próximos pasos con nuestro equipo."
+      "message": "{{firstName}}, tu declaración {{track}} lleva {{days}} días en verificación. Ve a Soporte para revisar los próximos pasos con nuestro equipo."
     },
     "alarm_letter_sent": {
       "title": "Recordatorio: revisa tu correo",
-      "message": "Hace {{days}} días se envió una carta sobre tu declaración {{track}}. Si la recibiste, contáctanos en Mensajes para guiarte en la respuesta."
+      "message": "Hace {{days}} días se envió una carta sobre tu declaración {{track}}. Si la recibiste, contáctanos en Soporte para guiarte en la respuesta."
     },
     "alarm_general": {
       "title": "Hay novedades en tu trámite",
-      "message": "{{firstName}}, tenemos una actualización importante sobre tu declaración {{track}}. Revisa tu estado en Seguimiento o escríbenos en Mensajes."
+      "message": "{{firstName}}, tenemos una actualización importante sobre tu declaración {{track}}. Revisa tu estado en Seguimiento o escríbenos en Soporte."
     },
     "status_federal_filed": {
       "title": "Declaración federal enviada al IRS",

@@ -14,7 +14,7 @@
     },
     "ticket_response": {
       "title": "You have a response from support",
-      "message": "{{firstName}}, we replied to your question about: {{subject}}. Check the full message in the Messages section."
+      "message": "{{firstName}}, we replied to your question about: {{subject}}. Check the full message in the Support section."
     },
     "referral_new": {
       "title": "Someone used your referral code!",
@@ -30,7 +30,7 @@
     },
     "problem_set": {
       "title": "{{firstName}}, we need your attention",
-      "message": "{{description}}. Go to Messages to resolve this with our team."
+      "message": "{{description}}. Go to Support to resolve this with our team."
     },
     "problem_resolved": {
       "title": "Problem resolved",
@@ -38,15 +38,15 @@
     },
     "alarm_verification_timeout": {
       "title": "Update on your verification",
-      "message": "{{firstName}}, your {{track}} return has been in verification for {{days}} days. Go to Messages to review next steps with our team."
+      "message": "{{firstName}}, your {{track}} return has been in verification for {{days}} days. Go to Support to review next steps with our team."
     },
     "alarm_letter_sent": {
       "title": "Reminder: check your mail",
-      "message": "{{days}} days ago, a letter was sent about your {{track}} return. If you received it, contact us in Messages for guidance on how to respond."
+      "message": "{{days}} days ago, a letter was sent about your {{track}} return. If you received it, contact us in Support for guidance on how to respond."
     },
     "alarm_general": {
       "title": "There's news about your case",
-      "message": "{{firstName}}, we have an important update about your {{track}} return. Check your status in Tracking or write to us in Messages."
+      "message": "{{firstName}}, we have an important update about your {{track}} return. Check your status in Tracking or write to us in Support."
     },
     "status_federal_filed": {
       "title": "Federal return submitted to the IRS",
