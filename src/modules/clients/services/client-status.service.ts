@@ -690,6 +690,22 @@ export class ClientStatusService {
       data: updateData,
     });
 
+    // Apply referral discount if this is the FIRST branch confirmed
+    const otherBranchConfirmed = type === 'federal'
+      ? taxCase.stateRefundReceived
+      : taxCase.federalRefundReceived;
+
+    if (!otherBranchConfirmed) {
+      await this.prisma.discountApplication.updateMany({
+        where: {
+          taxCaseId: taxCase.id,
+          discountType: 'referral_bonus',
+          status: 'pending',
+        },
+        data: { status: 'applied' },
+      });
+    }
+
     // Calculate fee information
     const refundAmount =
       type === 'federal'

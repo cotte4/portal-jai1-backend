@@ -32,8 +32,8 @@ export class ConsentFormService {
   private readonly logger = new Logger(ConsentFormService.name);
   private readonly BUCKET_NAME = 'documents';
 
-  // JAI-1 signature images (base64) - will be loaded from assets or stored directly
-  private jai1Signatures: Buffer[] | null = null;
+  // JAI-1 signature images loaded from assets
+  private jai1Signatures: Map<string, Buffer> = new Map();
 
   constructor(
     private prisma: PrismaService,
@@ -49,14 +49,17 @@ export class ConsentFormService {
   /**
    * Load JAI-1 signature images from assets folder
    */
-  private async loadJai1Signatures(): Promise<void> {
-    try {
-      // Signatures will be embedded as base64 strings in production
-      // For now, we'll generate placeholder signatures in the PDF
-      this.logger.log('JAI-1 signatures ready for PDF generation');
-    } catch (error) {
-      this.logger.warn('Could not load JAI-1 signatures, will use text placeholders');
+  private loadJai1Signatures(): void {
+    const signers = ['francisco-uria', 'lautaro-iglesias', 'tomas-bucci'];
+    for (const signer of signers) {
+      try {
+        const filePath = path.join(__dirname, 'assets', 'signatures', `${signer}.png`);
+        this.jai1Signatures.set(signer, fs.readFileSync(filePath));
+      } catch (error) {
+        this.logger.warn(`Could not load signature for ${signer}`);
+      }
     }
+    this.logger.log(`Loaded ${this.jai1Signatures.size}/3 JAI-1 signatures for PDF generation`);
   }
 
   /**
@@ -279,7 +282,7 @@ export class ConsentFormService {
   }
 
   /**
-   * Generate the signed PDF document
+   * Generate the signed PDF document (matches new frontend design)
    */
   private async generateSignedPdf(
     clientData: {
@@ -291,7 +294,6 @@ export class ConsentFormService {
     },
     clientSignature: Buffer,
   ): Promise<Buffer> {
-    // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
 
     // Embed fonts
@@ -299,27 +301,64 @@ export class ConsentFormService {
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     // Page settings
-    const pageWidth = 595; // A4 width in points
-    const pageHeight = 842; // A4 height in points
+    const pageWidth = 595; // A4
+    const pageHeight = 842;
     const margin = 50;
+    const contentWidth = pageWidth - 2 * margin;
     const lineHeight = 14;
     const fontSize = 10;
-    const titleFontSize = 16;
+    const footerHeight = 45;
+    const footerReserve = margin + footerHeight + 10;
 
-    // Colors
+    // Colors matching frontend design
     const darkBlue = rgb(29 / 255, 52 / 255, 93 / 255); // #1D345D
-    const textColor = rgb(0.2, 0.2, 0.2);
+    const burgundy = rgb(178 / 255, 27 / 255, 67 / 255); // #B21B43
+    const textColor = rgb(51 / 255, 65 / 255, 85 / 255); // #334155
+    const lightGray = rgb(226 / 255, 232 / 255, 240 / 255); // #e2e8f0
+    const white = rgb(1, 1, 1);
 
     let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-    let yPosition = pageHeight - margin;
+    let yPosition = pageHeight;
 
-    // Helper function to add text with word wrap
+    // Helper: draw footer band on a page
+    const drawFooter = (page: typeof currentPage) => {
+      // Burgundy band at bottom
+      page.drawRectangle({
+        x: 0,
+        y: 0,
+        width: pageWidth,
+        height: footerHeight,
+        color: burgundy,
+      });
+      // Contact info in white
+      const footerText = `${CONSENT_FORM_FOOTER.website}    |    ${CONSENT_FORM_FOOTER.phone}    |    ${CONSENT_FORM_FOOTER.email}`;
+      const footerTextWidth = helvetica.widthOfTextAtSize(footerText, 8);
+      page.drawText(footerText, {
+        x: (pageWidth - footerTextWidth) / 2,
+        y: 17,
+        size: 8,
+        font: helvetica,
+        color: white,
+      });
+    };
+
+    // Helper: check if we need a new page (reserves space for footer)
+    const ensureSpace = (needed: number) => {
+      if (yPosition - needed < footerReserve) {
+        drawFooter(currentPage);
+        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+        yPosition = pageHeight - margin;
+      }
+    };
+
+    // Helper: add text with word wrap
     const addWrappedText = (
       text: string,
       font: typeof helvetica,
       size: number,
       color: typeof textColor,
       maxWidth: number,
+      xOffset = margin,
     ) => {
       const words = text.split(' ');
       let currentLine = '';
@@ -329,14 +368,9 @@ export class ConsentFormService {
         const testWidth = font.widthOfTextAtSize(testLine, size);
 
         if (testWidth > maxWidth && currentLine) {
-          // Check if we need a new page
-          if (yPosition < margin + 50) {
-            currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-            yPosition = pageHeight - margin;
-          }
-
+          ensureSpace(lineHeight);
           currentPage.drawText(currentLine, {
-            x: margin,
+            x: xOffset,
             y: yPosition,
             size,
             font,
@@ -349,14 +383,10 @@ export class ConsentFormService {
         }
       }
 
-      // Draw remaining text
       if (currentLine) {
-        if (yPosition < margin + 50) {
-          currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-          yPosition = pageHeight - margin;
-        }
+        ensureSpace(lineHeight);
         currentPage.drawText(currentLine, {
-          x: margin,
+          x: xOffset,
           y: yPosition,
           size,
           font,
@@ -366,26 +396,32 @@ export class ConsentFormService {
       }
     };
 
-    // Draw header/logo placeholder (could be replaced with actual logo)
+    // ============ HEADER: Navy band (full-width) ============
+    const headerBandHeight = 70;
     currentPage.drawRectangle({
-      x: margin,
-      y: yPosition - 30,
-      width: pageWidth - 2 * margin,
-      height: 40,
+      x: 0,
+      y: pageHeight - headerBandHeight,
+      width: pageWidth,
+      height: headerBandHeight,
       color: darkBlue,
     });
 
-    currentPage.drawText('JAI-1', {
-      x: pageWidth / 2 - 20,
-      y: yPosition - 20,
-      size: 20,
+    // "JAI-1" text centered in the navy band
+    const logoText = 'JAI-1';
+    const logoSize = 28;
+    const logoWidth = helveticaBold.widthOfTextAtSize(logoText, logoSize);
+    currentPage.drawText(logoText, {
+      x: (pageWidth - logoWidth) / 2,
+      y: pageHeight - headerBandHeight / 2 - logoSize / 3,
+      size: logoSize,
       font: helveticaBold,
-      color: rgb(1, 1, 1),
+      color: white,
     });
 
-    yPosition -= 60;
+    yPosition = pageHeight - headerBandHeight - 30;
 
-    // Title
+    // ============ TITLE ============
+    const titleFontSize = 16;
     const titleWidth = helveticaBold.widthOfTextAtSize(CONSENT_FORM_TITLE, titleFontSize);
     currentPage.drawText(CONSENT_FORM_TITLE, {
       x: (pageWidth - titleWidth) / 2,
@@ -394,131 +430,179 @@ export class ConsentFormService {
       font: helveticaBold,
       color: darkBlue,
     });
-    yPosition -= 30;
+    yPosition -= 12;
 
-    // Introduction with client data (from form input)
+    // Thin burgundy accent line under title
+    currentPage.drawLine({
+      start: { x: pageWidth / 2 - 80, y: yPosition },
+      end: { x: pageWidth / 2 + 80, y: yPosition },
+      thickness: 2,
+      color: burgundy,
+    });
+    yPosition -= 25;
+
+    // ============ INTRODUCTION ============
     const introText = `${CONSENT_FORM_INTRO} ${clientData.fullName}, DNI/Pasaporte ${clientData.dniPassport}, con domicilio en calle ${clientData.street} de la ciudad de ${clientData.city} y electronico en la casilla de correo ${clientData.email}, en adelante el cliente, se celebra el presente acuerdo sujeto a las siguientes clausulas y condiciones:`;
 
-    addWrappedText(introText, helvetica, fontSize, textColor, pageWidth - 2 * margin);
+    addWrappedText(introText, helvetica, fontSize, textColor, contentWidth);
     yPosition -= lineHeight;
 
-    // Clauses
+    // ============ CLAUSES ============
     for (const clause of CONSENT_FORM_CLAUSES) {
-      yPosition -= 5; // Small gap between clauses
-      addWrappedText(clause, helvetica, fontSize, textColor, pageWidth - 2 * margin);
+      yPosition -= 4;
+      addWrappedText(clause, helvetica, fontSize, textColor, contentWidth);
     }
 
-    // Closing text
-    yPosition -= 20;
-    addWrappedText(CONSENT_FORM_CLOSING, helvetica, fontSize, textColor, pageWidth - 2 * margin);
+    // ============ CLOSING ============
+    yPosition -= 16;
+    // Separator line
+    ensureSpace(40);
+    currentPage.drawLine({
+      start: { x: margin, y: yPosition + 8 },
+      end: { x: pageWidth - margin, y: yPosition + 8 },
+      thickness: 0.5,
+      color: lightGray,
+    });
+
+    addWrappedText(CONSENT_FORM_CLOSING, helvetica, fontSize, textColor, contentWidth);
 
     // Date
     const dateInfo = formatSpanishDate(new Date());
-    yPosition -= 10;
+    yPosition -= 4;
+    ensureSpace(lineHeight);
     currentPage.drawText(`a los ${dateInfo.day} del mes de ${dateInfo.month} de ${dateInfo.year}.-`, {
       x: margin,
       y: yPosition,
       size: fontSize,
       font: helvetica,
-      color: textColor,
+      color: darkBlue,
     });
-    yPosition -= 40;
+    yPosition -= 35;
 
-    // Signatures section - may need new page
-    if (yPosition < 250) {
-      currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-      yPosition = pageHeight - margin;
-    }
+    // ============ SIGNATURES ============
+    // Separator
+    ensureSpace(280);
+    currentPage.drawLine({
+      start: { x: margin, y: yPosition + 8 },
+      end: { x: pageWidth - margin, y: yPosition + 8 },
+      thickness: 1.5,
+      color: lightGray,
+    });
 
     // Client signature
+    ensureSpace(90);
     currentPage.drawText('FIRMA CLIENTE:', {
       x: margin,
       y: yPosition,
-      size: fontSize,
+      size: 11,
       font: helveticaBold,
       color: darkBlue,
     });
+    yPosition -= 5;
 
-    // Embed and draw client signature
     try {
       const signatureImage = await pdfDoc.embedPng(clientSignature);
-      const signatureWidth = 150;
-      const signatureHeight = (signatureImage.height / signatureImage.width) * signatureWidth;
-
+      const sigWidth = 160;
+      const sigHeight = (signatureImage.height / signatureImage.width) * sigWidth;
       currentPage.drawImage(signatureImage, {
-        x: margin + 100,
-        y: yPosition - signatureHeight + 10,
-        width: signatureWidth,
-        height: signatureHeight,
-      });
-    } catch (error) {
-      this.logger.warn('Could not embed client signature image, using placeholder');
-      currentPage.drawText('________________', {
-        x: margin + 100,
-        y: yPosition,
-        size: fontSize,
-        font: helvetica,
-        color: textColor,
-      });
-    }
-
-    yPosition -= 80;
-
-    // JAI-1 signatures (3 signatures)
-    const jai1Signers = ['Francisco Uria', 'Lautaro Iglesias', 'Tomas Bucci'];
-
-    for (const signer of jai1Signers) {
-      currentPage.drawText('FIRMA JAI-1:', {
         x: margin,
-        y: yPosition,
-        size: fontSize,
-        font: helveticaBold,
-        color: darkBlue,
+        y: yPosition - sigHeight,
+        width: sigWidth,
+        height: sigHeight,
       });
-
-      // Signature line with name
+      yPosition -= sigHeight + 5;
+    } catch {
       currentPage.drawText('________________', {
-        x: margin + 80,
-        y: yPosition,
+        x: margin,
+        y: yPosition - 15,
         size: fontSize,
         font: helvetica,
         color: textColor,
       });
-
-      currentPage.drawText(signer, {
-        x: margin + 200,
-        y: yPosition,
-        size: 8,
-        font: helvetica,
-        color: rgb(0.5, 0.5, 0.5),
-      });
-
-      yPosition -= 50;
+      yPosition -= 25;
     }
 
-    // Footer
-    yPosition = margin;
-
-    // Footer line
-    currentPage.drawLine({
-      start: { x: margin, y: yPosition + 20 },
-      end: { x: pageWidth - margin, y: yPosition + 20 },
-      thickness: 1,
-      color: darkBlue,
-    });
-
-    // Footer text
-    const footerText = `${CONSENT_FORM_FOOTER.website}  |  ${CONSENT_FORM_FOOTER.phone}  |  ${CONSENT_FORM_FOOTER.email}`;
-    const footerWidth = helvetica.widthOfTextAtSize(footerText, 8);
-    currentPage.drawText(footerText, {
-      x: (pageWidth - footerWidth) / 2,
+    // Signer name under client signature
+    currentPage.drawText(clientData.fullName, {
+      x: margin,
       y: yPosition,
       size: 8,
       font: helvetica,
-      color: darkBlue,
+      color: rgb(148 / 255, 163 / 255, 184 / 255), // #94a3b8
     });
+    yPosition -= 30;
 
-    // Serialize to buffer
+    // JAI-1 signatures
+    const jai1Signers = [
+      { name: 'Francisco Uria', file: 'francisco-uria' },
+      { name: 'Lautaro Iglesias', file: 'lautaro-iglesias' },
+      { name: 'Tomas Bucci', file: 'tomas-bucci' },
+    ];
+
+    for (const signer of jai1Signers) {
+      ensureSpace(75);
+      currentPage.drawText('FIRMA JAI-1:', {
+        x: margin,
+        y: yPosition,
+        size: 11,
+        font: helveticaBold,
+        color: darkBlue,
+      });
+      yPosition -= 5;
+
+      // Try to embed actual signature image
+      const sigBuffer = this.jai1Signatures.get(signer.file);
+      if (sigBuffer) {
+        try {
+          const sigImage = await pdfDoc.embedPng(sigBuffer);
+          const sigWidth = 120;
+          const sigHeight = (sigImage.height / sigImage.width) * sigWidth;
+          currentPage.drawImage(sigImage, {
+            x: margin,
+            y: yPosition - sigHeight,
+            width: sigWidth,
+            height: sigHeight,
+          });
+          yPosition -= sigHeight + 5;
+        } catch {
+          // Fallback to line
+          currentPage.drawText('________________', {
+            x: margin,
+            y: yPosition - 15,
+            size: fontSize,
+            font: helvetica,
+            color: textColor,
+          });
+          yPosition -= 25;
+        }
+      } else {
+        currentPage.drawText('________________', {
+          x: margin,
+          y: yPosition - 15,
+          size: fontSize,
+          font: helvetica,
+          color: textColor,
+        });
+        yPosition -= 25;
+      }
+
+      // Signer name
+      currentPage.drawText(signer.name, {
+        x: margin,
+        y: yPosition,
+        size: 8,
+        font: helvetica,
+        color: rgb(148 / 255, 163 / 255, 184 / 255),
+      });
+      yPosition -= 25;
+    }
+
+    // ============ FOOTER on every page ============
+    const pages = pdfDoc.getPages();
+    for (const page of pages) {
+      drawFooter(page);
+    }
+
     const pdfBytes = await pdfDoc.save();
     return Buffer.from(pdfBytes);
   }

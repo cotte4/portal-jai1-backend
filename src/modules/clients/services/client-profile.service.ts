@@ -246,6 +246,11 @@ export class ClientProfileService {
                 commissionPaid: true,
                 federalCommissionPaid: true,
                 stateCommissionPaid: true,
+                discounts: {
+                  where: { discountType: 'referral_bonus', status: { in: ['pending', 'applied'] } },
+                  select: { discountAmount: true, status: true },
+                  take: 1,
+                },
               },
               orderBy: { taxYear: 'desc' },
               take: 1,
@@ -340,6 +345,12 @@ export class ClientProfileService {
               : null,
             federalCommissionRate: Number(user.clientProfile.taxCases[0].federalCommissionRate || 0.11),
             stateCommissionRate: Number(user.clientProfile.taxCases[0].stateCommissionRate || 0.11),
+            referralDiscount: user.clientProfile.taxCases[0].discounts[0]
+              ? {
+                  amount: Number(user.clientProfile.taxCases[0].discounts[0].discountAmount),
+                  status: user.clientProfile.taxCases[0].discounts[0].status,
+                }
+              : null,
           }
         : null,
     };

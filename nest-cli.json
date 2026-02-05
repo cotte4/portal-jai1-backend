@@ -9,6 +9,11 @@
         "include": "**/*.json",
         "outDir": "dist/src",
         "watchAssets": true
+      },
+      {
+        "include": "modules/consent-form/assets/**/*.png",
+        "outDir": "dist/src",
+        "watchAssets": true
       }
     ]
   }
