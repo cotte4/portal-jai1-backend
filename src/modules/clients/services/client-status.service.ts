@@ -658,8 +658,9 @@ export class ClientStatusService {
       if (taxCase.federalRefundReceived) {
         throw new BadRequestException('Federal refund already confirmed');
       }
-      if (!taxCase.federalDepositDate) {
-        throw new BadRequestException('Federal refund not yet deposited');
+      const federalApprovedStatuses = ['deposito_directo', 'cheque_en_camino', 'comision_pendiente', 'taxes_completados'];
+      if (!taxCase.federalStatusNew || !federalApprovedStatuses.includes(taxCase.federalStatusNew)) {
+        throw new BadRequestException('Federal refund has not been sent yet');
       }
       if (!taxCase.federalActualRefund || Number(taxCase.federalActualRefund) <= 0) {
         throw new BadRequestException('No federal refund amount recorded');
@@ -668,8 +669,9 @@ export class ClientStatusService {
       if (taxCase.stateRefundReceived) {
         throw new BadRequestException('State refund already confirmed');
       }
-      if (!taxCase.stateDepositDate) {
-        throw new BadRequestException('State refund not yet deposited');
+      const stateApprovedStatuses = ['deposito_directo', 'cheque_en_camino', 'comision_pendiente', 'taxes_completados'];
+      if (!taxCase.stateStatusNew || !stateApprovedStatuses.includes(taxCase.stateStatusNew)) {
+        throw new BadRequestException('State refund has not been sent yet');
       }
       if (!taxCase.stateActualRefund || Number(taxCase.stateActualRefund) <= 0) {
         throw new BadRequestException('No state refund amount recorded');
