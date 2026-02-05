@@ -326,7 +326,7 @@ export class NotificationsService {
 
   async markAllAsRead(userId: string) {
     await this.prisma.notification.updateMany({
-      where: { userId, isRead: false },
+      where: { userId, isRead: false, deletedAt: null },
       data: { isRead: true },
     });
 
@@ -363,7 +363,7 @@ export class NotificationsService {
 
   async archiveAllRead(userId: string) {
     const result = await this.prisma.notification.updateMany({
-      where: { userId, isRead: true, isArchived: false },
+      where: { userId, isRead: true, isArchived: false, deletedAt: null },
       data: { isArchived: true },
     });
 

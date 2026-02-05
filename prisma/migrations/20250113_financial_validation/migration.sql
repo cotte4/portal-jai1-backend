@@ -1,5 +1,5 @@
 -- Financial validation: CHECK constraints for non-negative refunds
--- Run this in Supabase SQL Editor
+-- Applied to production on 2026-02-04
 
 -- =============================================
 -- 1. TAX CASES: Refund amounts must be non-negative
@@ -12,14 +12,6 @@ DROP CONSTRAINT IF EXISTS "tax_cases_estimated_refund_check";
 ALTER TABLE "tax_cases"
 ADD CONSTRAINT "tax_cases_estimated_refund_check"
 CHECK ("estimated_refund" IS NULL OR "estimated_refund" >= 0);
-
--- Actual refund (deprecated) must be >= 0
-ALTER TABLE "tax_cases"
-DROP CONSTRAINT IF EXISTS "tax_cases_actual_refund_check";
-
-ALTER TABLE "tax_cases"
-ADD CONSTRAINT "tax_cases_actual_refund_check"
-CHECK ("actual_refund" IS NULL OR "actual_refund" >= 0);
 
 -- Federal actual refund must be >= 0
 ALTER TABLE "tax_cases"
