@@ -713,15 +713,15 @@ export class ClientStatusService {
       : taxCase.stateStatusNew !== 'comision_pendiente';
 
     if (statusChanged) {
-      await this.statusHistoryService.logStatusChange(
-        taxCase.id,
-        'system', // Changed by system, not admin
-        type === 'federal' ? 'federal_new' : 'state_new',
-        type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
-        'comision_pendiente',
-        `Cliente confirmó recepción de reembolso ${type}`,
-        null, // No internal comment
-      );
+      await this.prisma.statusHistory.create({
+        data: {
+          taxCaseId: taxCase.id,
+          previousStatus: type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
+          newStatus: 'comision_pendiente',
+          changedById: 'system',
+          comment: `Cliente confirmó recepción de reembolso ${type}`,
+        },
+      });
     }
 
     // Apply referral discount if this is the FIRST branch confirmed

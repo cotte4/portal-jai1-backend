@@ -10,7 +10,6 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { ReferralsService } from '../../referrals/referrals.service';
 import { EmailService } from '../../../common/services';
 import { AuditLogsService } from '../../audit-logs/audit-logs.service';
-import { StatusHistoryService } from './status-history.service';
 import { SetProblemDto, SendNotificationDto } from '../dto/admin-update.dto';
 import { redactEmail } from '../../../common/utils/log-sanitizer';
 
@@ -26,7 +25,6 @@ export class ClientAdminService {
     private referralsService: ReferralsService,
     private emailService: EmailService,
     private auditLogsService: AuditLogsService,
-    private statusHistoryService: StatusHistoryService,
   ) {}
 
   async markPaid(id: string) {
@@ -135,15 +133,15 @@ export class ClientAdminService {
     });
 
     // Log status change to history
-    await this.statusHistoryService.logStatusChange(
-      taxCase.id,
-      adminId,
-      type === 'federal' ? 'federal_new' : 'state_new',
-      type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
-      'taxes_completados',
-      `Comisión ${type} marcada como pagada y verificada`,
-      reviewNote || null,
-    );
+    await this.prisma.statusHistory.create({
+      data: {
+        taxCaseId: taxCase.id,
+        previousStatus: type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
+        newStatus: 'taxes_completados',
+        changedById: adminId,
+        comment: `Comisión ${type} marcada como pagada y verificada${reviewNote ? ': ' + reviewNote : ''}`,
+      },
+    });
 
     const refundAmount =
       type === 'federal'
