@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class EncryptionService {
+  private readonly logger = new Logger(EncryptionService.name);
   private readonly algorithm = 'aes-256-gcm';
   private readonly key: Buffer;
 
@@ -44,6 +45,11 @@ export class EncryptionService {
     try {
       const parts = encryptedText.split(':');
       if (parts.length !== 3) {
+        this.logger.warn('Invalid encrypted format: expected 3 parts separated by ":"', {
+          partsCount: parts.length,
+          textLength: encryptedText.length,
+          hasSeparator: encryptedText.includes(':'),
+        });
         // Not encrypted or invalid format, return as-is
         return encryptedText;
       }
@@ -59,9 +65,52 @@ export class EncryptionService {
       decrypted += decipher.final('utf8');
 
       return decrypted;
-    } catch {
+    } catch (error) {
+      this.logger.error('Decryption failed', {
+        error: error.message,
+        encryptedTextLength: encryptedText?.length,
+        format: encryptedText?.includes(':') ? 'has_separator' : 'no_separator',
+        partsCount: encryptedText?.split(':').length,
+      });
       // If decryption fails, return original (might not be encrypted)
       return encryptedText;
+    }
+  }
+
+  /**
+   * Safe decrypt that returns null on failure instead of the encrypted text
+   * Use this for credential reveals where we want to explicitly handle failures
+   */
+  safeDecrypt(encryptedText: string | null, fieldName?: string): string | null {
+    if (!encryptedText) return null;
+
+    try {
+      const parts = encryptedText.split(':');
+      if (parts.length !== 3) {
+        this.logger.warn(`Safe decrypt: Invalid format for ${fieldName || 'field'}`, {
+          partsCount: parts.length,
+          textLength: encryptedText.length,
+        });
+        return null;
+      }
+
+      const iv = Buffer.from(parts[0], 'base64');
+      const authTag = Buffer.from(parts[1], 'base64');
+      const encrypted = parts[2];
+
+      const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv);
+      decipher.setAuthTag(authTag);
+
+      let decrypted = decipher.update(encrypted, 'base64', 'utf8');
+      decrypted += decipher.final('utf8');
+
+      return decrypted;
+    } catch (error) {
+      this.logger.error(`Safe decrypt failed for ${fieldName || 'field'}`, {
+        error: error.message,
+        encryptedTextLength: encryptedText.length,
+      });
+      return null;
     }
   }
 

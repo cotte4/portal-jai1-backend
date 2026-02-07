@@ -355,4 +355,10 @@ export class MarkCommissionPaidDto {
   @ApiProperty({ enum: ['federal', 'state'], description: 'Type of commission to mark as paid' })
   @IsEnum(['federal', 'state'], { message: 'Type must be either federal or state' })
   type: 'federal' | 'state';
+
+  @ApiProperty({ required: false, description: 'Optional admin review note about the payment verification' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500, { message: 'Review note must not exceed 500 characters' })
+  reviewNote?: string;
 }

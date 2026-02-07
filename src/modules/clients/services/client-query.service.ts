@@ -242,7 +242,17 @@ export class ClientQueryService {
             stateStatusNewChangedAt: true,
             documents: {
               select: {
+                id: true,
                 type: true,
+                fileName: true,
+                storagePath: true,
+                mimeType: true,
+                fileSize: true,
+                taxYear: true,
+                isReviewed: true,
+                reviewedAt: true,
+                uploadedAt: true,
+                uploadedById: true,
               },
             },
           },
@@ -631,6 +641,14 @@ export class ClientQueryService {
 
     const now = new Date().toISOString();
 
+    // Use safeDecrypt to handle decryption failures gracefully
+    const turbotaxEmail = this.encryption.safeDecrypt(client.turbotaxEmail, 'turbotaxEmail');
+    const turbotaxPassword = this.encryption.safeDecrypt(client.turbotaxPassword, 'turbotaxPassword');
+    const irsUsername = this.encryption.safeDecrypt(client.irsUsername, 'irsUsername');
+    const irsPassword = this.encryption.safeDecrypt(client.irsPassword, 'irsPassword');
+    const stateUsername = this.encryption.safeDecrypt(client.stateUsername, 'stateUsername');
+    const statePassword = this.encryption.safeDecrypt(client.statePassword, 'statePassword');
+
     return {
       revealedAt: now,
       revealedBy: adminUserId,
@@ -638,24 +656,20 @@ export class ClientQueryService {
       clientName: `${client.user.firstName || ''} ${client.user.lastName || ''}`.trim(),
       clientEmail: client.user.email,
       credentials: {
-        turbotaxEmail: client.turbotaxEmail
-          ? this.encryption.decrypt(client.turbotaxEmail)
-          : null,
-        turbotaxPassword: client.turbotaxPassword
-          ? this.encryption.decrypt(client.turbotaxPassword)
-          : null,
-        irsUsername: client.irsUsername
-          ? this.encryption.decrypt(client.irsUsername)
-          : null,
-        irsPassword: client.irsPassword
-          ? this.encryption.decrypt(client.irsPassword)
-          : null,
-        stateUsername: client.stateUsername
-          ? this.encryption.decrypt(client.stateUsername)
-          : null,
-        statePassword: client.statePassword
-          ? this.encryption.decrypt(client.statePassword)
-          : null,
+        turbotaxEmail,
+        turbotaxPassword,
+        irsUsername,
+        irsPassword,
+        stateUsername,
+        statePassword,
+      },
+      errors: {
+        turbotaxEmail: client.turbotaxEmail && !turbotaxEmail ? 'Decryption failed' : null,
+        turbotaxPassword: client.turbotaxPassword && !turbotaxPassword ? 'Decryption failed' : null,
+        irsUsername: client.irsUsername && !irsUsername ? 'Decryption failed' : null,
+        irsPassword: client.irsPassword && !irsPassword ? 'Decryption failed' : null,
+        stateUsername: client.stateUsername && !stateUsername ? 'Decryption failed' : null,
+        statePassword: client.statePassword && !statePassword ? 'Decryption failed' : null,
       },
     };
   }

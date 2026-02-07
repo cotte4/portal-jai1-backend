@@ -240,8 +240,28 @@ export class DocumentsService {
         });
         this.logger.log(`Emitted PAYMENT_PROOF_UPLOADED event for user ${userId}`);
       } else if (uploadDto.type === 'commission_proof_federal' || uploadDto.type === 'commission_proof_state') {
-        // Commission proof uploaded - notify admins (admin verifies manually)
+        // Commission proof uploaded - mark as submitted in tax case
         const track = uploadDto.type === 'commission_proof_federal' ? 'federal' : 'state';
+        const now = new Date();
+
+        // Update tax case to mark proof as submitted
+        const proofUpdateData: any = {};
+        if (track === 'federal') {
+          proofUpdateData.federalCommissionProofSubmitted = true;
+          proofUpdateData.federalCommissionProofSubmittedAt = now;
+        } else {
+          proofUpdateData.stateCommissionProofSubmitted = true;
+          proofUpdateData.stateCommissionProofSubmittedAt = now;
+        }
+
+        await this.prisma.taxCase.update({
+          where: { id: taxCase.id },
+          data: proofUpdateData,
+        });
+
+        this.logger.log(`Marked ${track} commission proof as submitted for tax case ${taxCase.id}`);
+
+        // Notify admins
         await this.progressAutomation.processEvent({
           type: 'COMMISSION_PROOF_UPLOADED',
           userId,

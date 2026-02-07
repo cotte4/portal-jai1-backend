@@ -186,6 +186,18 @@ model TaxCase {
   stateCommissionPaid       Boolean    @default(false) @map("state_commission_paid")
   federalCommissionPaidAt   DateTime?  @map("federal_commission_paid_at") @db.Timestamptz
   stateCommissionPaidAt     DateTime?  @map("state_commission_paid_at") @db.Timestamptz
+  // Commission proof submission tracking (client uploads payment receipt)
+  federalCommissionProofSubmitted    Boolean?  @default(false) @map("federal_commission_proof_submitted")
+  federalCommissionProofSubmittedAt  DateTime? @map("federal_commission_proof_submitted_at") @db.Timestamptz
+  stateCommissionProofSubmitted      Boolean?  @default(false) @map("state_commission_proof_submitted")
+  stateCommissionProofSubmittedAt    DateTime? @map("state_commission_proof_submitted_at") @db.Timestamptz
+  // Commission proof review tracking (admin reviews and approves payment)
+  federalCommissionProofReviewedBy   String?   @map("federal_commission_proof_reviewed_by") @db.Uuid
+  federalCommissionProofReviewedAt   DateTime? @map("federal_commission_proof_reviewed_at") @db.Timestamptz
+  federalCommissionProofReviewNote   String?   @map("federal_commission_proof_review_note")
+  stateCommissionProofReviewedBy     String?   @map("state_commission_proof_reviewed_by") @db.Uuid
+  stateCommissionProofReviewedAt     DateTime? @map("state_commission_proof_reviewed_at") @db.Timestamptz
+  stateCommissionProofReviewNote     String?   @map("state_commission_proof_review_note")
   // Per-track commission rates (11% normal, 22% verification)
   federalCommissionRate     Decimal    @default(0.11) @map("federal_commission_rate") @db.Decimal(3, 2)
   stateCommissionRate       Decimal    @default(0.11) @map("state_commission_rate") @db.Decimal(3, 2)

@@ -678,17 +678,51 @@ export class ClientStatusService {
       }
     }
 
-    // Update the confirmation fields
+    // Update the confirmation fields AND auto-transition status to comision_pendiente
     const now = new Date();
-    const updateData =
-      type === 'federal'
-        ? { federalRefundReceived: true, federalRefundReceivedAt: now }
-        : { stateRefundReceived: true, stateRefundReceivedAt: now };
+    const updateData: any = {
+      statusUpdatedAt: now,
+    };
+
+    if (type === 'federal') {
+      updateData.federalRefundReceived = true;
+      updateData.federalRefundReceivedAt = now;
+      // Auto-transition to comision_pendiente
+      if (taxCase.federalStatusNew !== 'comision_pendiente') {
+        updateData.federalStatusNew = 'comision_pendiente';
+        updateData.federalStatusNewChangedAt = now;
+      }
+    } else {
+      updateData.stateRefundReceived = true;
+      updateData.stateRefundReceivedAt = now;
+      // Auto-transition to comision_pendiente
+      if (taxCase.stateStatusNew !== 'comision_pendiente') {
+        updateData.stateStatusNew = 'comision_pendiente';
+        updateData.stateStatusNewChangedAt = now;
+      }
+    }
 
     await this.prisma.taxCase.update({
       where: { id: taxCase.id },
       data: updateData,
     });
+
+    // Log status change to history if status was changed
+    const statusChanged = type === 'federal'
+      ? taxCase.federalStatusNew !== 'comision_pendiente'
+      : taxCase.stateStatusNew !== 'comision_pendiente';
+
+    if (statusChanged) {
+      await this.statusHistoryService.logStatusChange(
+        taxCase.id,
+        'system', // Changed by system, not admin
+        type === 'federal' ? 'federal_new' : 'state_new',
+        type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
+        'comision_pendiente',
+        `Cliente confirmó recepción de reembolso ${type}`,
+        null, // No internal comment
+      );
+    }
 
     // Apply referral discount if this is the FIRST branch confirmed
     const otherBranchConfirmed = type === 'federal'

@@ -380,7 +380,7 @@ export class ClientsController {
     @Body() dto: MarkCommissionPaidDto,
     @CurrentUser() user: any,
   ) {
-    return this.adminService.markCommissionPaid(id, dto.type, user.id);
+    return this.adminService.markCommissionPaid(id, dto.type, user.id, dto.reviewNote);
   }
 
   @Get('admin/clients/unpaid-commissions')

@@ -10,6 +10,7 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { ReferralsService } from '../../referrals/referrals.service';
 import { EmailService } from '../../../common/services';
 import { AuditLogsService } from '../../audit-logs/audit-logs.service';
+import { StatusHistoryService } from './status-history.service';
 import { SetProblemDto, SendNotificationDto } from '../dto/admin-update.dto';
 import { redactEmail } from '../../../common/utils/log-sanitizer';
 
@@ -25,6 +26,7 @@ export class ClientAdminService {
     private referralsService: ReferralsService,
     private emailService: EmailService,
     private auditLogsService: AuditLogsService,
+    private statusHistoryService: StatusHistoryService,
   ) {}
 
   async markPaid(id: string) {
@@ -48,7 +50,7 @@ export class ClientAdminService {
   /**
    * Admin marks commission as paid for federal or state refund.
    */
-  async markCommissionPaid(clientProfileId: string, type: 'federal' | 'state', adminId: string) {
+  async markCommissionPaid(clientProfileId: string, type: 'federal' | 'state', adminId: string, reviewNote?: string) {
     const client = await this.prisma.clientProfile.findUnique({
       where: { id: clientProfileId },
       include: {
@@ -86,12 +88,35 @@ export class ClientAdminService {
       }
     }
 
-    // Update the commission paid fields
+    // Update the commission paid fields + review tracking + status transition
     const now = new Date();
-    const updateData =
-      type === 'federal'
-        ? { federalCommissionPaid: true, federalCommissionPaidAt: now }
-        : { stateCommissionPaid: true, stateCommissionPaidAt: now };
+    const updateData: any = {
+      statusUpdatedAt: now,
+    };
+
+    if (type === 'federal') {
+      updateData.federalCommissionPaid = true;
+      updateData.federalCommissionPaidAt = now;
+      updateData.federalCommissionProofReviewedBy = adminId;
+      updateData.federalCommissionProofReviewedAt = now;
+      if (reviewNote) {
+        updateData.federalCommissionProofReviewNote = reviewNote;
+      }
+      // Auto-transition to taxes_completados
+      updateData.federalStatusNew = 'taxes_completados';
+      updateData.federalStatusNewChangedAt = now;
+    } else {
+      updateData.stateCommissionPaid = true;
+      updateData.stateCommissionPaidAt = now;
+      updateData.stateCommissionProofReviewedBy = adminId;
+      updateData.stateCommissionProofReviewedAt = now;
+      if (reviewNote) {
+        updateData.stateCommissionProofReviewNote = reviewNote;
+      }
+      // Auto-transition to taxes_completados
+      updateData.stateStatusNew = 'taxes_completados';
+      updateData.stateStatusNewChangedAt = now;
+    }
 
     // Also update legacy commissionPaid if both are now paid
     const willBothBePaid =
@@ -101,13 +126,24 @@ export class ClientAdminService {
       (type === 'state' && (!taxCase.federalActualRefund || Number(taxCase.federalActualRefund) === 0));
 
     if (willBothBePaid) {
-      Object.assign(updateData, { commissionPaid: true });
+      updateData.commissionPaid = true;
     }
 
     await this.prisma.taxCase.update({
       where: { id: taxCase.id },
       data: updateData,
     });
+
+    // Log status change to history
+    await this.statusHistoryService.logStatusChange(
+      taxCase.id,
+      adminId,
+      type === 'federal' ? 'federal_new' : 'state_new',
+      type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
+      'taxes_completados',
+      `Comisión ${type} marcada como pagada y verificada`,
+      reviewNote || null,
+    );
 
     const refundAmount =
       type === 'federal'
