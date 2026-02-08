@@ -544,6 +544,28 @@ export class ClientQueryService {
           commissionPaid: tc.commissionPaid,
           federalCommissionRate: tc.federalCommissionRate ? Number(tc.federalCommissionRate) : 0.11,
           stateCommissionRate: tc.stateCommissionRate ? Number(tc.stateCommissionRate) : 0.11,
+          // Commission proof tracking
+          federalCommissionProofSubmitted: (tc as any).federalCommissionProofSubmitted,
+          federalCommissionProofSubmittedAt: (tc as any).federalCommissionProofSubmittedAt,
+          stateCommissionProofSubmitted: (tc as any).stateCommissionProofSubmitted,
+          stateCommissionProofSubmittedAt: (tc as any).stateCommissionProofSubmittedAt,
+          // Commission proof review
+          federalCommissionProofReviewedBy: (tc as any).federalCommissionProofReviewedBy,
+          federalCommissionProofReviewedAt: (tc as any).federalCommissionProofReviewedAt,
+          federalCommissionProofReviewNote: (tc as any).federalCommissionProofReviewNote,
+          stateCommissionProofReviewedBy: (tc as any).stateCommissionProofReviewedBy,
+          stateCommissionProofReviewedAt: (tc as any).stateCommissionProofReviewedAt,
+          stateCommissionProofReviewNote: (tc as any).stateCommissionProofReviewNote,
+          // Commission payment (per-track)
+          federalCommissionPaid: (tc as any).federalCommissionPaid,
+          federalCommissionPaidAt: (tc as any).federalCommissionPaidAt,
+          stateCommissionPaid: (tc as any).stateCommissionPaid,
+          stateCommissionPaidAt: (tc as any).stateCommissionPaidAt,
+          // Refund confirmation
+          federalRefundReceived: (tc as any).federalRefundReceived,
+          federalRefundReceivedAt: (tc as any).federalRefundReceivedAt,
+          stateRefundReceived: (tc as any).stateRefundReceived,
+          stateRefundReceivedAt: (tc as any).stateRefundReceivedAt,
           statusUpdatedAt: tc.statusUpdatedAt,
           adminStep: tc.adminStep,
           hasProblem: tc.hasProblem,

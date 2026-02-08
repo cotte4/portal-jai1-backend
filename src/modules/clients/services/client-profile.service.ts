@@ -245,7 +245,13 @@ export class ClientProfileService {
                 stateRefundReceivedAt: true,
                 commissionPaid: true,
                 federalCommissionPaid: true,
+                federalCommissionPaidAt: true,
                 stateCommissionPaid: true,
+                stateCommissionPaidAt: true,
+                federalCommissionProofSubmitted: true,
+                federalCommissionProofSubmittedAt: true,
+                stateCommissionProofSubmitted: true,
+                stateCommissionProofSubmittedAt: true,
                 discounts: {
                   where: { discountType: 'referral_bonus', status: { in: ['pending', 'applied'] } },
                   select: { discountAmount: true, status: true },
