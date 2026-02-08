@@ -34,6 +34,7 @@ export class ConsentFormService {
 
   // JAI-1 signature images loaded from assets
   private jai1Signatures: Map<string, Buffer> = new Map();
+  private logoBuffer: Buffer | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -60,6 +61,15 @@ export class ConsentFormService {
       }
     }
     this.logger.log(`Loaded ${this.jai1Signatures.size}/3 JAI-1 signatures for PDF generation`);
+
+    // Load JAI-1 logo
+    try {
+      const logoPath = path.join(__dirname, 'assets', 'jai1-logo.png');
+      this.logoBuffer = fs.readFileSync(logoPath);
+      this.logger.log('Loaded JAI-1 logo for PDF generation');
+    } catch (error) {
+      this.logger.warn('Could not load JAI-1 logo for PDF generation');
+    }
   }
 
   /**
@@ -307,7 +317,8 @@ export class ConsentFormService {
     const contentWidth = pageWidth - 2 * margin;
     const lineHeight = 14;
     const fontSize = 10;
-    const footerHeight = 45;
+    const svgScale = pageWidth / 900; // 595/900 ≈ 0.661
+    const footerHeight = Math.ceil(120 * svgScale); // ~80pt
     const footerReserve = margin + footerHeight + 10;
 
     // Colors matching frontend design
@@ -320,22 +331,22 @@ export class ConsentFormService {
     let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
     let yPosition = pageHeight;
 
-    // Helper: draw footer band on a page
+    // Helper: draw footer band on a page (curved shape matching frontend)
+    const footerSvgPath =
+      'M0,120 H900 V40 C900,40 700,40 600,40 C520,40 490,0 450,0 C410,0 380,40 300,40 C200,40 0,40 0,40 Z';
     const drawFooter = (page: typeof currentPage) => {
-      // Burgundy band at bottom
-      page.drawRectangle({
+      page.drawSvgPath(footerSvgPath, {
         x: 0,
-        y: 0,
-        width: pageWidth,
-        height: footerHeight,
+        y: footerHeight,
+        scale: svgScale,
         color: burgundy,
       });
-      // Contact info in white
+      // Contact info in white, centered in the lower solid portion
       const footerText = `${CONSENT_FORM_FOOTER.website}    |    ${CONSENT_FORM_FOOTER.phone}    |    ${CONSENT_FORM_FOOTER.email}`;
       const footerTextWidth = helvetica.widthOfTextAtSize(footerText, 8);
       page.drawText(footerText, {
         x: (pageWidth - footerTextWidth) / 2,
-        y: 17,
+        y: 14,
         size: 8,
         font: helvetica,
         color: white,
@@ -396,29 +407,40 @@ export class ConsentFormService {
       }
     };
 
-    // ============ HEADER: Navy band (full-width) ============
-    const headerBandHeight = 70;
-    currentPage.drawRectangle({
+    // ============ HEADER: Curved navy band (matches frontend SVG) ============
+    const headerSvgPath =
+      'M0,0 H900 V80 C900,80 700,80 600,80 C520,80 490,120 450,120 C410,120 380,80 300,80 C200,80 0,80 0,80 Z';
+    const headerBandHeight = Math.ceil(120 * svgScale); // ~80pt
+
+    currentPage.drawSvgPath(headerSvgPath, {
       x: 0,
-      y: pageHeight - headerBandHeight,
-      width: pageWidth,
-      height: headerBandHeight,
+      y: pageHeight,
+      scale: svgScale,
       color: darkBlue,
     });
 
-    // "JAI-1" text centered in the navy band
-    const logoText = 'JAI-1';
-    const logoSize = 28;
-    const logoWidth = helveticaBold.widthOfTextAtSize(logoText, logoSize);
-    currentPage.drawText(logoText, {
-      x: (pageWidth - logoWidth) / 2,
-      y: pageHeight - headerBandHeight / 2 - logoSize / 3,
-      size: logoSize,
-      font: helveticaBold,
-      color: white,
-    });
+    // Embedded logo image below the curved header
+    let logoBottomY = pageHeight - headerBandHeight;
+    if (this.logoBuffer) {
+      try {
+        const logoImage = await pdfDoc.embedPng(this.logoBuffer);
+        const logoHeight = 40;
+        const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
+        const logoX = (pageWidth - logoWidth) / 2;
+        const logoY = pageHeight - headerBandHeight - 8 - logoHeight;
+        currentPage.drawImage(logoImage, {
+          x: logoX,
+          y: logoY,
+          width: logoWidth,
+          height: logoHeight,
+        });
+        logoBottomY = logoY;
+      } catch {
+        this.logger.warn('Could not embed logo in PDF, skipping');
+      }
+    }
 
-    yPosition = pageHeight - headerBandHeight - 30;
+    yPosition = logoBottomY - 20;
 
     // ============ TITLE ============
     const titleFontSize = 16;

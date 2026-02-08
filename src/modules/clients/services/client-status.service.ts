@@ -332,8 +332,12 @@ export class ClientStatusService {
       statusChanges.push(`stateStatus: ${statusData.stateStatusNew}`);
     }
 
-    // Build the history comment
-    let historyComment = statusData.comment || '';
+    // Build the history comment (include track-specific comments)
+    const commentParts: string[] = [];
+    if (statusData.comment) commentParts.push(statusData.comment);
+    if (statusData.federalComment) commentParts.push(`Federal: ${statusData.federalComment}`);
+    if (statusData.stateComment) commentParts.push(`Estatal: ${statusData.stateComment}`);
+    let historyComment = commentParts.join(' | ');
     if (isForceOverride) {
       const overridePrefix = `[ADMIN OVERRIDE] Razon: ${statusData.overrideReason}`;
       historyComment = historyComment
