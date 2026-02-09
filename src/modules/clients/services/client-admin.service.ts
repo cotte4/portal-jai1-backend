@@ -127,20 +127,22 @@ export class ClientAdminService {
       updateData.commissionPaid = true;
     }
 
-    await this.prisma.taxCase.update({
-      where: { id: taxCase.id },
-      data: updateData,
-    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.taxCase.update({
+        where: { id: taxCase.id },
+        data: updateData,
+      });
 
-    // Log status change to history
-    await this.prisma.statusHistory.create({
-      data: {
-        taxCaseId: taxCase.id,
-        previousStatus: type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
-        newStatus: 'taxes_completados',
-        changedById: adminId,
-        comment: `Comisión ${type} marcada como pagada y verificada${reviewNote ? ': ' + reviewNote : ''}`,
-      },
+      // Log status change to history
+      await tx.statusHistory.create({
+        data: {
+          taxCaseId: taxCase.id,
+          previousStatus: type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
+          newStatus: 'taxes_completados',
+          changedById: adminId,
+          comment: `Comisión ${type} marcada como pagada y verificada${reviewNote ? ': ' + reviewNote : ''}`,
+        },
+      });
     });
 
     const refundAmount =

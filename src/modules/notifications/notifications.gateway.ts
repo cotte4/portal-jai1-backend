@@ -30,6 +30,8 @@ import { ConfigService } from '@nestjs/config';
         !origin ||
         origin === frontendUrl ||
         origin === frontendUrl?.replace(/\/$/, '') ||
+        origin === 'https://www.jai1.app' ||
+        origin === 'https://jai1.app' ||
         origin.endsWith('.vercel.app') ||
         origin.includes('localhost');
 

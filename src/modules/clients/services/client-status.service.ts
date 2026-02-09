@@ -338,6 +338,15 @@ export class ClientStatusService {
     if (statusData.federalComment) commentParts.push(`Federal: ${statusData.federalComment}`);
     if (statusData.stateComment) commentParts.push(`Estatal: ${statusData.stateComment}`);
     let historyComment = commentParts.join(' | ');
+
+    // Build internal comment for history
+    const internalCommentParts: string[] = [];
+    if (statusData.federalInternalComment)
+      internalCommentParts.push(`Federal: ${statusData.federalInternalComment}`);
+    if (statusData.stateInternalComment)
+      internalCommentParts.push(`Estatal: ${statusData.stateInternalComment}`);
+    const internalHistoryComment = internalCommentParts.join(' | ') || null;
+
     if (isForceOverride) {
       const overridePrefix = `[ADMIN OVERRIDE] Razon: ${statusData.overrideReason}`;
       historyComment = historyComment
@@ -408,6 +417,7 @@ export class ClientStatusService {
           newStatus: statusChanges.join(', ') || 'status update',
           changedById,
           comment: historyComment || null,
+          internalComment: internalHistoryComment,
         },
       }),
     ]);
@@ -706,27 +716,29 @@ export class ClientStatusService {
       }
     }
 
-    await this.prisma.taxCase.update({
-      where: { id: taxCase.id },
-      data: updateData,
-    });
-
     // Log status change to history if status was changed
     const statusChanged = type === 'federal'
       ? taxCase.federalStatusNew !== 'comision_pendiente'
       : taxCase.stateStatusNew !== 'comision_pendiente';
 
-    if (statusChanged) {
-      await this.prisma.statusHistory.create({
-        data: {
-          taxCaseId: taxCase.id,
-          previousStatus: type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
-          newStatus: 'comision_pendiente',
-          changedById: 'system',
-          comment: `Cliente confirmó recepción de reembolso ${type}`,
-        },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.taxCase.update({
+        where: { id: taxCase.id },
+        data: updateData,
       });
-    }
+
+      if (statusChanged) {
+        await tx.statusHistory.create({
+          data: {
+            taxCaseId: taxCase.id,
+            previousStatus: type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
+            newStatus: 'comision_pendiente',
+            changedById: userId,
+            comment: `Cliente confirmó recepción de reembolso ${type}`,
+          },
+        });
+      }
+    });
 
     // Apply referral discount if this is the FIRST branch confirmed
     const otherBranchConfirmed = type === 'federal'

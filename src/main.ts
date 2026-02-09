@@ -57,11 +57,13 @@ async function bootstrap() {
           return;
         }
 
-        // Check if origin matches FRONTEND_URL or is a Vercel preview URL
+        // Check if origin matches FRONTEND_URL, jai1.app, or Vercel preview URLs
         const isAllowed =
           origin === frontendUrl ||
-          origin === frontendUrl?.replace(/\/$/, '') || // Without trailing slash
-          (origin.includes('portal-jai1') && origin.endsWith('.vercel.app')); // Vercel preview/production URLs
+          origin === frontendUrl?.replace(/\/$/, '') ||
+          origin === 'https://www.jai1.app' ||
+          origin === 'https://jai1.app' ||
+          (origin.includes('portal-jai1') && origin.endsWith('.vercel.app'));
 
         if (isAllowed) {
           callback(null, true);

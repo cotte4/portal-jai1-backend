@@ -321,8 +321,9 @@ model StatusHistory {
   previousStatus String?  @map("previous_status")
   newStatus      String   @map("new_status")
   changedById    String?  @map("changed_by_id") @db.Uuid
-  comment        String?
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  comment         String?
+  internalComment String?  @map("internal_comment")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
   changedBy      User?    @relation("ChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
   taxCase        TaxCase  @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
 

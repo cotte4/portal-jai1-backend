@@ -428,6 +428,7 @@ export class ClientQueryService {
         newStatus: sh.newStatus,
         changedById: sh.changedById,
         comment: sh.comment,
+        internalComment: sh.internalComment,
         createdAt: sh.createdAt,
         changedBy: sh.changedBy,
       })),
