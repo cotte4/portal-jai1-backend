@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
 import { ReferralsService } from '../referrals/referrals.service';
@@ -31,8 +31,9 @@ export class AuthService {
   // Pre-computed dummy hash for timing-safe login responses
   // This prevents timing attacks that could enumerate valid emails
   // Hash of a random string, computed once at class initialization
+  // Valid bcrypt hash of a random string, used for timing-safe comparisons
   private readonly DUMMY_PASSWORD_HASH =
-    '$2b$10$dummyHashForTimingSafetyXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+    '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234';
 
   // Temporary storage for OAuth authorization codes (single-use, short-lived)
   // In production, consider using Redis for multi-instance deployments
