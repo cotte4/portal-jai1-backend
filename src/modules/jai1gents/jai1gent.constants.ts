@@ -5,9 +5,9 @@
 export const COMMISSION_TIERS = [
   { min: 1, max: 3, percent: 5 },
   { min: 4, max: 10, percent: 10 },
-  { min: 11, max: 49, percent: 15 },
-  { min: 50, max: 99, percent: 20 },
-  { min: 100, max: Infinity, percent: 25 },
+  { min: 11, max: 25, percent: 15 },
+  { min: 26, max: 50, percent: 20 },
+  { min: 51, max: Infinity, percent: 25 },
 ];
 
 /**
