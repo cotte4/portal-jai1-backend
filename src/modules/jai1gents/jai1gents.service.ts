@@ -281,7 +281,7 @@ export class Jai1gentsService {
         },
         referrals: {
           orderBy: { createdAt: 'desc' },
-          take: 5,
+          take: 50,
           include: {
             referredUser: {
               select: { firstName: true, lastName: true },

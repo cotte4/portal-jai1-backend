@@ -29,8 +29,12 @@ export function getNextTierInfo(completedReferrals: number): {
   nextTierAt: number;
   nextPercent: number;
 } | null {
+  // Find the current tier first
+  const currentTier = getCurrentTierInfo(completedReferrals);
+
+  // Find the next tier after the current one
   for (const tier of COMMISSION_TIERS) {
-    if (completedReferrals < tier.min) {
+    if (tier.percent > currentTier.percent) {
       return {
         nextTierAt: tier.min,
         nextPercent: tier.percent,
@@ -60,11 +64,11 @@ export function getCurrentTierInfo(completedReferrals: number): {
       };
     }
   }
-  // If no referrals yet, return tier 0 info
+  // No completed referrals yet — show Tier 1 since that's what they'll earn
   return {
-    tierNumber: 0,
-    percent: 0,
-    min: 0,
-    max: 0,
+    tierNumber: 1,
+    percent: COMMISSION_TIERS[0].percent,
+    min: COMMISSION_TIERS[0].min,
+    max: COMMISSION_TIERS[0].max === Infinity ? -1 : COMMISSION_TIERS[0].max,
   };
 }
