@@ -1,6 +1,6 @@
 import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, Matches } from 'class-validator';
 
-export class RegisterJai1gentDto {
+export class AdminCreateJai1gentDto {
   @IsEmail({}, { message: 'Email must be a valid email address' })
   @IsNotEmpty({ message: 'Email is required' })
   email: string;
@@ -19,11 +19,11 @@ export class RegisterJai1gentDto {
   last_name: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Invite code is required' })
-  @Matches(/^[A-Z0-9]{8}$/, { message: 'Invalid invite code format' })
-  invite_code: string;
-
-  @IsString()
   @IsOptional()
   phone?: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Referral code is required' })
+  @Matches(/^[A-Z0-9]{5,15}$/, { message: 'Referral code must be 5-15 uppercase alphanumeric characters' })
+  referral_code: string;
 }

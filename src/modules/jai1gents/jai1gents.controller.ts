@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { UserRole } from '@prisma/client';
+import { Throttle } from '@nestjs/throttler';
 import { Jai1gentsService } from './jai1gents.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
@@ -18,6 +19,8 @@ import {
   RegisterJai1gentDto,
   UpdateJai1gentProfileDto,
   GenerateInviteCodesDto,
+  AdminCreateJai1gentDto,
+  UpdateReferralCodeDto,
 } from './dto';
 
 @Controller('jai1gents')
@@ -46,6 +49,7 @@ export class Jai1gentsController {
    * PUBLIC: Register as a new JAI1GENT with invite code
    */
   @Post('register')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   async register(@Body() dto: RegisterJai1gentDto, @Req() req: Request) {
     const ipAddress = req.ip || req.connection.remoteAddress;
     const userAgent = req.headers['user-agent'];
@@ -126,5 +130,60 @@ export class Jai1gentsController {
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
     });
+  }
+
+  /**
+   * ADMIN: Get referral details for a specific JAI1GENT
+   */
+  @Get('admin/:userId/referrals')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  async getJai1gentReferrals(
+    @Param('userId') userId: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.jai1gentsService.getJai1gentReferrals(userId, {
+      status: status || 'all',
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+    });
+  }
+
+  /**
+   * ADMIN: Activate or deactivate a JAI1GENT
+   */
+  @Patch('admin/:userId/toggle-active')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  async toggleActive(
+    @Param('userId') userId: string,
+    @Body('is_active') isActive: boolean,
+  ) {
+    return this.jai1gentsService.toggleActive(userId, isActive);
+  }
+
+  /**
+   * ADMIN: Create a JAI1GENT account directly (no invite code needed)
+   */
+  @Post('admin/create')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  async adminCreate(@Body() dto: AdminCreateJai1gentDto) {
+    return this.jai1gentsService.adminCreate(dto);
+  }
+
+  /**
+   * ADMIN: Update a JAI1GENT's referral code
+   */
+  @Patch('admin/:userId/referral-code')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  async updateReferralCode(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateReferralCodeDto,
+  ) {
+    return this.jai1gentsService.updateReferralCode(userId, dto.referral_code);
   }
 }

@@ -4,9 +4,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Jai1gentsController } from './jai1gents.controller';
 import { Jai1gentsService } from './jai1gents.service';
 import { PrismaService } from '../../config/prisma.service';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
+    UsersModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
