@@ -394,7 +394,7 @@ One missing:   { "box_2": "1110.02", "box_17": "not_found" }`;
    * Frontend should call this first to check if estimate already exists
    */
   async getLatestEstimate(userId: string) {
-    const estimate = await this.prisma.w2Estimate.findFirst({
+    const estimates = await this.prisma.w2Estimate.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -408,22 +408,35 @@ One missing:   { "box_2": "1110.02", "box_17": "not_found" }`;
       },
     });
 
-    if (!estimate) {
-      return { hasEstimate: false, estimate: null };
+    if (estimates.length === 0) {
+      return { hasEstimate: false, estimate: null, estimates: [], totalEstimatedRefund: 0 };
     }
 
-    const estimatedRefund = Number(estimate.estimatedRefund);
+    const formattedEstimates = estimates.map((e) => ({
+      ...e,
+      box2Federal: Number(e.box2Federal),
+      box17State: Number(e.box17State),
+      estimatedRefund: Number(e.estimatedRefund),
+    }));
+
+    const totalEstimatedRefund = formattedEstimates.reduce(
+      (sum, e) => sum + e.estimatedRefund,
+      0,
+    );
+
+    // Return latest estimate in `estimate` for backward compatibility
+    const latest = formattedEstimates[0];
 
     return {
       hasEstimate: true,
       estimate: {
-        ...estimate,
-        box2Federal: Number(estimate.box2Federal),
-        box17State: Number(estimate.box17State),
-        estimatedRefund,
+        ...latest,
         // Flag $0 results as requiring manual review
-        requiresReview: estimatedRefund <= 0,
+        requiresReview: totalEstimatedRefund <= 0,
       },
+      estimates: formattedEstimates,
+      totalEstimatedRefund,
+      requiresReview: totalEstimatedRefund <= 0,
     };
   }
 
@@ -490,12 +503,21 @@ One missing:   { "box_2": "1110.02", "box_17": "not_found" }`;
         });
         this.logger.log(`Created TaxCase ${taxCase.id} with estimated refund $${estimatedRefund}`);
       } else {
-        // Update existing TaxCase with new estimated refund
+        // Sum ALL W2Estimates for this user to get aggregated refund
+        const allEstimates = await this.prisma.w2Estimate.findMany({
+          where: { userId },
+          select: { estimatedRefund: true },
+        });
+        const aggregatedRefund = allEstimates.reduce(
+          (sum, e) => sum + Number(e.estimatedRefund),
+          0,
+        );
+
         taxCase = await this.prisma.taxCase.update({
           where: { id: taxCase.id },
-          data: { estimatedRefund },
+          data: { estimatedRefund: aggregatedRefund },
         });
-        this.logger.log(`Updated TaxCase ${taxCase.id} with estimated refund $${estimatedRefund}`);
+        this.logger.log(`Updated TaxCase ${taxCase.id} with aggregated refund $${aggregatedRefund} (${allEstimates.length} W2s)`);
       }
 
       return { id: taxCase.id, clientProfileId: clientProfile.id };

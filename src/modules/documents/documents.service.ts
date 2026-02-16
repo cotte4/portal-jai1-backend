@@ -306,6 +306,135 @@ export class DocumentsService {
     };
   }
 
+  /**
+   * Admin uploads a document on behalf of a client.
+   * Uses the same {userId}/{taxYear}/{docType}/{uuid}.ext pathing as client uploads.
+   */
+  async uploadForClient(
+    clientProfileId: string,
+    file: Express.Multer.File,
+    uploadDto: UploadDocumentDto,
+    adminId: string,
+  ) {
+    // Look up client profile to get userId
+    const clientProfile = await this.prisma.clientProfile.findUnique({
+      where: { id: clientProfileId },
+      include: { taxCases: { orderBy: { taxYear: 'desc' }, take: 1 } },
+    });
+
+    if (!clientProfile) {
+      throw new NotFoundException('Client profile not found');
+    }
+
+    const userId = clientProfile.userId;
+    let taxCase = clientProfile.taxCases[0];
+
+    // Create tax case if it doesn't exist
+    if (!taxCase) {
+      taxCase = await this.prisma.taxCase.create({
+        data: {
+          clientProfileId: clientProfile.id,
+          taxYear: uploadDto.tax_year || new Date().getFullYear(),
+        },
+      });
+    }
+
+    // Generate path — same as client upload
+    const taxYear = uploadDto.tax_year || taxCase.taxYear || new Date().getFullYear();
+    const storagePath = this.storagePath.generateDocumentPath({
+      userId,
+      taxYear,
+      documentType: uploadDto.type,
+      originalFileName: file.originalname,
+    });
+
+    // Upload to Supabase Storage
+    await this.supabase.uploadFile(
+      this.BUCKET_NAME,
+      storagePath,
+      file.buffer,
+      file.mimetype,
+    );
+
+    // Save document metadata with uploadedById tracking the admin
+    const document = await this.prisma.document.create({
+      data: {
+        taxCaseId: taxCase.id,
+        type: uploadDto.type,
+        fileName: file.originalname,
+        storagePath,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        taxYear: uploadDto.tax_year,
+        uploadedById: adminId,
+      },
+    });
+
+    logStorageSuccess(this.logger, {
+      operation: 'ADMIN_DOCUMENT_UPLOAD_SUCCESS',
+      userId,
+      adminId,
+      documentId: document.id,
+      fileName: file.originalname,
+      bucket: this.BUCKET_NAME,
+      storagePath,
+      documentType: uploadDto.type,
+    });
+
+    // Update computed status fields (for W2 documents)
+    if (uploadDto.type === 'w2') {
+      await this.updateClientComputedStatus(clientProfile.id);
+    }
+
+    // Fire progress automation events
+    try {
+      const clientName = await this.progressAutomation.getClientName(userId);
+
+      if (uploadDto.type === 'w2') {
+        await this.progressAutomation.processEvent({
+          type: 'W2_UPLOADED',
+          userId,
+          taxCaseId: taxCase.id,
+          metadata: { clientName, fileName: file.originalname },
+        });
+      } else if (uploadDto.type === 'payment_proof') {
+        await this.progressAutomation.processEvent({
+          type: 'PAYMENT_PROOF_UPLOADED',
+          userId,
+          taxCaseId: taxCase.id,
+          metadata: { clientName, fileName: file.originalname },
+        });
+      } else {
+        await this.progressAutomation.processEvent({
+          type: 'DOCUMENT_UPLOADED',
+          userId,
+          taxCaseId: taxCase.id,
+          metadata: { clientName, fileName: file.originalname, documentType: uploadDto.type },
+        });
+      }
+
+      await this.progressAutomation.checkAllDocsComplete(taxCase.id, userId);
+      await this.progressAutomation.checkDocumentationCompleteAndTransition(taxCase.id, userId);
+    } catch (error) {
+      this.logger.error('Progress automation error (non-fatal):', error);
+    }
+
+    return {
+      document: {
+        id: document.id,
+        taxCaseId: taxCase.id,
+        type: document.type,
+        fileName: document.fileName,
+        storagePath: document.storagePath,
+        mimeType: document.mimeType,
+        fileSize: document.fileSize,
+        taxYear: document.taxYear,
+        isReviewed: document.isReviewed,
+        uploadedAt: document.uploadedAt,
+      },
+    };
+  }
+
   async findByUserId(userId: string) {
     // Single query with join instead of two separate queries
     const documents = await this.prisma.document.findMany({

@@ -491,12 +491,12 @@ export class ClientAdminService {
   }
 
   async remove(id: string) {
-    // Fetch all documents and user profile picture BEFORE cascade delete
+    // Fetch all documents, user info, and profile picture BEFORE cascade delete
     const client = await this.prisma.clientProfile.findUnique({
       where: { id },
       include: {
         user: {
-          select: { profilePicturePath: true },
+          select: { id: true, profilePicturePath: true },
         },
         taxCases: {
           include: {
@@ -512,6 +512,8 @@ export class ClientAdminService {
       throw new NotFoundException('Client not found');
     }
 
+    const userId = client.user.id;
+
     // Collect all document storage paths
     const storagePaths: string[] = [];
     for (const taxCase of client.taxCases) {
@@ -522,7 +524,7 @@ export class ClientAdminService {
       }
     }
 
-    // Delete document S3 files first
+    // Delete document S3 files first (before any DB deletion)
     const DOCUMENTS_BUCKET = 'documents';
     for (const storagePath of storagePaths) {
       try {
@@ -550,13 +552,14 @@ export class ClientAdminService {
       }
     }
 
-    // Now delete the client (cascade will handle database records)
-    await this.prisma.clientProfile.delete({
-      where: { id },
+    // Delete the User record — cascades to ClientProfile, TaxCase, Document,
+    // RefreshToken, Notification, Ticket, W2Estimate, Referral, DiscountApplication, etc.
+    await this.prisma.user.delete({
+      where: { id: userId },
     });
 
     this.logger.log(
-      `Client ${id} deleted successfully. Cleaned up ${storagePaths.length} document files${profilePictureDeleted ? ' and 1 profile picture' : ''}.`,
+      `Client ${id} and User ${userId} deleted successfully. Cleaned up ${storagePaths.length} document files${profilePictureDeleted ? ' and 1 profile picture' : ''}.`,
     );
     return { message: 'Client deleted successfully' };
   }

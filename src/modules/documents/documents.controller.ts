@@ -15,6 +15,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UserRole } from '@prisma/client';
 import { DocumentsService } from './documents.service';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
@@ -56,6 +57,39 @@ export class DocumentsController {
     });
 
     return this.documentsService.upload(user.id, file, uploadDto);
+  }
+
+  @Post('upload-for-client/:clientProfileId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.admin)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadForClient(
+    @CurrentUser() user: any,
+    @Param('clientProfileId') clientProfileId: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 25 * 1024 * 1024 }),
+          new FileTypeValidator({
+            fileType:
+              /^(image\/(jpeg|jpg|png|gif|webp)|application\/pdf|application\/(msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document)|application\/(vnd\.ms-excel|vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet))$/,
+          }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+    @Body() uploadDto: UploadDocumentDto,
+  ) {
+    logStorageSuccess(this.logger, {
+      operation: 'ADMIN_DOCUMENT_UPLOAD_START',
+      adminId: user?.id,
+      clientProfileId,
+      fileName: file?.originalname,
+      fileSize: file?.size,
+      documentType: uploadDto?.type,
+    });
+
+    return this.documentsService.uploadForClient(clientProfileId, file, uploadDto, user.id);
   }
 
   @Get()
