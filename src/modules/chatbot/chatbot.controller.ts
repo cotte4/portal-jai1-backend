@@ -18,7 +18,7 @@ export class ChatbotController {
       // Get relevant context from knowledge base
       let context = '';
       try {
-        context = await this.knowledgeService.getContextForQuery(body.message, 3);
+        context = await this.knowledgeService.getContextForQuery(body.message, 5);
         if (context) {
           this.logger.debug(`Found relevant context for query: ${body.message.slice(0, 50)}...`);
         }

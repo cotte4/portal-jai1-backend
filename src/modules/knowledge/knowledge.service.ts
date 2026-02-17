@@ -26,7 +26,9 @@ export class KnowledgeService {
   ) {}
 
   /**
-   * Parse markdown knowledge base into sections
+   * Parse markdown knowledge base into sections.
+   * Splits FAQ Q&A pairs and large sections into focused chunks
+   * for better semantic search accuracy.
    */
   parseMarkdownIntoChunks(markdown: string): ChunkInput[] {
     const chunks: ChunkInput[] = [];
@@ -39,21 +41,35 @@ export class KnowledgeService {
     const flushChunk = () => {
       const content = currentContent.join('\n').trim();
       if (content.length > 50) {
-        // Only add chunks with meaningful content
-        chunks.push({
-          section: currentSubsection || currentSection,
-          content,
-          metadata: {
-            mainSection: currentSection,
-            subsection: currentSubsection || undefined,
-          },
-        });
+        // Check if content has Q&A pairs (FAQ pattern: **P: ...** / R: ...)
+        const qaPairs = this.extractQAPairs(content);
+        if (qaPairs.length > 0) {
+          for (const qa of qaPairs) {
+            chunks.push({
+              section: `${currentSubsection || currentSection} - FAQ`,
+              content: qa,
+              metadata: {
+                mainSection: currentSection,
+                subsection: currentSubsection || undefined,
+                type: 'faq',
+              },
+            });
+          }
+        } else {
+          chunks.push({
+            section: currentSubsection || currentSection,
+            content,
+            metadata: {
+              mainSection: currentSection,
+              subsection: currentSubsection || undefined,
+            },
+          });
+        }
       }
       currentContent = [];
     };
 
     for (const line of lines) {
-      // Main section (## TITLE)
       if (line.startsWith('## ')) {
         flushChunk();
         currentSection = line.replace('## ', '').trim();
@@ -61,26 +77,62 @@ export class KnowledgeService {
         continue;
       }
 
-      // Subsection (### Title)
       if (line.startsWith('### ')) {
         flushChunk();
         currentSubsection = line.replace('### ', '').trim();
         continue;
       }
 
-      // Skip table of contents and index
       if (line.includes('INDICE') || line.match(/^\d+\.\s*\[/)) {
         continue;
       }
 
-      // Add content line
       currentContent.push(line);
     }
 
-    // Flush remaining content
     flushChunk();
-
     return chunks;
+  }
+
+  /**
+   * Extract individual Q&A pairs from FAQ-style content.
+   * Matches patterns like "**P: question**\nR: answer"
+   */
+  private extractQAPairs(content: string): string[] {
+    const pairs: string[] = [];
+    const lines = content.split('\n');
+
+    let currentQuestion = '';
+    let currentAnswer: string[] = [];
+
+    const flushQA = () => {
+      if (currentQuestion && currentAnswer.length > 0) {
+        const answer = currentAnswer.join('\n').trim();
+        if (answer.length > 0) {
+          pairs.push(`${currentQuestion}\n${answer}`);
+        }
+      }
+      currentQuestion = '';
+      currentAnswer = [];
+    };
+
+    for (const line of lines) {
+      // Match Q&A pattern: **P: ...** or **P: ...**
+      if (line.match(/^\*\*P:/)) {
+        flushQA();
+        currentQuestion = line;
+        continue;
+      }
+
+      // If we're inside a Q&A pair, collect answer lines
+      if (currentQuestion) {
+        currentAnswer.push(line);
+        continue;
+      }
+    }
+
+    flushQA();
+    return pairs;
   }
 
   /**
@@ -170,8 +222,8 @@ export class KnowledgeService {
       return '';
     }
 
-    // Filter out low-relevance chunks (similarity < 0.3)
-    const relevantChunks = chunks.filter((c) => c.similarity && c.similarity > 0.3);
+    // Filter out low-relevance chunks (similarity < 0.15)
+    const relevantChunks = chunks.filter((c) => c.similarity && c.similarity > 0.15);
 
     if (relevantChunks.length === 0) {
       return '';

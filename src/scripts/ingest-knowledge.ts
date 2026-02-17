@@ -58,8 +58,8 @@ async function main() {
 
   // Show sample chunks
   console.log('Sample chunks:');
-  for (const chunk of chunks.slice(0, 3)) {
-    console.log(`  - [${chunk.section}] ${chunk.content.slice(0, 60)}...`);
+  for (const chunk of chunks.slice(0, 5)) {
+    console.log(`  - [${chunk.section}] ${chunk.content.slice(0, 80)}...`);
   }
   console.log();
 
@@ -112,9 +112,52 @@ async function main() {
       SELECT COUNT(*) as count FROM knowledge_chunks WHERE embedding IS NOT NULL
     `;
     console.log(`Verification: ${count[0].count} chunks with embeddings in database`);
+
+    // Show FAQ chunk count
+    const faqChunks = chunks.filter((c) => c.metadata.type === 'faq');
+    console.log(`FAQ chunks: ${faqChunks.length} individual Q&A pairs`);
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/**
+ * Extract individual Q&A pairs from FAQ-style content.
+ * Matches patterns like "**P: question**\nR: answer"
+ */
+function extractQAPairs(content: string): string[] {
+  const pairs: string[] = [];
+  const lines = content.split('\n');
+
+  let currentQuestion = '';
+  let currentAnswer: string[] = [];
+
+  const flushQA = () => {
+    if (currentQuestion && currentAnswer.length > 0) {
+      const answer = currentAnswer.join('\n').trim();
+      if (answer.length > 0) {
+        pairs.push(`${currentQuestion}\n${answer}`);
+      }
+    }
+    currentQuestion = '';
+    currentAnswer = [];
+  };
+
+  for (const line of lines) {
+    if (line.match(/^\*\*P:/)) {
+      flushQA();
+      currentQuestion = line;
+      continue;
+    }
+
+    if (currentQuestion) {
+      currentAnswer.push(line);
+      continue;
+    }
+  }
+
+  flushQA();
+  return pairs;
 }
 
 function parseMarkdownIntoChunks(markdown: string): ChunkInput[] {
@@ -128,20 +171,35 @@ function parseMarkdownIntoChunks(markdown: string): ChunkInput[] {
   const flushChunk = () => {
     const content = currentContent.join('\n').trim();
     if (content.length > 50) {
-      chunks.push({
-        section: currentSubsection || currentSection,
-        content,
-        metadata: {
-          mainSection: currentSection,
-          subsection: currentSubsection || undefined,
-        },
-      });
+      // Check if content has Q&A pairs (FAQ pattern: **P: ...** / R: ...)
+      const qaPairs = extractQAPairs(content);
+      if (qaPairs.length > 0) {
+        for (const qa of qaPairs) {
+          chunks.push({
+            section: `${currentSubsection || currentSection} - FAQ`,
+            content: qa,
+            metadata: {
+              mainSection: currentSection,
+              subsection: currentSubsection || undefined,
+              type: 'faq',
+            },
+          });
+        }
+      } else {
+        chunks.push({
+          section: currentSubsection || currentSection,
+          content,
+          metadata: {
+            mainSection: currentSection,
+            subsection: currentSubsection || undefined,
+          },
+        });
+      }
     }
     currentContent = [];
   };
 
   for (const line of lines) {
-    // Main section (## TITLE)
     if (line.startsWith('## ')) {
       flushChunk();
       currentSection = line.replace('## ', '').trim();
@@ -149,14 +207,12 @@ function parseMarkdownIntoChunks(markdown: string): ChunkInput[] {
       continue;
     }
 
-    // Subsection (### Title)
     if (line.startsWith('### ')) {
       flushChunk();
       currentSubsection = line.replace('### ', '').trim();
       continue;
     }
 
-    // Skip table of contents and index
     if (line.includes('INDICE') || line.match(/^\d+\.\s*\[/)) {
       continue;
     }
