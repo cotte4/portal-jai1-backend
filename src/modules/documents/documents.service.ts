@@ -404,6 +404,23 @@ export class DocumentsService {
           taxCaseId: taxCase.id,
           metadata: { clientName, fileName: file.originalname },
         });
+      } else if (uploadDto.type === 'consent_form') {
+        // Mark consent form as signed on the tax case (same fields as ConsentFormService.sign())
+        await this.prisma.taxCase.update({
+          where: { id: taxCase.id },
+          data: {
+            consentFormStatus: 'signed',
+            consentFormSignedAt: new Date(),
+            consentFormStoragePath: storagePath,
+          },
+        });
+        this.logger.log(`Admin marked consent form as signed for tax case ${taxCase.id}`);
+        await this.progressAutomation.processEvent({
+          type: 'DOCUMENT_UPLOADED',
+          userId,
+          taxCaseId: taxCase.id,
+          metadata: { clientName, fileName: file.originalname, documentType: uploadDto.type },
+        });
       } else {
         await this.progressAutomation.processEvent({
           type: 'DOCUMENT_UPLOADED',

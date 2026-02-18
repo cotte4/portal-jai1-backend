@@ -190,7 +190,7 @@ export class ClientQueryService {
     }
 
     // Build dynamic orderBy clause
-    const sortOrder = options.sortOrder || 'desc';
+    const sortOrder = options.sortOrder || 'asc';
     let orderBy: any = { createdAt: sortOrder }; // Default sort
 
     if (options.sortBy) {
