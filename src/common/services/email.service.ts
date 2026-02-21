@@ -83,45 +83,72 @@ export class EmailService {
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
     const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #B21B43; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background-color: #f9f9f9; }
-          .button { display: inline-block; background-color: #1D345D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }
-          .warning { background-color: #fff3cd; border: 1px solid #ffc107; padding: 10px; margin: 15px 0; border-radius: 4px; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Restablecer Contrasena</h1>
-          </div>
-          <div class="content">
-            <p>Hola <strong>${firstName}</strong>,</p>
-            <p>Recibimos una solicitud para restablecer la contrasena de tu cuenta en JAI1.</p>
-            <p>Haz clic en el siguiente boton para crear una nueva contrasena:</p>
-            <p style="text-align: center;">
-              <a href="${resetLink}" class="button">Restablecer Contrasena</a>
-            </p>
-            <div class="warning">
-              <strong>Importante:</strong> Este enlace expirara en 1 hora por seguridad.
-            </div>
-            <p>Si no solicitaste este cambio, puedes ignorar este correo. Tu contrasena actual seguira siendo la misma.</p>
-          </div>
-          <div class="footer">
-            <p>El equipo JAI1</p>
-            <p style="font-size: 10px; color: #999;">Si el boton no funciona, copia y pega este enlace en tu navegador: ${resetLink}</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restablecer Contrasena - JAI1</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f0f2f5;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+        <!-- Card -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#B21B43 0%,#1D345D 100%);border-radius:16px 16px 0 0;padding:40px 48px;text-align:center;">
+              <div style="margin-bottom:28px;">
+                <span style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:6px;text-transform:uppercase;">JAI1</span><span style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:400;color:rgba(255,255,255,0.45);letter-spacing:6px;text-transform:uppercase;margin-left:4px;">TAXES</span>
+              </div>
+              <div style="width:40px;height:1px;background:rgba(255,255,255,0.2);margin:0 auto 24px;"></div>
+              <h1 style="margin:0;font-size:23px;font-weight:700;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">Restablecer Contrasena</h1>
+              <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.6);font-family:Arial,sans-serif;">Solicitud de cambio de acceso</p>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="background:#ffffff;padding:40px 48px;">
+              <p style="margin:0 0 8px;font-size:16px;color:#1D345D;font-weight:600;">Hola, <span style="color:#B21B43;">${firstName}</span></p>
+              <p style="margin:0 0 24px;font-size:15px;color:#4a5568;line-height:1.6;">Recibimos una solicitud para restablecer la contrasena de tu cuenta. Si fuiste tu, haz clic en el boton a continuacion para crear una nueva contrasena.</p>
+
+              <!-- CTA Button -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 28px;">
+                <tr>
+                  <td style="border-radius:50px;background:linear-gradient(135deg,#B21B43 0%,#1D345D 100%);">
+                    <a href="${resetLink}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:50px;letter-spacing:0.3px;">Restablecer Contrasena</a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Notice box -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="background:#fdf2f5;border-left:3px solid #B21B43;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:24px;">
+                    <p style="margin:0;font-size:13px;color:#7a2035;line-height:1.5;"><strong style="color:#B21B43;">&#9201; Expira en 1 hora.</strong> Por seguridad, este enlace dejara de ser valido pasado ese tiempo.</p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:24px 0 0;font-size:13px;color:#718096;line-height:1.6;">Si no solicitaste este cambio, puedes ignorar este correo sin problema. Tu contrasena actual permanecera sin cambios.</p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8f9fb;border-radius:0 0 16px 16px;padding:24px 48px;border-top:1px solid #e8ecf0;">
+              <p style="margin:0 0 8px;font-size:12px;color:#a0aec0;text-align:center;">Si el boton no funciona, copia y pega este enlace en tu navegador:</p>
+              <p style="margin:0 0 16px;font-size:11px;color:#718096;text-align:center;word-break:break-all;">${resetLink}</p>
+              <hr style="border:none;border-top:1px solid #e8ecf0;margin:16px 0;">
+              <p style="margin:0;font-size:12px;color:#a0aec0;text-align:center;">© 2025 JAI1 Taxes · Todos los derechos reservados</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
     return this.send({
       to,
@@ -141,45 +168,72 @@ export class EmailService {
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
     const verificationLink = `${frontendUrl}/verify-email?token=${verificationToken}`;
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #B21B43; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background-color: #f9f9f9; }
-          .button { display: inline-block; background-color: #1D345D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }
-          .warning { background-color: #fff3cd; border: 1px solid #ffc107; padding: 10px; margin: 15px 0; border-radius: 4px; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Verifica tu Email</h1>
-          </div>
-          <div class="content">
-            <p>Hola <strong>${firstName}</strong>,</p>
-            <p>Gracias por registrarte en JAI1. Para completar tu registro y activar tu cuenta, por favor verifica tu direccion de email.</p>
-            <p>Haz clic en el siguiente boton para verificar tu cuenta:</p>
-            <p style="text-align: center;">
-              <a href="${verificationLink}" class="button">Verificar Email</a>
-            </p>
-            <div class="warning">
-              <strong>Importante:</strong> Este enlace expirara en 24 horas por seguridad.
-            </div>
-            <p>Si no creaste una cuenta en JAI1, puedes ignorar este correo.</p>
-          </div>
-          <div class="footer">
-            <p>El equipo JAI1</p>
-            <p style="font-size: 10px; color: #999;">Si el boton no funciona, copia y pega este enlace en tu navegador: ${verificationLink}</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verifica tu Email - JAI1</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f0f2f5;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+        <!-- Card -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#B21B43 0%,#1D345D 100%);border-radius:16px 16px 0 0;padding:40px 48px;text-align:center;">
+              <div style="margin-bottom:28px;">
+                <span style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:6px;text-transform:uppercase;">JAI1</span><span style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:400;color:rgba(255,255,255,0.45);letter-spacing:6px;text-transform:uppercase;margin-left:4px;">TAXES</span>
+              </div>
+              <div style="width:40px;height:1px;background:rgba(255,255,255,0.2);margin:0 auto 24px;"></div>
+              <h1 style="margin:0;font-size:23px;font-weight:700;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">Verifica tu Email</h1>
+              <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.6);font-family:Arial,sans-serif;">Un paso mas para activar tu cuenta</p>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="background:#ffffff;padding:40px 48px;">
+              <p style="margin:0 0 8px;font-size:16px;color:#1D345D;font-weight:600;">Bienvenido/a, <span style="color:#B21B43;">${firstName}</span></p>
+              <p style="margin:0 0 24px;font-size:15px;color:#4a5568;line-height:1.6;">Gracias por registrarte en JAI1. Para completar tu registro y comenzar a usar el portal, necesitamos verificar tu direccion de email.</p>
+
+              <!-- CTA Button -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 28px;">
+                <tr>
+                  <td style="border-radius:50px;background:linear-gradient(135deg,#B21B43 0%,#1D345D 100%);">
+                    <a href="${verificationLink}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:50px;letter-spacing:0.3px;">Verificar mi Email</a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Notice box -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="background:#fdf2f5;border-left:3px solid #B21B43;border-radius:0 8px 8px 0;padding:14px 18px;">
+                    <p style="margin:0;font-size:13px;color:#7a2035;line-height:1.5;"><strong style="color:#B21B43;">&#9201; Expira en 24 horas.</strong> Este enlace de verificacion es valido por un dia.</p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:24px 0 0;font-size:13px;color:#718096;line-height:1.6;">Si no creaste una cuenta en JAI1, puedes ignorar este correo con total tranquilidad.</p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8f9fb;border-radius:0 0 16px 16px;padding:24px 48px;border-top:1px solid #e8ecf0;">
+              <p style="margin:0 0 8px;font-size:12px;color:#a0aec0;text-align:center;">Si el boton no funciona, copia y pega este enlace en tu navegador:</p>
+              <p style="margin:0 0 16px;font-size:11px;color:#718096;text-align:center;word-break:break-all;">${verificationLink}</p>
+              <hr style="border:none;border-top:1px solid #e8ecf0;margin:16px 0;">
+              <p style="margin:0;font-size:12px;color:#a0aec0;text-align:center;">© 2025 JAI1 Taxes · Todos los derechos reservados</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
     return this.send({
       to,
@@ -199,39 +253,68 @@ export class EmailService {
   ): Promise<boolean> {
     const portalUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #B21B43; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background-color: #f9f9f9; }
-          .message-box { background-color: white; border-left: 4px solid #1D345D; padding: 15px; margin: 15px 0; }
-          .button { display: inline-block; background-color: #1D345D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>${title}</h1>
-          </div>
-          <div class="content">
-            <p>Hola <strong>${firstName}</strong>,</p>
-            <div class="message-box">
-              <p>${message}</p>
-            </div>
-            <a href="${portalUrl}" class="button">Ir al Portal</a>
-          </div>
-          <div class="footer">
-            <p>El equipo JAI1</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title} - JAI1</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f0f2f5;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+        <!-- Card -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#B21B43 0%,#1D345D 100%);border-radius:16px 16px 0 0;padding:40px 48px;text-align:center;">
+              <div style="margin-bottom:28px;">
+                <span style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:6px;text-transform:uppercase;">JAI1</span><span style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:400;color:rgba(255,255,255,0.45);letter-spacing:6px;text-transform:uppercase;margin-left:4px;">TAXES</span>
+              </div>
+              <div style="width:40px;height:1px;background:rgba(255,255,255,0.2);margin:0 auto 24px;"></div>
+              <h1 style="margin:0;font-size:23px;font-weight:700;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">${title}</h1>
+              <p style="margin:8px 0 0;font-size:13px;color:rgba(255,255,255,0.6);font-family:Arial,sans-serif;">Notificacion de tu cuenta</p>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="background:#ffffff;padding:40px 48px;">
+              <p style="margin:0 0 20px;font-size:16px;color:#1D345D;font-weight:600;">Hola, <span style="color:#B21B43;">${firstName}</span></p>
+
+              <!-- Message box -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:28px;">
+                <tr>
+                  <td style="background:#f8f9fb;border-radius:12px;border:1px solid #e8ecf0;padding:20px 24px;">
+                    <p style="margin:0;font-size:15px;color:#2d3748;line-height:1.7;">${message}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA Button -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto;">
+                <tr>
+                  <td style="border-radius:50px;background:linear-gradient(135deg,#B21B43 0%,#1D345D 100%);">
+                    <a href="${portalUrl}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:50px;letter-spacing:0.3px;">Ir al Portal</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8f9fb;border-radius:0 0 16px 16px;padding:24px 48px;border-top:1px solid #e8ecf0;">
+              <p style="margin:0 0 6px;font-size:13px;color:#718096;text-align:center;font-weight:500;">El equipo de JAI1 Taxes</p>
+              <hr style="border:none;border-top:1px solid #e8ecf0;margin:16px 0;">
+              <p style="margin:0;font-size:12px;color:#a0aec0;text-align:center;">© 2025 JAI1 Taxes · Todos los derechos reservados</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
     return this.send({
       to,
