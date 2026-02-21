@@ -159,8 +159,8 @@ export class ClientQueryService {
           some: {
             ...existingTaxCaseFilters,
             OR: [
-              { federalStatusNew: 'issues' },
-              { stateStatusNew: 'issues' },
+              { federalStatusNew: 'problemas' },
+              { stateStatusNew: 'problemas' },
               { hasProblem: true },
             ],
           },

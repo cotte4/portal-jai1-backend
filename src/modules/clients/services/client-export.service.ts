@@ -111,7 +111,7 @@ export class ClientExportService {
         };
       } else if (options.status === 'group_needs_attention') {
         where.taxCases = {
-          some: { ...existingTaxCaseFilters, OR: [{ federalStatusNew: 'issues' }, { stateStatusNew: 'issues' }, { hasProblem: true }] },
+          some: { ...existingTaxCaseFilters, OR: [{ federalStatusNew: 'problemas' }, { stateStatusNew: 'problemas' }, { hasProblem: true }] },
         };
       }
     }
