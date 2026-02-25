@@ -5,6 +5,7 @@ WORKDIR /app
 # Copy package files first — Docker layer cache means npm ci only re-runs when
 # package.json or package-lock.json changes, not on every source change.
 COPY package*.json ./
+COPY prisma/ ./prisma/
 RUN npm ci
 
 # Install Firefox binary + all OS-level system dependencies Playwright needs.
