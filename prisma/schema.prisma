@@ -144,6 +144,7 @@ model TaxCase {
   stateEstimatedDate    DateTime?    @map("state_estimated_date") @db.Timestamptz
   federalActualRefund   Decimal?     @map("federal_actual_refund") @db.Decimal(10, 2)
   stateActualRefund     Decimal?     @map("state_actual_refund") @db.Decimal(10, 2)
+  filingStatus          FilingStatus @default(single) @map("filing_status")
   federalDepositDate    DateTime?    @map("federal_deposit_date") @db.Timestamptz
   stateDepositDate      DateTime?    @map("state_deposit_date") @db.Timestamptz
 
@@ -823,6 +824,13 @@ model IrsCheck {
   @@index([createdAt])
   @@index([checkResult])
   @@map("irs_checks")
+}
+
+enum FilingStatus {
+  single
+  married_joint
+  married_separate
+  head_of_household
 }
 
 enum IrsCheckTrigger {

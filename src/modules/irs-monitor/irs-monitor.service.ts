@@ -53,6 +53,7 @@ export class IrsMonitorService {
         federalActualRefund: tc.federalActualRefund,
         irsRefundAmount,           // the amount that will actually be submitted to IRS WMR
         paymentMethod: tc.paymentMethod,
+        filingStatus: tc.filingStatus,
         federalStatusNew: tc.federalStatusNew,
         federalStatusNewChangedAt: tc.federalStatusNewChangedAt,
         clientName: `${tc.clientProfile.user.firstName} ${tc.clientProfile.user.lastName}`,
@@ -159,14 +160,27 @@ export class IrsMonitorService {
       return { success: false, error: 'Client has no federal refund amount on file', check };
     }
 
-    // Run scraper
+    // Run scraper (with one automatic retry on error/timeout)
     this.logger.log(`IRS check for ${user.firstName} ${user.lastName} (taxCase: ${taxCaseId})`);
-    const scrapeResult = await this.scraper.checkRefundStatus({
+    let scrapeResult = await this.scraper.checkRefundStatus({
       ssn,
       refundAmount,
       taxYear: taxCase.taxYear,
       taxCaseId,
+      filingStatus: taxCase.filingStatus,
     });
+
+    if (scrapeResult.result === 'error' || scrapeResult.result === 'timeout') {
+      this.logger.warn(`Check ${scrapeResult.result} for ${taxCaseId}, retrying in 5s...`);
+      await new Promise(r => setTimeout(r, 5000));
+      scrapeResult = await this.scraper.checkRefundStatus({
+        ssn,
+        refundAmount,
+        taxYear: taxCase.taxYear,
+        taxCaseId,
+      });
+      this.logger.log(`Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`);
+    }
 
     // Map result to JAI1 status
     const mappedStatus = this.mapper.map(scrapeResult.rawStatus, taxCase.paymentMethod);
@@ -281,6 +295,54 @@ export class IrsMonitorService {
       where: { taxCaseId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async exportCsv(): Promise<string> {
+    const checks = await this.prisma.irsCheck.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        taxCase: {
+          include: {
+            clientProfile: {
+              include: { user: { select: { firstName: true, lastName: true, email: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    const escape = (v: unknown) => {
+      const s = v == null ? '' : String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    };
+
+    const headers = [
+      'Date', 'Client Name', 'Email', 'Tax Year', 'Filing Status',
+      'IRS Raw Status', 'Mapped Status', 'Status Changed', 'Previous Status',
+      'Check Result', 'Triggered By', 'Error Message',
+    ];
+
+    const rows = checks.map((c: any) => {
+      const u = c.taxCase.clientProfile.user;
+      return [
+        new Date(c.createdAt).toISOString(),
+        `${u.firstName} ${u.lastName}`,
+        u.email,
+        c.taxCase.taxYear,
+        c.taxCase.filingStatus,
+        c.irsRawStatus,
+        c.mappedStatus ?? '',
+        c.statusChanged ? 'YES' : 'no',
+        c.previousStatus ?? '',
+        c.checkResult,
+        c.triggeredBy,
+        c.errorMessage ?? '',
+      ].map(escape).join(',');
+    });
+
+    return [headers.join(','), ...rows].join('\n');
   }
 
   async getScreenshotUrl(checkId: string): Promise<{ url: string }> {

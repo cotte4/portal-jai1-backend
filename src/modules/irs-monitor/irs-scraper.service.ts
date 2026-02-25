@@ -16,21 +16,33 @@ export class IrsScraperService {
   private readonly isHeadless: boolean;
 
   private readonly SCREENSHOT_BUCKET = 'irs-screenshots';
+  private readonly proxyUrl: string | undefined;
 
   constructor(
     private config: ConfigService,
     private supabase: SupabaseService,
   ) {
     this.isHeadless = this.config.get<string>('PLAYWRIGHT_HEADLESS', 'false') === 'true';
+    this.proxyUrl = this.config.get<string>('PLAYWRIGHT_PROXY_URL') || undefined;
+    if (this.proxyUrl) this.logger.log(`Proxy configured: ${this.proxyUrl.replace(/:\/\/.*@/, '://***@')}`);
   }
+
+  // Maps JAI1 FilingStatus enum values to IRS WMR label[for] selectors
+  private readonly FILING_STATUS_SELECTOR: Record<string, string> = {
+    single:            'label[for="Single"]',
+    married_joint:     'label[for="MFJ"]',
+    married_separate:  'label[for="MFS"]',
+    head_of_household: 'label[for="HOH"]',
+  };
 
   async checkRefundStatus(params: {
     ssn: string;
     refundAmount: number;
     taxYear: number;
     taxCaseId: string;
+    filingStatus: string;
   }): Promise<IrsScrapeResult> {
-    const { ssn, refundAmount, taxYear, taxCaseId } = params;
+    const { ssn, refundAmount, taxYear, taxCaseId, filingStatus } = params;
 
     // Lazy import so NestJS starts even if playwright isn't installed yet
     let playwright: typeof import('playwright');
@@ -76,12 +88,12 @@ export class IrsScraperService {
       const context = await browser.newContext({
         userAgent:
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
-        // Realistic desktop resolution
         viewport: { width: 1366, height: 768 },
-        // US locale and timezone — IRS website expects en-US
         locale: 'en-US',
         timezoneId: 'America/New_York',
         colorScheme: 'light',
+        // Optional residential proxy — set PLAYWRIGHT_PROXY_URL env var if Railway IP gets flagged
+        ...(this.proxyUrl ? { proxy: { server: this.proxyUrl } } : {}),
       });
 
       // Hide the webdriver flag — the #1 signal bot detectors check
@@ -109,10 +121,10 @@ export class IrsScraperService {
       await humanClick(page, yearLabel);
       await page.waitForTimeout(jitter(700));
 
-      // Filing Status — Single (most J-1 students are Single)
-      // TODO: add filingStatus field to TaxCase or ClientProfile to make this dynamic
-      await page.waitForSelector('label[for="Single"]', { timeout: 10000 });
-      await humanClick(page, 'label[for="Single"]');
+      // Filing Status — use value from TaxCase.filingStatus (default: single)
+      const filingSelector = this.FILING_STATUS_SELECTOR[filingStatus] ?? 'label[for="Single"]';
+      await page.waitForSelector(filingSelector, { timeout: 10000 });
+      await humanClick(page, filingSelector);
       await page.waitForTimeout(jitter(700));
 
       // Refund Amount

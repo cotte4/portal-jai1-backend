@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Param, Query, UseGuards, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, UseGuards, Logger, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { CurrentUser, Roles } from '../../common/decorators';
@@ -60,6 +61,15 @@ export class IrsMonitorController {
   @ApiOperation({ summary: 'Get IRS check history for a specific client' })
   async getChecksForClient(@Param('taxCaseId') taxCaseId: string) {
     return this.irsMonitorService.getChecksForClient(taxCaseId);
+  }
+
+  @Get('export')
+  @ApiOperation({ summary: 'Export all IRS checks as CSV' })
+  async exportCsv(@Res() res: Response) {
+    const csv = await this.irsMonitorService.exportCsv();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="irs-checks-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
   }
 
   @Get('screenshot/:checkId')
