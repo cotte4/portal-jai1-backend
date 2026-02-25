@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Query, UseGuards, Logger, Res } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, UseGuards, Logger, Res, ParseUUIDPipe } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
@@ -40,7 +40,7 @@ export class IrsMonitorController {
   @Post('check/:taxCaseId')
   @ApiOperation({ summary: 'Run IRS WMR check for a specific client' })
   async runCheck(
-    @Param('taxCaseId') taxCaseId: string,
+    @Param('taxCaseId', new ParseUUIDPipe()) taxCaseId: string,
     @CurrentUser() user: any,
   ) {
     return this.irsMonitorService.runCheck(taxCaseId, user.id);
@@ -59,7 +59,7 @@ export class IrsMonitorController {
 
   @Get('checks/:taxCaseId')
   @ApiOperation({ summary: 'Get IRS check history for a specific client' })
-  async getChecksForClient(@Param('taxCaseId') taxCaseId: string) {
+  async getChecksForClient(@Param('taxCaseId', new ParseUUIDPipe()) taxCaseId: string) {
     return this.irsMonitorService.getChecksForClient(taxCaseId);
   }
 
@@ -73,8 +73,8 @@ export class IrsMonitorController {
   }
 
   @Get('screenshot/:checkId')
-  @ApiOperation({ summary: 'Get a 1-hour signed URL for a check screenshot' })
-  async getScreenshot(@Param('checkId') checkId: string) {
+  @ApiOperation({ summary: 'Get a 24-hour signed URL for a check screenshot' })
+  async getScreenshot(@Param('checkId', new ParseUUIDPipe()) checkId: string) {
     return this.irsMonitorService.getScreenshotUrl(checkId);
   }
 }

@@ -13,7 +13,9 @@ export class IrsStatusMapperService {
     // Return Received — IRS received the return but hasn't processed it yet
     if (
       lower.includes('return received') ||
-      lower.includes('we received your tax return')
+      lower.includes('we received your tax return') ||
+      lower.includes('still being processed') ||
+      lower.includes('refund date will be provided when available')
     ) {
       return FederalStatusNew.taxes_en_proceso;
     }
@@ -40,19 +42,23 @@ export class IrsStatusMapperService {
         : FederalStatusNew.deposito_directo;
     }
 
-    // Identity verification or manual review
+    // Action required / identity verification — distinguish from hard errors
     if (
+      lower.includes('take action') ||
+      lower.includes('action required') ||
       lower.includes('identity') ||
-      lower.includes('verification') ||
       lower.includes('we need more information') ||
-      lower.includes('under review')
+      lower.includes('under review') ||
+      lower.includes('being reviewed') ||
+      lower.includes('verification')
     ) {
       return FederalStatusNew.en_verificacion;
     }
 
-    // Problems / action required
+    // Problems — IRS cannot process or no info available
     if (
-      lower.includes('more information') ||
+      lower.includes('cannot provide any information') ||
+      lower.includes('refund has been reduced') ||
       lower.includes('contact us') ||
       lower.includes('cannot process') ||
       lower.includes('we could not process')

@@ -20,4 +20,6 @@ RUN npx prisma generate && npm run build
 ENV PLAYWRIGHT_HEADLESS=true
 
 EXPOSE 3000
-CMD ["node", "dist/main"]
+# Run pending migrations first, then start the app.
+# prisma migrate deploy is idempotent — safe to run on every container start.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]

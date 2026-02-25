@@ -12,6 +12,7 @@ export class IrsMonitorService {
   private readonly logger = new Logger(IrsMonitorService.name);
 
   private readonly SCREENSHOT_BUCKET = 'irs-screenshots';
+  private isRunningCheckAll = false;
 
   constructor(
     private prisma: PrismaService,
@@ -69,30 +70,41 @@ export class IrsMonitorService {
     trigger: IrsCheckTrigger = IrsCheckTrigger.manual,
     adminId: string | null = null,
   ): Promise<{ total: number; succeeded: number; failed: number }> {
-    const taxCases = await this.prisma.taxCase.findMany({
-      where: { caseStatus: 'taxes_filed' },
-      select: { id: true },
-    });
-
-    const total = taxCases.length;
-    let succeeded = 0;
-    let failed = 0;
-
-    this.logger.log(`runAllChecks started: ${total} clients (trigger: ${trigger})`);
-
-    for (const { id } of taxCases) {
-      try {
-        const result = await this.runCheck(id, adminId, trigger);
-        if (result.success || result.statusChanged) succeeded++;
-        else failed++;
-      } catch (err) {
-        this.logger.warn(`runAllChecks: check failed for ${id}: ${(err as Error).message}`);
-        failed++;
-      }
+    if (this.isRunningCheckAll) {
+      this.logger.warn('runAllChecks already in progress — skipping duplicate run');
+      return { total: 0, succeeded: 0, failed: 0 };
     }
 
-    this.logger.log(`runAllChecks complete: ${succeeded}/${total} succeeded, ${failed} failed`);
-    return { total, succeeded, failed };
+    this.isRunningCheckAll = true;
+
+    try {
+      const taxCases = await this.prisma.taxCase.findMany({
+        where: { caseStatus: 'taxes_filed' },
+        select: { id: true },
+      });
+
+      const total = taxCases.length;
+      let succeeded = 0;
+      let failed = 0;
+
+      this.logger.log(`runAllChecks started: ${total} clients (trigger: ${trigger})`);
+
+      for (const { id } of taxCases) {
+        try {
+          const result = await this.runCheck(id, adminId, trigger);
+          if (result.success || result.statusChanged) succeeded++;
+          else failed++;
+        } catch (err) {
+          this.logger.warn(`runAllChecks: check failed for ${id}: ${(err as Error).message}`);
+          failed++;
+        }
+      }
+
+      this.logger.log(`runAllChecks complete: ${succeeded}/${total} succeeded, ${failed} failed`);
+      return { total, succeeded, failed };
+    } finally {
+      this.isRunningCheckAll = false;
+    }
   }
 
   async getStats(): Promise<{ changesLast24h: number }> {
@@ -178,6 +190,7 @@ export class IrsMonitorService {
         refundAmount,
         taxYear: taxCase.taxYear,
         taxCaseId,
+        filingStatus: taxCase.filingStatus,
       });
       this.logger.log(`Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`);
     }
@@ -198,7 +211,7 @@ export class IrsMonitorService {
         previousStatus,
         statusChanged,
         checkResult: scrapeResult.result,
-        triggeredBy: IrsCheckTrigger.manual,
+        triggeredBy: trigger,
         triggeredByUserId: adminId,
         errorMessage: scrapeResult.errorMessage ?? null,
       },
@@ -351,7 +364,7 @@ export class IrsMonitorService {
       select: { screenshotPath: true },
     });
     if (!check?.screenshotPath) throw new NotFoundException('No screenshot for this check');
-    const url = await this.supabase.getSignedUrl(this.SCREENSHOT_BUCKET, check.screenshotPath, 3600);
+    const url = await this.supabase.getSignedUrl(this.SCREENSHOT_BUCKET, check.screenshotPath, 86400);
     return { url };
   }
 }

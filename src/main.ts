@@ -100,6 +100,10 @@ async function bootstrap() {
     console.log('📄 OpenAPI spec written to openapi.json');
   }
 
+  // Graceful shutdown — Railway sends SIGTERM on redeploy; without this,
+  // active Playwright browsers and DB connections won't close cleanly.
+  app.enableShutdownHooks();
+
   const port = configService.get<number>('PORT') || 3000;
   await app.listen(port, '0.0.0.0');
 
@@ -111,5 +115,17 @@ async function bootstrap() {
   console.log(`🚀 Portal JAI1 Backend running on port ${port}`);
   console.log(`📚 Swagger docs: http://localhost:${port}/api`);
   console.log(`⚡ Compression enabled, keep-alive: 65s`);
+
+  process.on('SIGTERM', async () => {
+    console.log('SIGTERM received — shutting down gracefully');
+    await app.close();
+    process.exit(0);
+  });
+
+  process.on('SIGINT', async () => {
+    console.log('SIGINT received — shutting down gracefully');
+    await app.close();
+    process.exit(0);
+  });
 }
 bootstrap();

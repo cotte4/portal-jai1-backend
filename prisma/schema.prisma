@@ -823,6 +823,7 @@ model IrsCheck {
   @@index([taxCaseId])
   @@index([createdAt])
   @@index([checkResult])
+  @@index([statusChanged, createdAt])
   @@map("irs_checks")
 }
 
