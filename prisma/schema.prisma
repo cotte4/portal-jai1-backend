@@ -231,6 +231,7 @@ model TaxCase {
   referrals          Referral[]
   alarmThreshold     AlarmThreshold?
   alarmHistory       AlarmHistory[]
+  irsChecks          IrsCheck[]
   clientProfile      ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
 
   @@unique([clientProfileId, taxYear])
@@ -788,4 +789,50 @@ model Jai1gentReferral {
   @@index([status])
   @@index([referralCode])
   @@map("jai1gent_referrals")
+}
+
+// ============= IRS MONITOR =============
+
+model IrsCheck {
+  id                String           @id @default(uuid()) @db.Uuid
+  taxCaseId         String           @map("tax_case_id") @db.Uuid
+
+  // What the IRS page returned
+  irsRawStatus      String           @map("irs_raw_status")
+  irsDetails        String?          @map("irs_details")
+  screenshotPath    String?          @map("screenshot_path")
+
+  // What we did with the result
+  mappedStatus      FederalStatusNew? @map("mapped_status")
+  statusChanged     Boolean           @default(false) @map("status_changed")
+  previousStatus    FederalStatusNew? @map("previous_status")
+
+  // How it was triggered
+  triggeredBy       IrsCheckTrigger  @map("triggered_by")
+  triggeredByUserId String?          @map("triggered_by_user_id") @db.Uuid
+
+  // Outcome
+  checkResult       IrsCheckResult   @map("check_result")
+  errorMessage      String?          @map("error_message")
+
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  taxCase           TaxCase          @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+
+  @@index([taxCaseId])
+  @@index([createdAt])
+  @@index([checkResult])
+  @@map("irs_checks")
+}
+
+enum IrsCheckTrigger {
+  manual
+  schedule
+}
+
+enum IrsCheckResult {
+  success
+  not_found
+  error
+  timeout
 }
