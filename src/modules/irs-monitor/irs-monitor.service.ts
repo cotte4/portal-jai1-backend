@@ -3,6 +3,7 @@ import { FederalStatusNew, IrsCheckTrigger, IrsCheckResult } from '@prisma/clien
 import { PrismaService } from '../../config/prisma.service';
 import { EncryptionService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SupabaseService } from '../../config/supabase.service';
 import { IrsScraperService } from './irs-scraper.service';
 import { IrsStatusMapperService } from './irs-status-mapper.service';
 
@@ -10,12 +11,15 @@ import { IrsStatusMapperService } from './irs-status-mapper.service';
 export class IrsMonitorService {
   private readonly logger = new Logger(IrsMonitorService.name);
 
+  private readonly SCREENSHOT_BUCKET = 'irs-screenshots';
+
   constructor(
     private prisma: PrismaService,
     private encryption: EncryptionService,
     private scraper: IrsScraperService,
     private mapper: IrsStatusMapperService,
     private notifications: NotificationsService,
+    private supabase: SupabaseService,
   ) {}
 
   async getFiledClients() {
@@ -60,7 +64,45 @@ export class IrsMonitorService {
     });
   }
 
-  async runCheck(taxCaseId: string, adminId: string) {
+  async runAllChecks(
+    trigger: IrsCheckTrigger = IrsCheckTrigger.manual,
+    adminId: string | null = null,
+  ): Promise<{ total: number; succeeded: number; failed: number }> {
+    const taxCases = await this.prisma.taxCase.findMany({
+      where: { caseStatus: 'taxes_filed' },
+      select: { id: true },
+    });
+
+    const total = taxCases.length;
+    let succeeded = 0;
+    let failed = 0;
+
+    this.logger.log(`runAllChecks started: ${total} clients (trigger: ${trigger})`);
+
+    for (const { id } of taxCases) {
+      try {
+        const result = await this.runCheck(id, adminId, trigger);
+        if (result.success || result.statusChanged) succeeded++;
+        else failed++;
+      } catch (err) {
+        this.logger.warn(`runAllChecks: check failed for ${id}: ${(err as Error).message}`);
+        failed++;
+      }
+    }
+
+    this.logger.log(`runAllChecks complete: ${succeeded}/${total} succeeded, ${failed} failed`);
+    return { total, succeeded, failed };
+  }
+
+  async getStats(): Promise<{ changesLast24h: number }> {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const changesLast24h = await this.prisma.irsCheck.count({
+      where: { statusChanged: true, createdAt: { gte: since } },
+    });
+    return { changesLast24h };
+  }
+
+  async runCheck(taxCaseId: string, adminId: string | null = null, trigger: IrsCheckTrigger = IrsCheckTrigger.manual) {
     const taxCase = await this.prisma.taxCase.findUnique({
       where: { id: taxCaseId },
       include: {
@@ -88,8 +130,8 @@ export class IrsMonitorService {
           taxCaseId,
           irsRawStatus: 'No SSN on file',
           checkResult: IrsCheckResult.error,
-          triggeredBy: IrsCheckTrigger.manual,
-          triggeredByUserId: adminId,
+          triggeredBy: trigger,
+          triggeredByUserId: adminId ?? undefined,
           statusChanged: false,
           errorMessage: 'Client has no SSN on file',
         },
@@ -108,8 +150,8 @@ export class IrsMonitorService {
           taxCaseId,
           irsRawStatus: 'No refund amount on file',
           checkResult: IrsCheckResult.error,
-          triggeredBy: IrsCheckTrigger.manual,
-          triggeredByUserId: adminId,
+          triggeredBy: trigger,
+          triggeredByUserId: adminId ?? undefined,
           statusChanged: false,
           errorMessage: 'Client has no federal refund amount on file (set federalActualRefund or estimatedRefund)',
         },
@@ -123,6 +165,7 @@ export class IrsMonitorService {
       ssn,
       refundAmount,
       taxYear: taxCase.taxYear,
+      taxCaseId,
     });
 
     // Map result to JAI1 status
@@ -166,9 +209,9 @@ export class IrsMonitorService {
             taxCaseId,
             previousStatus: previousStatus ?? undefined,
             newStatus: mappedStatus,
-            changedById: adminId,
+            changedById: adminId ?? undefined,
             comment: `IRS Monitor (automático): ${scrapeResult.rawStatus}`,
-            internalComment: `Triggered by admin ${adminId} via IRS Monitor`,
+            internalComment: `Triggered by ${adminId ? `admin ${adminId}` : 'scheduler'} via IRS Monitor`,
           },
         });
       });
@@ -238,5 +281,15 @@ export class IrsMonitorService {
       where: { taxCaseId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getScreenshotUrl(checkId: string): Promise<{ url: string }> {
+    const check = await this.prisma.irsCheck.findUnique({
+      where: { id: checkId },
+      select: { screenshotPath: true },
+    });
+    if (!check?.screenshotPath) throw new NotFoundException('No screenshot for this check');
+    const url = await this.supabase.getSignedUrl(this.SCREENSHOT_BUCKET, check.screenshotPath, 3600);
+    return { url };
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SupabaseService } from '../../config/supabase.service';
 
 export interface IrsScrapeResult {
   rawStatus: string;
@@ -14,7 +15,12 @@ export class IrsScraperService {
   private readonly logger = new Logger(IrsScraperService.name);
   private readonly isHeadless: boolean;
 
-  constructor(private config: ConfigService) {
+  private readonly SCREENSHOT_BUCKET = 'irs-screenshots';
+
+  constructor(
+    private config: ConfigService,
+    private supabase: SupabaseService,
+  ) {
     this.isHeadless = this.config.get<string>('PLAYWRIGHT_HEADLESS', 'false') === 'true';
   }
 
@@ -22,8 +28,9 @@ export class IrsScraperService {
     ssn: string;
     refundAmount: number;
     taxYear: number;
+    taxCaseId: string;
   }): Promise<IrsScrapeResult> {
-    const { ssn, refundAmount, taxYear } = params;
+    const { ssn, refundAmount, taxYear, taxCaseId } = params;
 
     // Lazy import so NestJS starts even if playwright isn't installed yet
     let playwright: typeof import('playwright');
@@ -166,10 +173,27 @@ export class IrsScraperService {
         result = 'not_found';
       }
 
+      // Capture screenshot of the result page and upload to Supabase Storage
+      let screenshotPath: string | null = null;
+      try {
+        const buffer = await page.screenshot({ type: 'png', fullPage: false });
+        const storagePath = `checks/${taxCaseId}/${Date.now()}.png`;
+        await this.supabase.uploadFile(
+          this.SCREENSHOT_BUCKET,
+          storagePath,
+          Buffer.from(buffer),
+          'image/png',
+        );
+        screenshotPath = storagePath;
+        this.logger.log(`Screenshot saved: ${storagePath}`);
+      } catch (err) {
+        this.logger.warn(`Screenshot upload failed (non-fatal): ${(err as Error).message}`);
+      }
+
       return {
         rawStatus: rawStatus.trim(),
         details: details.trim(),
-        screenshotPath: null,
+        screenshotPath,
         result,
       };
     } catch (error) {

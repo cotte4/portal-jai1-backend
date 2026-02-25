@@ -1,8 +1,9 @@
-import { Controller, Post, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, UseGuards, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { CurrentUser, Roles } from '../../common/decorators';
 import { IrsMonitorService } from './irs-monitor.service';
+import { IrsCheckTrigger } from '@prisma/client';
 
 @ApiTags('irs-monitor')
 @ApiBearerAuth()
@@ -10,12 +11,29 @@ import { IrsMonitorService } from './irs-monitor.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class IrsMonitorController {
+  private readonly logger = new Logger(IrsMonitorController.name);
   constructor(private readonly irsMonitorService: IrsMonitorService) {}
+
+  @Get('stats')
+  @ApiOperation({ summary: 'IRS monitor stats (status changes in last 24h)' })
+  async getStats() {
+    return this.irsMonitorService.getStats();
+  }
 
   @Get('clients')
   @ApiOperation({ summary: 'Get all clients with taxes_filed status' })
   async getFiledClients() {
     return this.irsMonitorService.getFiledClients();
+  }
+
+  @Post('check-all')
+  @ApiOperation({ summary: 'Run IRS check for all taxes_filed clients (fire & forget)' })
+  async runCheckAll(@CurrentUser() user: any) {
+    // Fire and forget — each check takes ~20s so we cannot block the HTTP response
+    void this.irsMonitorService
+      .runAllChecks(IrsCheckTrigger.manual, user.id)
+      .catch((err: Error) => this.logger.error(`check-all error: ${err.message}`));
+    return { started: true };
   }
 
   @Post('check/:taxCaseId')
@@ -42,5 +60,11 @@ export class IrsMonitorController {
   @ApiOperation({ summary: 'Get IRS check history for a specific client' })
   async getChecksForClient(@Param('taxCaseId') taxCaseId: string) {
     return this.irsMonitorService.getChecksForClient(taxCaseId);
+  }
+
+  @Get('screenshot/:checkId')
+  @ApiOperation({ summary: 'Get a 1-hour signed URL for a check screenshot' })
+  async getScreenshot(@Param('checkId') checkId: string) {
+    return this.irsMonitorService.getScreenshotUrl(checkId);
   }
 }
