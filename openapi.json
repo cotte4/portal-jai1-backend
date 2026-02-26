@@ -1305,6 +1305,133 @@
         ]
       }
     },
+    "/v1/jai1gents/admin/{userId}/referrals": {
+      "get": {
+        "operationId": "Jai1gentsController_getJai1gentReferrals",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
+    "/v1/jai1gents/admin/{userId}/toggle-active": {
+      "patch": {
+        "operationId": "Jai1gentsController_toggleActive",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
+    "/v1/jai1gents/admin/create": {
+      "post": {
+        "operationId": "Jai1gentsController_adminCreate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateJai1gentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
+    "/v1/jai1gents/admin/{userId}/referral-code": {
+      "patch": {
+        "operationId": "Jai1gentsController_updateReferralCode",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReferralCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jai1gents"
+        ]
+      }
+    },
     "/v1/profile": {
       "get": {
         "operationId": "ClientsController_getProfile",
@@ -2291,6 +2418,39 @@
       "post": {
         "operationId": "DocumentsController_upload",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/v1/documents/upload-for-client/{clientProfileId}": {
+      "post": {
+        "operationId": "DocumentsController_uploadForClient",
+        "parameters": [
+          {
+            "name": "clientProfileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3323,6 +3483,210 @@
           "Consent Form"
         ]
       }
+    },
+    "/v1/irs-monitor/stats": {
+      "get": {
+        "operationId": "IrsMonitorController_getStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "IRS monitor stats (status changes in last 24h)",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
+    },
+    "/v1/irs-monitor/clients": {
+      "get": {
+        "operationId": "IrsMonitorController_getFiledClients",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all clients with taxes_filed status",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
+    },
+    "/v1/irs-monitor/check-all": {
+      "post": {
+        "operationId": "IrsMonitorController_runCheckAll",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Run IRS check for all taxes_filed clients (fire & forget)",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
+    },
+    "/v1/irs-monitor/check/{taxCaseId}": {
+      "post": {
+        "operationId": "IrsMonitorController_runCheck",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Run IRS WMR check for a specific client",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
+    },
+    "/v1/irs-monitor/checks": {
+      "get": {
+        "operationId": "IrsMonitorController_getChecks",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all recent IRS checks (paginated)",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
+    },
+    "/v1/irs-monitor/checks/{taxCaseId}": {
+      "get": {
+        "operationId": "IrsMonitorController_getChecksForClient",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get IRS check history for a specific client",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
+    },
+    "/v1/irs-monitor/export": {
+      "get": {
+        "operationId": "IrsMonitorController_exportCsv",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Export all IRS checks as CSV",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
+    },
+    "/v1/irs-monitor/screenshot/{checkId}": {
+      "get": {
+        "operationId": "IrsMonitorController_getScreenshot",
+        "parameters": [
+          {
+            "name": "checkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a 24-hour signed URL for a check screenshot",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
     }
   },
   "info": {
@@ -3796,6 +4160,14 @@
         "type": "object",
         "properties": {}
       },
+      "AdminCreateJai1gentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateReferralCodeDto": {
+        "type": "object",
+        "properties": {}
+      },
       "AddressDto": {
         "type": "object",
         "properties": {
@@ -4122,6 +4494,10 @@
               "state"
             ],
             "description": "Type of commission to mark as paid"
+          },
+          "reviewNote": {
+            "type": "string",
+            "description": "Optional admin review note about the payment verification"
           }
         },
         "required": [
@@ -4181,6 +4557,8 @@
               "w2",
               "payment_proof",
               "consent_form",
+              "commission_proof_federal",
+              "commission_proof_state",
               "other"
             ],
             "example": "w2"
