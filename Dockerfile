@@ -20,4 +20,4 @@ RUN npx prisma generate && npm run build
 ENV PLAYWRIGHT_HEADLESS=true
 
 EXPOSE 3000
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]
