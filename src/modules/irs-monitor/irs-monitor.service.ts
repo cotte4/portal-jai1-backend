@@ -173,19 +173,10 @@ export class IrsMonitorService {
       return { success: false, error: 'No federal actual refund amount on file', check };
     }
 
-    // Run scraper (with one automatic retry on error/timeout)
+    // Run scraper — always save a DB record so the frontend poll never times out
     this.logger.log(`IRS check for ${user.firstName} ${user.lastName} (taxCase: ${taxCaseId})`);
-    let scrapeResult = await this.scraper.checkRefundStatus({
-      ssn,
-      refundAmount,
-      taxYear: taxCase.taxYear,
-      taxCaseId,
-      filingStatus: taxCase.filingStatus,
-    });
-
-    if (scrapeResult.result === 'error' || scrapeResult.result === 'timeout') {
-      this.logger.warn(`Check ${scrapeResult.result} for ${taxCaseId}, retrying in 5s...`);
-      await new Promise(r => setTimeout(r, 5000));
+    let scrapeResult: Awaited<ReturnType<typeof this.scraper.checkRefundStatus>>;
+    try {
       scrapeResult = await this.scraper.checkRefundStatus({
         ssn,
         refundAmount,
@@ -193,7 +184,36 @@ export class IrsMonitorService {
         taxCaseId,
         filingStatus: taxCase.filingStatus,
       });
-      this.logger.log(`Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`);
+
+      if (scrapeResult.result === 'error' || scrapeResult.result === 'timeout') {
+        this.logger.warn(`Check ${scrapeResult.result} for ${taxCaseId}, retrying in 5s...`);
+        await new Promise(r => setTimeout(r, 5000));
+        scrapeResult = await this.scraper.checkRefundStatus({
+          ssn,
+          refundAmount,
+          taxYear: taxCase.taxYear,
+          taxCaseId,
+          filingStatus: taxCase.filingStatus,
+        });
+        this.logger.log(`Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`);
+      }
+    } catch (err) {
+      // Unexpected crash (Playwright install missing, OOM, etc.) — save error record
+      // immediately so the frontend poll finds it and stops waiting
+      const message = (err as Error).message ?? 'Unexpected scraper error';
+      this.logger.error(`runCheck unexpected error [${taxCaseId}]: ${message}`);
+      const check = await this.prisma.irsCheck.create({
+        data: {
+          taxCaseId,
+          irsRawStatus: 'Error',
+          checkResult: IrsCheckResult.error,
+          triggeredBy: trigger,
+          triggeredByUserId: adminId,
+          statusChanged: false,
+          errorMessage: message,
+        },
+      });
+      return { success: false, error: message, check };
     }
 
     // Map result to JAI1 status
