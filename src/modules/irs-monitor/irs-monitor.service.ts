@@ -177,24 +177,21 @@ export class IrsMonitorService {
     this.logger.log(`IRS check for ${user.firstName} ${user.lastName} (taxCase: ${taxCaseId})`);
     let scrapeResult: Awaited<ReturnType<typeof this.scraper.checkRefundStatus>>;
     try {
-      scrapeResult = await this.scraper.checkRefundStatus({
+      const scraperParams = {
         ssn,
         refundAmount,
         taxYear: taxCase.taxYear,
         taxCaseId,
         filingStatus: taxCase.filingStatus,
-      });
+        clientName: `${user.firstName} ${user.lastName}`,
+      };
+
+      scrapeResult = await this.scraper.checkRefundStatus(scraperParams);
 
       if (scrapeResult.result === 'error' || scrapeResult.result === 'timeout') {
         this.logger.warn(`Check ${scrapeResult.result} for ${taxCaseId}, retrying in 5s...`);
         await new Promise(r => setTimeout(r, 5000));
-        scrapeResult = await this.scraper.checkRefundStatus({
-          ssn,
-          refundAmount,
-          taxYear: taxCase.taxYear,
-          taxCaseId,
-          filingStatus: taxCase.filingStatus,
-        });
+        scrapeResult = await this.scraper.checkRefundStatus(scraperParams);
         this.logger.log(`Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`);
       }
     } catch (err) {

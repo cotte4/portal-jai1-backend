@@ -41,8 +41,9 @@ export class IrsScraperService {
     taxYear: number;
     taxCaseId: string;
     filingStatus: string;
+    clientName: string;
   }): Promise<IrsScrapeResult> {
-    const { ssn, refundAmount, taxYear, taxCaseId, filingStatus } = params;
+    const { ssn, refundAmount, taxYear, taxCaseId, filingStatus, clientName } = params;
 
     // Lazy import so NestJS starts even if playwright isn't installed yet
     let playwright: typeof import('playwright');
@@ -103,31 +104,52 @@ export class IrsScraperService {
 
       const page = await context.newPage();
 
-      this.logger.log('Navigating to IRS WMR...');
+      // ── Step 1: Navigate ──────────────────────────────────────────────────
+      this.logger.log(`[${clientName}] Step 1/5 — Navigating to IRS WMR...`);
       await page.goto('https://sa.www4.irs.gov/wmr/', { timeout: 30000 });
-      // Wait for page JS to settle — varies by connection
       await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
       await page.waitForTimeout(jitter(2000));
 
-      // SSN — type character by character like a human
+      // ── Step 2: SSN ───────────────────────────────────────────────────────
+      this.logger.log(`[${clientName}] Step 2/5 — Filling SSN...`);
       await page.waitForSelector('input[name="ssnInput"]', { timeout: 15000 });
       await humanClick(page, 'input[name="ssnInput"]');
       await page.keyboard.type(ssn, { delay: jitter(60) });
       await page.waitForTimeout(jitter(700));
+      this.logger.log(`[${clientName}] Step 2/5 — SSN filled ✓`);
 
-      // Tax Year
+      // ── Step 3: Tax Year ──────────────────────────────────────────────────
+      this.logger.log(`[${clientName}] Step 3/5 — Selecting tax year ${taxYear}...`);
       const yearLabel = `label[for="${taxYear}"]`;
       await page.waitForSelector(yearLabel, { timeout: 10000 });
       await humanClick(page, yearLabel);
       await page.waitForTimeout(jitter(700));
+      // Verify the radio is actually checked
+      const yearChecked = await page.$eval(
+        `input[id="${taxYear}"]`,
+        (el) => (el as HTMLInputElement).checked,
+      ).catch(() => false);
+      if (!yearChecked) throw new Error(`Tax year ${taxYear} radio not selected — label[for="${taxYear}"] may not match IRS page`);
+      this.logger.log(`[${clientName}] Step 3/5 — Tax year ${taxYear} selected ✓`);
 
-      // Filing Status — use value from TaxCase.filingStatus (default: single)
+      // ── Step 4: Filing Status ─────────────────────────────────────────────
+      this.logger.log(`[${clientName}] Step 4/5 — Selecting filing status: ${filingStatus}...`);
       const filingSelector = this.FILING_STATUS_SELECTOR[filingStatus] ?? 'label[for="Single"]';
+      // The radio id is the value inside the for="" attribute
+      const filingRadioId = filingSelector.match(/\[for="(.+?)"\]/)?.[1] ?? 'Single';
       await page.waitForSelector(filingSelector, { timeout: 10000 });
       await humanClick(page, filingSelector);
       await page.waitForTimeout(jitter(700));
+      // Verify the radio is actually checked
+      const filingChecked = await page.$eval(
+        `input[id="${filingRadioId}"]`,
+        (el) => (el as HTMLInputElement).checked,
+      ).catch(() => false);
+      if (!filingChecked) throw new Error(`Filing status radio "${filingRadioId}" not selected — IRS page selector may have changed`);
+      this.logger.log(`[${clientName}] Step 4/5 — Filing status ${filingStatus} (${filingRadioId}) selected ✓`);
 
-      // Refund Amount — locate by label text so it survives IRS HTML changes
+      // ── Step 5: Refund Amount ─────────────────────────────────────────────
+      this.logger.log(`[${clientName}] Step 5/5 — Filling refund amount: $${refundAmount}...`);
       const refundLocator = page.getByLabel(/refund amount/i).first();
       await refundLocator.waitFor({ state: 'visible', timeout: 10000 });
       const refundBox = await refundLocator.boundingBox();
@@ -140,15 +162,58 @@ export class IrsScraperService {
       } else {
         await refundLocator.click();
       }
-      // Clear any pre-filled value then type with human variance
       await page.keyboard.press('Control+A');
       await page.keyboard.press('Delete');
       await page.keyboard.type(String(refundAmount), { delay: jitter(70) });
       await page.waitForTimeout(jitter(700));
+      // Verify the value was entered
+      const filledAmount = await refundLocator.inputValue().catch(() => '');
+      if (filledAmount !== String(refundAmount)) {
+        throw new Error(`Refund amount mismatch — expected "${refundAmount}", field contains "${filledAmount}"`);
+      }
+      this.logger.log(`[${clientName}] Step 5/5 — Refund amount $${refundAmount} filled ✓`);
 
-      // Submit
+      // ── Pre-submit gate — re-read all 4 fields from DOM ──────────────────
+      // Never submit if any field is missing or wrong. Each check throws with
+      // a specific message so Railway logs show exactly what failed.
+      this.logger.log(`[${clientName}] Pre-submit gate — verifying all fields...`);
+
+      const ssnValue = await page.$eval(
+        'input[name="ssnInput"]',
+        (el) => (el as HTMLInputElement).value,
+      ).catch(() => '');
+      if (!ssnValue || ssnValue.length < 9) {
+        throw new Error(`Pre-submit gate FAILED: SSN field is empty or too short (got "${ssnValue}")`);
+      }
+
+      const yearOk = await page.$eval(
+        `input[id="${taxYear}"]`,
+        (el) => (el as HTMLInputElement).checked,
+      ).catch(() => false);
+      if (!yearOk) {
+        throw new Error(`Pre-submit gate FAILED: Tax year ${taxYear} is not selected`);
+      }
+
+      const filingOk = await page.$eval(
+        `input[id="${filingRadioId}"]`,
+        (el) => (el as HTMLInputElement).checked,
+      ).catch(() => false);
+      if (!filingOk) {
+        throw new Error(`Pre-submit gate FAILED: Filing status "${filingRadioId}" is not selected`);
+      }
+
+      const amountValue = await refundLocator.inputValue().catch(() => '');
+      if (amountValue !== String(refundAmount)) {
+        throw new Error(`Pre-submit gate FAILED: Refund amount is "${amountValue}", expected "${refundAmount}"`);
+      }
+
+      this.logger.log(`[${clientName}] Pre-submit gate PASSED — SSN ✓ Year ${taxYear} ✓ Filing ${filingRadioId} ✓ Amount $${refundAmount} ✓`);
+
+      // ── Submit ────────────────────────────────────────────────────────────
+      this.logger.log(`[${clientName}] Submitting form...`);
       await page.waitForSelector('a#anchor-ui-0', { timeout: 10000 });
       await humanClick(page, 'a#anchor-ui-0');
+      this.logger.log(`[${clientName}] Form submitted — waiting for IRS result...`);
 
       // Wait for result: IRS WMR is a SPA — URL won't change, so wait for the
       // result heading to appear in the DOM (up to 15s) then read it
@@ -186,7 +251,10 @@ export class IrsScraperService {
       let screenshotPath: string | null = null;
       try {
         const buffer = await page.screenshot({ type: 'png', fullPage: false });
-        const storagePath = `checks/${taxCaseId}/${Date.now()}.png`;
+        const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const time = new Date().toISOString().slice(11, 19).replace(/:/g, '-'); // HH-MM-SS
+        const clientSlug = clientName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const storagePath = `checks/${date}/${clientSlug}/${time}.png`;
         await this.supabase.uploadFile(
           this.SCREENSHOT_BUCKET,
           storagePath,
