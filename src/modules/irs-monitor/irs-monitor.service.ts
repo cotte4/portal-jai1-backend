@@ -152,24 +152,25 @@ export class IrsMonitorService {
       return { success: false, error: 'Client has no SSN on file', check };
     }
 
-    // Validate refund amount — IRS WMR is federal only, so prioritise the exact
-    // federal amount from the filed return. Fall back to the pre-filing estimate
-    // only if the federal-specific amount hasn't been entered yet.
-    const rawRefund = taxCase.federalActualRefund ?? taxCase.estimatedRefund;
-    const refundAmount = rawRefund ? Math.round(Number(rawRefund)) : null;
+    // Validate refund amount — IRS WMR requires the exact federal refund amount
+    // from the filed return. Never use the pre-filing estimate: it will return
+    // "not found" even when SSN/year/filing status are all correct.
+    const refundAmount = taxCase.federalActualRefund
+      ? Math.round(Number(taxCase.federalActualRefund))
+      : null;
     if (!refundAmount) {
       const check = await this.prisma.irsCheck.create({
         data: {
           taxCaseId,
-          irsRawStatus: 'No refund amount on file',
+          irsRawStatus: 'No federal refund amount on file',
           checkResult: IrsCheckResult.error,
           triggeredBy: trigger,
           triggeredByUserId: adminId ?? undefined,
           statusChanged: false,
-          errorMessage: 'Client has no federal refund amount on file (set federalActualRefund or estimatedRefund)',
+          errorMessage: 'Set the federal actual refund amount before running IRS checks',
         },
       });
-      return { success: false, error: 'Client has no federal refund amount on file', check };
+      return { success: false, error: 'No federal actual refund amount on file', check };
     }
 
     // Run scraper (with one automatic retry on error/timeout)

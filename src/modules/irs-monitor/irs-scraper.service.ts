@@ -127,22 +127,19 @@ export class IrsScraperService {
       await humanClick(page, filingSelector);
       await page.waitForTimeout(jitter(700));
 
-      // Refund Amount
-      const refundSelectors = [
-        'input[aria-label="Refund Amount, Required"]',
-        'input[name="refundAmountInput"]',
-        'input#undefinedplaceholder',
-      ];
-      let refundSelector: string | null = null;
-      for (const sel of refundSelectors) {
-        if (await page.$(sel)) {
-          refundSelector = sel;
-          break;
-        }
+      // Refund Amount — locate by label text so it survives IRS HTML changes
+      const refundLocator = page.getByLabel(/refund amount/i).first();
+      await refundLocator.waitFor({ state: 'visible', timeout: 10000 });
+      const refundBox = await refundLocator.boundingBox();
+      if (refundBox) {
+        const x = refundBox.x + refundBox.width * (0.3 + Math.random() * 0.4);
+        const y = refundBox.y + refundBox.height * (0.3 + Math.random() * 0.4);
+        await page.mouse.move(x, y, { steps: 8 });
+        await page.waitForTimeout(jitter(120));
+        await page.mouse.click(x, y);
+      } else {
+        await refundLocator.click();
       }
-      if (!refundSelector) throw new Error('Refund amount input not found on IRS page');
-
-      await humanClick(page, refundSelector);
       // Clear any pre-filled value then type with human variance
       await page.keyboard.press('Control+A');
       await page.keyboard.press('Delete');
