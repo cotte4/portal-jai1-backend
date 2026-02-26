@@ -150,22 +150,25 @@ export class IrsScraperService {
 
       // ── Step 5: Refund Amount ─────────────────────────────────────────────
       this.logger.log(`[${clientName}] Step 5/5 — Filling refund amount: $${refundAmount}...`);
-      const refundLocator = page.getByLabel(/refund amount/i).first();
+
+      // getByLabel can resolve to a label/container rather than the <input> itself,
+      // causing inputValue() to silently return ''. Use direct CSS selectors first.
+      const directRefundInput = page.locator(
+        'input[name*="refund" i], input[id*="refund" i], ' +
+        'input[aria-label*="refund" i], input[placeholder*="refund" i]',
+      ).first();
+      const isDirectVisible = await directRefundInput.isVisible().catch(() => false);
+      const refundLocator = isDirectVisible
+        ? directRefundInput
+        : page.getByLabel(/refund amount/i).first();
+
       await refundLocator.waitFor({ state: 'visible', timeout: 10000 });
-      const refundBox = await refundLocator.boundingBox();
-      if (refundBox) {
-        const x = refundBox.x + refundBox.width * (0.3 + Math.random() * 0.4);
-        const y = refundBox.y + refundBox.height * (0.3 + Math.random() * 0.4);
-        await page.mouse.move(x, y, { steps: 8 });
-        await page.waitForTimeout(jitter(120));
-        await page.mouse.click(x, y);
-      } else {
-        await refundLocator.click();
-      }
-      await page.keyboard.press('Control+A');
-      await page.keyboard.press('Delete');
-      await page.keyboard.type(String(refundAmount), { delay: jitter(70) });
+
+      // fill() is more reliable than click+keyboard.type:
+      // it handles focus, clear, and value assignment atomically
+      await refundLocator.fill(String(refundAmount));
       await page.waitForTimeout(jitter(700));
+
       // Verify the value was entered
       const filledAmount = await refundLocator.inputValue().catch(() => '');
       if (filledAmount !== String(refundAmount)) {
