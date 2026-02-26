@@ -38,12 +38,16 @@ export class IrsMonitorController {
   }
 
   @Post('check/:taxCaseId')
-  @ApiOperation({ summary: 'Run IRS WMR check for a specific client' })
+  @ApiOperation({ summary: 'Run IRS WMR check for a specific client (fire & forget)' })
   async runCheck(
     @Param('taxCaseId', new ParseUUIDPipe()) taxCaseId: string,
     @CurrentUser() user: any,
   ) {
-    return this.irsMonitorService.runCheck(taxCaseId, user.id);
+    // Fire and forget — Playwright takes 30-90s, blocking the HTTP connection causes timeouts
+    void this.irsMonitorService
+      .runCheck(taxCaseId, user.id)
+      .catch((err: Error) => this.logger.error(`check error [${taxCaseId}]: ${err.message}`));
+    return { started: true };
   }
 
   @Get('checks')
