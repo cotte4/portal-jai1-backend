@@ -19,5 +19,6 @@ RUN npx prisma generate && npm run build
 # Force headless mode inside the container — no display available in Railway
 ENV PLAYWRIGHT_HEADLESS=true
 
-EXPOSE 3000
+# Railway injects PORT at runtime — don't hardcode EXPOSE 3000 or the healthcheck
+# will hit port 3000 while the app is actually listening on Railway's PORT (8080)
 CMD ["node", "dist/src/main"]
