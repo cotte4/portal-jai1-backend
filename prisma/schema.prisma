@@ -233,6 +233,7 @@ model TaxCase {
   alarmThreshold     AlarmThreshold?
   alarmHistory       AlarmHistory[]
   irsChecks          IrsCheck[]
+  coloradoChecks     ColoradoCheck[]
   clientProfile      ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
 
   @@unique([clientProfileId, taxYear])
@@ -825,6 +826,41 @@ model IrsCheck {
   @@index([checkResult])
   @@index([statusChanged, createdAt])
   @@map("irs_checks")
+}
+
+// ============= COLORADO STATE MONITOR =============
+
+model ColoradoCheck {
+  id                String           @id @default(uuid()) @db.Uuid
+  taxCaseId         String           @map("tax_case_id") @db.Uuid
+
+  // What the Colorado portal returned
+  coRawStatus       String           @map("co_raw_status")
+  coDetails         String?          @map("co_details")
+  screenshotPath    String?          @map("screenshot_path")
+
+  // What we did with the result
+  mappedStatus      StateStatusNew?  @map("mapped_status")
+  statusChanged     Boolean          @default(false) @map("status_changed")
+  previousStatus    StateStatusNew?  @map("previous_status")
+
+  // How it was triggered (reuse IRS enums — they're not IRS-specific)
+  triggeredBy       IrsCheckTrigger  @map("triggered_by")
+  triggeredByUserId String?          @map("triggered_by_user_id") @db.Uuid
+
+  // Outcome
+  checkResult       IrsCheckResult   @map("check_result")
+  errorMessage      String?          @map("error_message")
+
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  taxCase           TaxCase          @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+
+  @@index([taxCaseId])
+  @@index([createdAt])
+  @@index([checkResult])
+  @@index([statusChanged, createdAt])
+  @@map("colorado_checks")
 }
 
 enum FilingStatus {

@@ -36,6 +36,7 @@ import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { Jai1gentsModule } from './modules/jai1gents/jai1gents.module';
 import { ConsentFormModule } from './modules/consent-form/consent-form.module';
 import { IrsMonitorModule } from './modules/irs-monitor/irs-monitor.module';
+import { ColoradoMonitorModule } from './modules/colorado-monitor/colorado-monitor.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { IrsMonitorModule } from './modules/irs-monitor/irs-monitor.module';
     Jai1gentsModule,
     ConsentFormModule,
     IrsMonitorModule,
+    ColoradoMonitorModule,
   ],
   controllers: [],
   providers: [

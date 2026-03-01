@@ -3,97 +3,95 @@ import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { CurrentUser, Roles } from '../../common/decorators';
-import { IrsMonitorService } from './irs-monitor.service';
+import { ColoradoMonitorService } from './colorado-monitor.service';
 import { IrsCheckTrigger } from '@prisma/client';
 
-@ApiTags('irs-monitor')
+@ApiTags('colorado-monitor')
 @ApiBearerAuth()
-@Controller('irs-monitor')
+@Controller('colorado-monitor')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
-export class IrsMonitorController {
-  private readonly logger = new Logger(IrsMonitorController.name);
-  constructor(private readonly irsMonitorService: IrsMonitorService) {}
+export class ColoradoMonitorController {
+  private readonly logger = new Logger(ColoradoMonitorController.name);
+  constructor(private readonly coloradoMonitorService: ColoradoMonitorService) {}
 
   @Get('stats')
-  @ApiOperation({ summary: 'IRS monitor stats (status changes in last 24h)' })
+  @ApiOperation({ summary: 'Colorado monitor stats (status changes in last 24h)' })
   async getStats() {
-    return this.irsMonitorService.getStats();
+    return this.coloradoMonitorService.getStats();
   }
 
   @Get('clients')
-  @ApiOperation({ summary: 'Get all clients with taxes_filed status' })
+  @ApiOperation({ summary: 'Get all Colorado clients with taxes_filed status' })
   async getFiledClients() {
-    return this.irsMonitorService.getFiledClients();
+    return this.coloradoMonitorService.getFiledClients();
   }
 
   @Post('check-all')
-  @ApiOperation({ summary: 'Run IRS check for all taxes_filed clients (fire & forget)' })
+  @ApiOperation({ summary: 'Run Colorado check for all filed CO clients (fire & forget)' })
   async runCheckAll(@CurrentUser() user: any) {
-    // Fire and forget — each check takes ~20s so we cannot block the HTTP response
-    void this.irsMonitorService
+    void this.coloradoMonitorService
       .runAllChecks(IrsCheckTrigger.manual, user.id)
       .catch((err: Error) => this.logger.error(`check-all error: ${err.message}`));
     return { started: true };
   }
 
   @Post('check/:taxCaseId')
-  @ApiOperation({ summary: 'Run IRS WMR check for a specific client (fire & forget)' })
+  @ApiOperation({ summary: 'Run Colorado refund check for a specific client (fire & forget)' })
   async runCheck(
     @Param('taxCaseId', new ParseUUIDPipe()) taxCaseId: string,
     @CurrentUser() user: any,
   ) {
-    // Fire and forget — Playwright takes 30-90s, blocking the HTTP connection causes timeouts
-    void this.irsMonitorService
+    void this.coloradoMonitorService
       .runCheck(taxCaseId, user.id)
       .catch((err: Error) => this.logger.error(`check error [${taxCaseId}]: ${err.message}`));
     return { started: true };
   }
 
   @Get('checks')
-  @ApiOperation({ summary: 'Get all recent IRS checks (paginated)' })
+  @ApiOperation({ summary: 'Get all recent Colorado checks (paginated)' })
   @ApiQuery({ name: 'cursor', required: false })
   @ApiQuery({ name: 'limit', required: false })
   async getChecks(
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.irsMonitorService.getChecks(cursor, limit ? parseInt(limit, 10) : 20);
+    return this.coloradoMonitorService.getChecks(cursor, limit ? parseInt(limit, 10) : 20);
   }
 
   @Get('checks/:taxCaseId')
-  @ApiOperation({ summary: 'Get IRS check history for a specific client' })
+  @ApiOperation({ summary: 'Get Colorado check history for a specific client' })
   async getChecksForClient(@Param('taxCaseId', new ParseUUIDPipe()) taxCaseId: string) {
-    return this.irsMonitorService.getChecksForClient(taxCaseId);
+    return this.coloradoMonitorService.getChecksForClient(taxCaseId);
   }
 
   @Get('export')
-  @ApiOperation({ summary: 'Export all IRS checks as CSV' })
+  @ApiOperation({ summary: 'Export all Colorado checks as CSV' })
   async exportCsv(@Res() res: Response) {
-    const csv = await this.irsMonitorService.exportCsv();
+    const csv = await this.coloradoMonitorService.exportCsv();
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="irs-checks-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="colorado-checks-${new Date().toISOString().slice(0, 10)}.csv"`);
     res.send(csv);
   }
 
   @Post('checks/:checkId/approve')
-  @ApiOperation({ summary: 'Approve a recommended status change from an IRS check' })
+  @ApiOperation({ summary: 'Approve a recommended status change from a Colorado check' })
   async approveCheck(
     @Param('checkId', new ParseUUIDPipe()) checkId: string,
     @CurrentUser() user: any,
   ) {
-    return this.irsMonitorService.approveCheck(checkId, user.id);
+    return this.coloradoMonitorService.approveCheck(checkId, user.id);
   }
 
   @Post('checks/:checkId/dismiss')
   @ApiOperation({ summary: 'Dismiss a recommended status change (no update applied)' })
   async dismissCheck(@Param('checkId', new ParseUUIDPipe()) checkId: string) {
-    return this.irsMonitorService.dismissCheck(checkId);
+    return this.coloradoMonitorService.dismissCheck(checkId);
   }
 
   @Get('screenshot/:checkId')
   @ApiOperation({ summary: 'Get a 24-hour signed URL for a check screenshot' })
   async getScreenshot(@Param('checkId', new ParseUUIDPipe()) checkId: string) {
-    return this.irsMonitorService.getScreenshotUrl(checkId);
+    return this.coloradoMonitorService.getScreenshotUrl(checkId);
   }
 }

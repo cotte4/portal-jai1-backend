@@ -1,31 +1,37 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { FederalStatusNew, IrsCheckTrigger, IrsCheckResult } from '@prisma/client';
+import { StateStatusNew, IrsCheckTrigger, IrsCheckResult } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 import { EncryptionService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SupabaseService } from '../../config/supabase.service';
-import { IrsScraperService } from './irs-scraper.service';
-import { IrsStatusMapperService } from './irs-status-mapper.service';
+import { ColoradoScraperService } from './colorado-scraper.service';
+import { ColoradoStatusMapperService } from './colorado-status-mapper.service';
 
 @Injectable()
-export class IrsMonitorService {
-  private readonly logger = new Logger(IrsMonitorService.name);
+export class ColoradoMonitorService {
+  private readonly logger = new Logger(ColoradoMonitorService.name);
 
-  private readonly SCREENSHOT_BUCKET = 'irs-screenshots';
+  private readonly SCREENSHOT_BUCKET = 'colorado-screenshots';
   private isRunningCheckAll = false;
 
   constructor(
     private prisma: PrismaService,
     private encryption: EncryptionService,
-    private scraper: IrsScraperService,
-    private mapper: IrsStatusMapperService,
+    private scraper: ColoradoScraperService,
+    private mapper: ColoradoStatusMapperService,
     private notifications: NotificationsService,
     private supabase: SupabaseService,
   ) {}
 
   async getFiledClients() {
     const taxCases = await this.prisma.taxCase.findMany({
-      where: { caseStatus: 'taxes_filed' },
+      where: {
+        caseStatus: { in: ['taxes_filed', 'case_issues'] },
+        OR: [
+          { workState: { equals: 'Colorado', mode: 'insensitive' } },
+          { workState: { equals: 'CO', mode: 'insensitive' } },
+        ],
+      },
       include: {
         clientProfile: {
           include: {
@@ -34,7 +40,7 @@ export class IrsMonitorService {
             },
           },
         },
-        irsChecks: {
+        coloradoChecks: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
@@ -43,25 +49,21 @@ export class IrsMonitorService {
     });
 
     return taxCases.map((tc: any) => {
-      // Determine which amount will actually be sent to IRS WMR (same priority as runCheck)
-      const rawRefund = tc.federalActualRefund ?? tc.estimatedRefund;
-      const irsRefundAmount = rawRefund ? Math.round(Number(rawRefund)) : null;
+      const stateRefundAmount = tc.stateActualRefund
+        ? Math.round(Number(tc.stateActualRefund))
+        : null;
 
       return {
         taxCaseId: tc.id,
-        taxYear: new Date().getFullYear() - 1,
-        estimatedRefund: tc.estimatedRefund,
-        federalActualRefund: tc.federalActualRefund,
-        irsRefundAmount,           // the amount that will actually be submitted to IRS WMR
+        stateActualRefund: stateRefundAmount,
         paymentMethod: tc.paymentMethod,
-        filingStatus: tc.filingStatus,
-        federalStatusNew: tc.federalStatusNew,
-        federalStatusNewChangedAt: tc.federalStatusNewChangedAt,
+        stateStatusNew: tc.stateStatusNew,
+        stateStatusNewChangedAt: tc.stateStatusNewChangedAt,
         clientName: `${tc.clientProfile.user.firstName} ${tc.clientProfile.user.lastName}`,
         clientEmail: tc.clientProfile.user.email,
         userId: tc.clientProfile.user.id,
         ssnMasked: tc.clientProfile.ssn ? this.encryption.maskSSN(tc.clientProfile.ssn) : null,
-        lastCheck: tc.irsChecks[0] ?? null,
+        lastCheck: tc.coloradoChecks[0] ?? null,
       };
     });
   }
@@ -79,7 +81,13 @@ export class IrsMonitorService {
 
     try {
       const taxCases = await this.prisma.taxCase.findMany({
-        where: { caseStatus: 'taxes_filed' },
+        where: {
+          caseStatus: { in: ['taxes_filed', 'case_issues'] },
+          OR: [
+            { workState: { equals: 'Colorado', mode: 'insensitive' } },
+            { workState: { equals: 'CO', mode: 'insensitive' } },
+          ],
+        },
         select: { id: true },
       });
 
@@ -87,7 +95,7 @@ export class IrsMonitorService {
       let succeeded = 0;
       let failed = 0;
 
-      this.logger.log(`runAllChecks started: ${total} clients (trigger: ${trigger})`);
+      this.logger.log(`runAllChecks started: ${total} CO clients (trigger: ${trigger})`);
 
       for (const { id } of taxCases) {
         try {
@@ -109,7 +117,7 @@ export class IrsMonitorService {
 
   async getStats(): Promise<{ changesLast24h: number }> {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const changesLast24h = await this.prisma.irsCheck.count({
+    const changesLast24h = await this.prisma.coloradoCheck.count({
       where: { statusChanged: true, createdAt: { gte: since } },
     });
     return { changesLast24h };
@@ -134,14 +142,13 @@ export class IrsMonitorService {
     const { clientProfile } = taxCase;
     const user = clientProfile.user;
 
-    // Validate SSN — use safeDecrypt so corrupted/non-encrypted data returns null
-    // rather than the raw ciphertext being sent to IRS
+    // Validate SSN
     const ssn = this.encryption.safeDecrypt(clientProfile.ssn ?? null, 'ssn');
     if (!ssn) {
-      const check = await this.prisma.irsCheck.create({
+      const check = await this.prisma.coloradoCheck.create({
         data: {
           taxCaseId,
-          irsRawStatus: 'No SSN on file',
+          coRawStatus: 'No SSN on file',
           checkResult: IrsCheckResult.error,
           triggeredBy: trigger,
           triggeredByUserId: adminId ?? undefined,
@@ -152,43 +159,33 @@ export class IrsMonitorService {
       return { success: false, error: 'Client has no SSN on file', check };
     }
 
-    // Validate refund amount — IRS WMR requires the exact federal refund amount
-    // from the filed return. Never use the pre-filing estimate: it will return
-    // "not found" even when SSN/year/filing status are all correct.
-    const refundAmount = taxCase.federalActualRefund
-      ? Math.round(Number(taxCase.federalActualRefund))
+    // Validate state refund amount — Colorado requires it, no fallback
+    const stateRefundAmount = taxCase.stateActualRefund
+      ? Math.round(Number(taxCase.stateActualRefund))
       : null;
-    if (!refundAmount) {
-      const check = await this.prisma.irsCheck.create({
+    if (!stateRefundAmount) {
+      const check = await this.prisma.coloradoCheck.create({
         data: {
           taxCaseId,
-          irsRawStatus: 'No federal refund amount on file',
+          coRawStatus: 'No state refund amount on file',
           checkResult: IrsCheckResult.error,
           triggeredBy: trigger,
           triggeredByUserId: adminId ?? undefined,
           statusChanged: false,
-          errorMessage: 'Set the federal actual refund amount before running IRS checks',
+          errorMessage: 'Set the state actual refund amount before running Colorado checks',
         },
       });
-      return { success: false, error: 'No federal actual refund amount on file', check };
+      return { success: false, error: 'No state actual refund amount on file', check };
     }
 
-    // Run scraper — always save a DB record so the frontend poll never times out
-    this.logger.log(`IRS check for ${user.firstName} ${user.lastName} (taxCase: ${taxCaseId})`);
+    // Run scraper
+    this.logger.log(`Colorado check for ${user.firstName} ${user.lastName} (taxCase: ${taxCaseId})`);
     let scrapeResult: Awaited<ReturnType<typeof this.scraper.checkRefundStatus>>;
     try {
-      // IRS WMR asks for the tax year of the return, NOT the current year.
-      // Tax season 2026 files returns for tax year 2025. The DB taxYear
-      // sometimes stores the current year instead, so always use
-      // (current year - 1) to match what IRS WMR expects.
-      const irsTaxYear = new Date().getFullYear() - 1;
-
       const scraperParams = {
         ssn,
-        refundAmount,
-        taxYear: irsTaxYear,
+        stateRefundAmount,
         taxCaseId,
-        filingStatus: taxCase.filingStatus,
         clientName: `${user.firstName} ${user.lastName}`,
       };
 
@@ -201,14 +198,12 @@ export class IrsMonitorService {
         this.logger.log(`Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`);
       }
     } catch (err) {
-      // Unexpected crash (Playwright install missing, OOM, etc.) — save error record
-      // immediately so the frontend poll finds it and stops waiting
       const message = (err as Error).message ?? 'Unexpected scraper error';
       this.logger.error(`runCheck unexpected error [${taxCaseId}]: ${message}`);
-      const check = await this.prisma.irsCheck.create({
+      const check = await this.prisma.coloradoCheck.create({
         data: {
           taxCaseId,
-          irsRawStatus: 'Error',
+          coRawStatus: 'Error',
           checkResult: IrsCheckResult.error,
           triggeredBy: trigger,
           triggeredByUserId: adminId,
@@ -219,17 +214,17 @@ export class IrsMonitorService {
       return { success: false, error: message, check };
     }
 
-    // Map result to JAI1 status
+    // Map result to JAI1 state status
     const mappedStatus = this.mapper.map(scrapeResult.rawStatus, taxCase.paymentMethod);
-    const previousStatus = taxCase.federalStatusNew as FederalStatusNew | null;
+    const previousStatus = taxCase.stateStatusNew as StateStatusNew | null;
     const statusChanged = mappedStatus !== null && mappedStatus !== previousStatus;
 
     // Save check record
-    const check = await this.prisma.irsCheck.create({
+    const check = await this.prisma.coloradoCheck.create({
       data: {
         taxCaseId,
-        irsRawStatus: scrapeResult.rawStatus,
-        irsDetails: scrapeResult.details,
+        coRawStatus: scrapeResult.rawStatus,
+        coDetails: scrapeResult.details,
         screenshotPath: scrapeResult.screenshotPath,
         mappedStatus,
         previousStatus,
@@ -241,9 +236,7 @@ export class IrsMonitorService {
       },
     });
 
-    // Status changes are NO LONGER applied automatically.
-    // The check record stores the recommendation (mappedStatus + statusChanged),
-    // and the admin must approve it manually via POST /irs-monitor/checks/:checkId/approve
+    // Status changes require admin approval (same pattern as IRS)
     if (statusChanged && mappedStatus) {
       this.logger.log(
         `Recommendation: ${user.firstName} ${user.lastName} — ${previousStatus ?? 'null'} → ${mappedStatus} (pending admin approval)`,
@@ -263,7 +256,7 @@ export class IrsMonitorService {
   async getChecks(cursor?: string, limit = 20) {
     const effectiveLimit = Math.min(limit, 100);
 
-    const checks = await this.prisma.irsCheck.findMany({
+    const checks = await this.prisma.coloradoCheck.findMany({
       take: effectiveLimit + 1,
       cursor: cursor ? { id: cursor } : undefined,
       orderBy: { createdAt: 'desc' },
@@ -294,14 +287,14 @@ export class IrsMonitorService {
   }
 
   async getChecksForClient(taxCaseId: string) {
-    return this.prisma.irsCheck.findMany({
+    return this.prisma.coloradoCheck.findMany({
       where: { taxCaseId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async exportCsv(): Promise<string> {
-    const checks = await this.prisma.irsCheck.findMany({
+    const checks = await this.prisma.coloradoCheck.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
         taxCase: {
@@ -322,8 +315,8 @@ export class IrsMonitorService {
     };
 
     const headers = [
-      'Date', 'Client Name', 'Email', 'Tax Year', 'Filing Status',
-      'IRS Raw Status', 'Mapped Status', 'Status Changed', 'Previous Status',
+      'Date', 'Client Name', 'Email',
+      'CO Raw Status', 'Mapped Status', 'Status Changed', 'Previous Status',
       'Check Result', 'Triggered By', 'Error Message',
     ];
 
@@ -333,9 +326,7 @@ export class IrsMonitorService {
         new Date(c.createdAt).toISOString(),
         `${u.firstName} ${u.lastName}`,
         u.email,
-        c.taxCase.taxYear,
-        c.taxCase.filingStatus,
-        c.irsRawStatus,
+        c.coRawStatus,
         c.mappedStatus ?? '',
         c.statusChanged ? 'YES' : 'no',
         c.previousStatus ?? '',
@@ -349,7 +340,7 @@ export class IrsMonitorService {
   }
 
   async approveCheck(checkId: string, adminId: string) {
-    const check = await this.prisma.irsCheck.findUnique({
+    const check = await this.prisma.coloradoCheck.findUnique({
       where: { id: checkId },
       include: {
         taxCase: {
@@ -369,8 +360,8 @@ export class IrsMonitorService {
 
     const taxCase = check.taxCase;
     const user = taxCase.clientProfile.user;
-    const mappedStatus = check.mappedStatus as FederalStatusNew;
-    const previousStatus = taxCase.federalStatusNew as FederalStatusNew | null;
+    const mappedStatus = check.mappedStatus as StateStatusNew;
+    const previousStatus = taxCase.stateStatusNew as StateStatusNew | null;
 
     if (mappedStatus === previousStatus) {
       return { applied: false, reason: 'Status already matches recommendation' };
@@ -381,10 +372,10 @@ export class IrsMonitorService {
       await tx.taxCase.update({
         where: { id: taxCase.id },
         data: {
-          federalStatusNew: mappedStatus,
-          federalStatusNewChangedAt: now,
-          federalLastReviewedAt: now,
-          federalLastComment: `IRS Monitor (aprobado): ${check.irsRawStatus}`,
+          stateStatusNew: mappedStatus,
+          stateStatusNewChangedAt: now,
+          stateLastReviewedAt: now,
+          stateLastComment: `Colorado Monitor (aprobado): ${check.coRawStatus}`,
         },
       });
 
@@ -394,8 +385,8 @@ export class IrsMonitorService {
           previousStatus: previousStatus ?? undefined,
           newStatus: mappedStatus,
           changedById: adminId,
-          comment: `IRS Monitor (aprobado por admin): ${check.irsRawStatus}`,
-          internalComment: `Admin ${adminId} approved IRS check ${checkId}`,
+          comment: `Colorado Monitor (aprobado por admin): ${check.coRawStatus}`,
+          internalComment: `Admin ${adminId} approved Colorado check ${checkId}`,
         },
       });
     });
@@ -405,7 +396,7 @@ export class IrsMonitorService {
         user.id,
         'status_change',
         'Estado de tu reembolso actualizado',
-        `Tu estado federal fue actualizado a: ${mappedStatus.replace(/_/g, ' ')}`,
+        `Tu estado estatal fue actualizado a: ${mappedStatus.replace(/_/g, ' ')}`,
       )
       .catch((err: Error) => {
         this.logger.warn(`Notification failed for user ${user.id}: ${err.message}`);
@@ -419,10 +410,10 @@ export class IrsMonitorService {
   }
 
   async dismissCheck(checkId: string) {
-    const check = await this.prisma.irsCheck.findUnique({ where: { id: checkId } });
+    const check = await this.prisma.coloradoCheck.findUnique({ where: { id: checkId } });
     if (!check) throw new NotFoundException('Check not found');
 
-    await this.prisma.irsCheck.update({
+    await this.prisma.coloradoCheck.update({
       where: { id: checkId },
       data: { statusChanged: false },
     });
@@ -431,7 +422,7 @@ export class IrsMonitorService {
   }
 
   async getScreenshotUrl(checkId: string): Promise<{ url: string }> {
-    const check = await this.prisma.irsCheck.findUnique({
+    const check = await this.prisma.coloradoCheck.findUnique({
       where: { id: checkId },
       select: { screenshotPath: true },
     });

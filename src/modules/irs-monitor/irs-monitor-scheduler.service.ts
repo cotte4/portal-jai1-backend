@@ -13,8 +13,9 @@ export class IrsMonitorSchedulerService {
    * Runs daily at 08:00 AM Eastern Time.
    * Checks all clients with caseStatus = taxes_filed against IRS WMR.
    * IRS WMR is most reliable during morning hours; results are cached ~24h on their end.
+   * TEMPORARILY DISABLED — remove the comment on @Cron to re-enable.
    */
-  @Cron('0 8 * * *', { timeZone: 'America/New_York' })
+  // @Cron('0 8 * * *', { timeZone: 'America/New_York' })
   async runDailyCheck() {
     this.logger.log('Daily IRS check triggered by scheduler');
     try {

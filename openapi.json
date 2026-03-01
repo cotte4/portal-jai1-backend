@@ -3567,7 +3567,7 @@
             "bearer": []
           }
         ],
-        "summary": "Run IRS WMR check for a specific client",
+        "summary": "Run IRS WMR check for a specific client (fire & forget)",
         "tags": [
           "irs-monitor"
         ]
@@ -3659,6 +3659,64 @@
         ]
       }
     },
+    "/v1/irs-monitor/checks/{checkId}/approve": {
+      "post": {
+        "operationId": "IrsMonitorController_approveCheck",
+        "parameters": [
+          {
+            "name": "checkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Approve a recommended status change from an IRS check",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
+    },
+    "/v1/irs-monitor/checks/{checkId}/dismiss": {
+      "post": {
+        "operationId": "IrsMonitorController_dismissCheck",
+        "parameters": [
+          {
+            "name": "checkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Dismiss a recommended status change (no update applied)",
+        "tags": [
+          "irs-monitor"
+        ]
+      }
+    },
     "/v1/irs-monitor/screenshot/{checkId}": {
       "get": {
         "operationId": "IrsMonitorController_getScreenshot",
@@ -3685,6 +3743,268 @@
         "summary": "Get a 24-hour signed URL for a check screenshot",
         "tags": [
           "irs-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/stats": {
+      "get": {
+        "operationId": "ColoradoMonitorController_getStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Colorado monitor stats (status changes in last 24h)",
+        "tags": [
+          "colorado-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/clients": {
+      "get": {
+        "operationId": "ColoradoMonitorController_getFiledClients",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all Colorado clients with taxes_filed status",
+        "tags": [
+          "colorado-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/check-all": {
+      "post": {
+        "operationId": "ColoradoMonitorController_runCheckAll",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Run Colorado check for all filed CO clients (fire & forget)",
+        "tags": [
+          "colorado-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/check/{taxCaseId}": {
+      "post": {
+        "operationId": "ColoradoMonitorController_runCheck",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Run Colorado refund check for a specific client (fire & forget)",
+        "tags": [
+          "colorado-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/checks": {
+      "get": {
+        "operationId": "ColoradoMonitorController_getChecks",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all recent Colorado checks (paginated)",
+        "tags": [
+          "colorado-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/checks/{taxCaseId}": {
+      "get": {
+        "operationId": "ColoradoMonitorController_getChecksForClient",
+        "parameters": [
+          {
+            "name": "taxCaseId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get Colorado check history for a specific client",
+        "tags": [
+          "colorado-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/export": {
+      "get": {
+        "operationId": "ColoradoMonitorController_exportCsv",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Export all Colorado checks as CSV",
+        "tags": [
+          "colorado-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/checks/{checkId}/approve": {
+      "post": {
+        "operationId": "ColoradoMonitorController_approveCheck",
+        "parameters": [
+          {
+            "name": "checkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Approve a recommended status change from a Colorado check",
+        "tags": [
+          "colorado-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/checks/{checkId}/dismiss": {
+      "post": {
+        "operationId": "ColoradoMonitorController_dismissCheck",
+        "parameters": [
+          {
+            "name": "checkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Dismiss a recommended status change (no update applied)",
+        "tags": [
+          "colorado-monitor"
+        ]
+      }
+    },
+    "/v1/colorado-monitor/screenshot/{checkId}": {
+      "get": {
+        "operationId": "ColoradoMonitorController_getScreenshot",
+        "parameters": [
+          {
+            "name": "checkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a 24-hour signed URL for a check screenshot",
+        "tags": [
+          "colorado-monitor"
         ]
       }
     }

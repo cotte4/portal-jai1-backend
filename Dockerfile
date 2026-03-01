@@ -8,9 +8,10 @@ COPY package*.json ./
 COPY prisma/ ./prisma/
 RUN npm ci
 
-# Install Firefox binary + all OS-level system dependencies Playwright needs.
+# Install Chromium binary + all OS-level system dependencies Playwright needs.
+# Chromium is required for playwright-extra stealth plugin (anti-bot evasion).
 # Must run AFTER npm ci so the local playwright package is available.
-RUN npx playwright install --with-deps firefox
+RUN npx playwright install --with-deps chromium
 
 # Copy source and build
 COPY . .
