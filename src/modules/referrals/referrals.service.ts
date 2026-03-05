@@ -317,19 +317,6 @@ export class ReferralsService {
   }
 
   /**
-   * @deprecated No longer used - referral status now goes directly from 'pending' to 'successful'
-   * when federal/state status becomes 'taxes_completed'. Kept for backwards compatibility.
-   * Update referral status when referred user submits tax form
-   */
-  async updateReferralOnTaxFormSubmit(referredUserId: string): Promise<void> {
-    // Deprecated: No-op - intermediate statuses removed
-    // Referrals now transition directly: pending -> successful (on taxes_completed)
-    this.logger.debug(
-      `updateReferralOnTaxFormSubmit called for ${referredUserId} - deprecated, skipping`,
-    );
-  }
-
-  /**
    * Mark referral as successful when referred user receives refund
    */
   async markReferralSuccessful(

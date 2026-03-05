@@ -7,8 +7,8 @@ Sentry.init({
   // Only send errors in production
   enabled: process.env.NODE_ENV === 'production',
 
-  // Send default PII data (IP address, etc.)
-  sendDefaultPii: true,
+  // Do not send PII data (IP address, etc.) to Sentry
+  sendDefaultPii: false,
 
   // Sample rate for performance monitoring (1.0 = 100%)
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,

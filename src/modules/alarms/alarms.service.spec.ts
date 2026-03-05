@@ -46,7 +46,7 @@ const mockTaxCaseWithCustomThresholds = {
 const mockAlarmHistory = {
   id: 'alarm-1',
   taxCaseId: 'taxcase-1',
-  alarmType: AlarmType.possible_verification,
+  alarmType: AlarmType.possible_verification_federal,
   alarmLevel: AlarmLevel.warning,
   track: 'federal',
   message: 'Federal status taxes_en_proceso for 30 days',
@@ -185,7 +185,7 @@ describe('AlarmsService', () => {
       const result = await service.getHistory();
 
       expect(result).toHaveLength(1);
-      expect(result[0].alarmType).toBe(AlarmType.possible_verification);
+      expect(result[0].alarmType).toBe(AlarmType.possible_verification_federal);
       expect(result[0].clientName).toBe('John Doe');
     });
 
@@ -204,11 +204,11 @@ describe('AlarmsService', () => {
     it('should filter by alarmType', async () => {
       prisma.alarmHistory.findMany.mockResolvedValue([]);
 
-      await service.getHistory({ alarmType: AlarmType.possible_verification });
+      await service.getHistory({ alarmType: AlarmType.possible_verification_federal });
 
       expect(prisma.alarmHistory.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { alarmType: AlarmType.possible_verification },
+          where: { alarmType: AlarmType.possible_verification_federal },
         }),
       );
     });
@@ -508,8 +508,8 @@ describe('AlarmsService', () => {
       prisma.taxCase.findUnique.mockResolvedValue(mockTaxCase);
 
       const alarm = {
-        type: 'possible_verification',
-        level: 'warning',
+        type: 'possible_verification_federal' as const,
+        level: 'warning' as const,
         track: 'federal' as const,
         message: 'Test alarm',
         threshold: 21,
@@ -532,8 +532,8 @@ describe('AlarmsService', () => {
       prisma.alarmHistory.update.mockResolvedValue(mockAlarmHistory);
 
       const alarm = {
-        type: 'possible_verification',
-        level: 'warning',
+        type: 'possible_verification_federal' as const,
+        level: 'warning' as const,
         track: 'federal' as const,
         message: 'Updated message',
         threshold: 21,

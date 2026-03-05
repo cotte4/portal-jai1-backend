@@ -33,7 +33,7 @@ export class AuthService {
   // Hash of a random string, computed once at class initialization
   // Valid bcrypt hash of a random string, used for timing-safe comparisons
   private readonly DUMMY_PASSWORD_HASH =
-    '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01234';
+    '$2b$10$FNABhU80YfHys8OAoS92kOGCGytN35Wxt.7qrNd99iYTIfELjWwD6';
 
   // Temporary storage for OAuth authorization codes (single-use, short-lived)
   // In production, consider using Redis for multi-instance deployments

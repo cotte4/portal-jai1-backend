@@ -20,7 +20,7 @@ const mockTaxCase = {
   federalStatusNew: FederalStatusNew.taxes_en_proceso,
   federalActualRefund: 1215,
   estimatedRefund: null,
-  paymentMethod: PaymentMethod.direct_deposit,
+  paymentMethod: PaymentMethod.bank_deposit,
   filingStatus: 'single',
   clientProfile: {
     ssn: 'encrypted-ssn',
@@ -32,14 +32,14 @@ const mockScrapeSuccess = {
   rawStatus: 'Return Received',
   details: 'Return Received — Your return is being processed.',
   screenshotPath: 'checks/abc/123.png',
-  result: IrsCheckResult.success as const,
+  result: IrsCheckResult.success,
 };
 
 const mockScrapeError = {
   rawStatus: 'Error',
   details: '',
   screenshotPath: null,
-  result: IrsCheckResult.error as const,
+  result: IrsCheckResult.error,
   errorMessage: 'Timeout waiting for selector',
 };
 
@@ -47,7 +47,7 @@ const mockScrapeTimeout = {
   rawStatus: 'Error',
   details: '',
   screenshotPath: null,
-  result: IrsCheckResult.timeout as const,
+  result: IrsCheckResult.timeout,
   errorMessage: 'Timed out 30000ms',
 };
 

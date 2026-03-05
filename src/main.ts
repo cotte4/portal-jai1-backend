@@ -18,7 +18,13 @@ async function bootstrap() {
   // Security headers (HSTS, X-Content-Type-Options, X-Frame-Options, etc.)
   app.use(
     helmet({
-      contentSecurityPolicy: false, // Disable CSP for now (can cause issues with some frontends)
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:'],
+        },
+      },
       crossOriginEmbedderPolicy: false, // Disable for iframe compatibility
     }),
   );

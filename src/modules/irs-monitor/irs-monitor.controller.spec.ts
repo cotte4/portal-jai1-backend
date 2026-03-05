@@ -95,11 +95,11 @@ describe('IrsMonitorController', () => {
         statusChanged: true,
         newStatus: FederalStatusNew.deposito_directo,
         rawStatus: 'Refund Approved',
-      });
+      } as any);
 
       const result = await controller.runCheck(VALID_UUID, MOCK_ADMIN);
-      expect(result.statusChanged).toBe(true);
-      expect(result.newStatus).toBe(FederalStatusNew.deposito_directo);
+      expect((result as any).statusChanged).toBe(true);
+      expect((result as any).newStatus).toBe(FederalStatusNew.deposito_directo);
     });
   });
 

@@ -105,7 +105,6 @@ describe('ClientsController', () => {
 
     const mockExportService = {
       exportToExcelStream: jest.fn(),
-      exportToExcel: jest.fn(),
     };
 
     const mockReportingService = {
@@ -146,7 +145,7 @@ describe('ClientsController', () => {
 
   describe('GET /profile', () => {
     it('should return client profile', async () => {
-      profileService.getProfile.mockResolvedValue(mockProfile);
+      profileService.getProfile.mockResolvedValue(mockProfile as any);
 
       const result = await controller.getProfile(mockClientUser);
 
@@ -159,15 +158,17 @@ describe('ClientsController', () => {
     const completeProfileDto: CompleteProfileDto = {
       ssn: '123-45-6789',
       date_of_birth: '1990-01-01',
-      address_street: '123 Main St',
-      address_city: 'New York',
-      address_state: 'NY',
-      address_zip: '10001',
+      address: {
+        street: '123 Main St',
+        city: 'New York',
+        state: 'NY',
+        zip: '10001',
+      },
     };
 
     it('should complete client profile', async () => {
-      const completedProfile = { ...mockProfile, profileComplete: true };
-      profileService.completeProfile.mockResolvedValue(completedProfile);
+      const completedProfile = { profile: { ...mockProfile, profileComplete: true }, message: 'Profile saved successfully' };
+      profileService.completeProfile.mockResolvedValue(completedProfile as any);
 
       const result = await controller.completeProfile(mockClientUser, completeProfileDto);
 
@@ -179,7 +180,7 @@ describe('ClientsController', () => {
   describe('GET /profile/draft', () => {
     it('should return profile draft', async () => {
       const draftProfile = { ...mockProfile, isDraft: true };
-      profileService.getDraft.mockResolvedValue(draftProfile);
+      profileService.getDraft.mockResolvedValue(draftProfile as any);
 
       const result = await controller.getDraft(mockClientUser);
 
@@ -195,7 +196,7 @@ describe('ClientsController', () => {
         firstName: 'Updated',
       };
       const updatedProfile = { ...mockProfile, user: { ...mockProfile.user, ...updateData } };
-      profileService.updateUserInfo.mockResolvedValue(updatedProfile);
+      profileService.updateUserInfo.mockResolvedValue(updatedProfile as any);
 
       const result = await controller.updateUserInfo(mockClientUser, updateData);
 
@@ -242,9 +243,9 @@ describe('ClientsController', () => {
     it('should return season stats', async () => {
       const stats = {
         totalClients: 100,
-        completedCases: 50,
-        pendingCases: 30,
-        revenue: 50000,
+        taxesCompletedPercent: 50,
+        projectedEarnings: 100000,
+        earningsToDate: 50000,
       };
       reportingService.getSeasonStats.mockResolvedValue(stats);
 
@@ -257,7 +258,7 @@ describe('ClientsController', () => {
 
   describe('GET /admin/accounts', () => {
     it('should return all client accounts with pagination', async () => {
-      queryService.getAllClientAccounts.mockResolvedValue(mockClientList);
+      queryService.getAllClientAccounts.mockResolvedValue(mockClientList as any);
 
       const result = await controller.getAllClientAccounts('cursor-123', '50');
 
@@ -269,7 +270,7 @@ describe('ClientsController', () => {
     });
 
     it('should use default limit when not provided', async () => {
-      queryService.getAllClientAccounts.mockResolvedValue(mockClientList);
+      queryService.getAllClientAccounts.mockResolvedValue(mockClientList as any);
 
       await controller.getAllClientAccounts(undefined, undefined);
 
@@ -280,7 +281,7 @@ describe('ClientsController', () => {
     });
 
     it('should cap limit at maximum value', async () => {
-      queryService.getAllClientAccounts.mockResolvedValue(mockClientList);
+      queryService.getAllClientAccounts.mockResolvedValue(mockClientList as any);
 
       await controller.getAllClientAccounts(undefined, '1000');
 
@@ -293,7 +294,7 @@ describe('ClientsController', () => {
 
   describe('GET /admin/clients', () => {
     it('should return filtered client list', async () => {
-      queryService.findAll.mockResolvedValue(mockClientList);
+      queryService.findAll.mockResolvedValue(mockClientList as any);
 
       const result = await controller.findAll(
         'pending',
@@ -328,7 +329,7 @@ describe('ClientsController', () => {
     });
 
     it('should parse hasProblem boolean correctly', async () => {
-      queryService.findAll.mockResolvedValue(mockClientList);
+      queryService.findAll.mockResolvedValue(mockClientList as any);
 
       await controller.findAll(
         undefined,
@@ -353,7 +354,7 @@ describe('ClientsController', () => {
 
   describe('GET /admin/clients/:id', () => {
     it('should return single client detail', async () => {
-      queryService.findOne.mockResolvedValue(mockProfile);
+      queryService.findOne.mockResolvedValue(mockProfile as any);
 
       const result = await controller.findOne('client-123');
 
@@ -363,17 +364,17 @@ describe('ClientsController', () => {
   });
 
   describe('PATCH /admin/clients/:id/status', () => {
-    const updateStatusDto: UpdateStatusDto = {
-      federalStatus: 'accepted',
-      stateStatus: 'pending',
-    };
+    const updateStatusDto = {
+      federalStatusNew: 'accepted',
+      stateStatusNew: 'pending',
+    } as unknown as UpdateStatusDto;
 
     it('should update client status', async () => {
       const updatedProfile = {
         ...mockProfile,
         taxCase: { ...mockProfile.taxCase, federalStatus: 'accepted' },
       };
-      statusService.updateStatus.mockResolvedValue(updatedProfile);
+      statusService.updateStatus.mockResolvedValue(updatedProfile as any);
 
       const result = await controller.updateStatus('client-123', updateStatusDto, mockAdminUser);
 
@@ -412,12 +413,13 @@ describe('ClientsController', () => {
 
   describe('PATCH /admin/clients/:id/problem', () => {
     const setProblemDto: SetProblemDto = {
+      hasProblem: true,
       problemType: 'missing_documents',
       problemDescription: 'W2 form is missing',
     };
 
     it('should set problem on client case', async () => {
-      const response = { message: 'Problem set successfully' };
+      const response = { message: 'Problem set successfully', hasProblem: true };
       adminService.setProblem.mockResolvedValue(response);
 
       const result = await controller.setProblem('client-123', setProblemDto);
@@ -428,12 +430,13 @@ describe('ClientsController', () => {
   });
 
   describe('POST /admin/clients/:id/notify', () => {
-    const notifyDto: SendNotificationDto = {
+    const notifyDto = {
+      title: 'Document Review',
       message: 'Your documents have been reviewed',
-    };
+    } as SendNotificationDto;
 
     it('should send notification to client', async () => {
-      const response = { message: 'Notification sent' };
+      const response = { message: 'Notification sent', emailSent: true };
       adminService.sendClientNotification.mockResolvedValue(response);
 
       const result = await controller.sendClientNotification('client-123', notifyDto);

@@ -10,7 +10,7 @@ describe('IrsStatusMapperService', () => {
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  const dd = PaymentMethod.direct_deposit;
+  const dd = PaymentMethod.bank_deposit;
   const chk = PaymentMethod.check;
 
   // ─── Return Received / Still Processing ─────────────────────────────────────

@@ -87,7 +87,7 @@ describe('TicketsController', () => {
     };
 
     it('should create a new ticket', async () => {
-      ticketsService.create.mockResolvedValue(mockTicket);
+      ticketsService.create.mockResolvedValue(mockTicket as any);
 
       const result = await controller.create(mockClientUser, createTicketDto);
 
@@ -98,7 +98,7 @@ describe('TicketsController', () => {
 
   describe('GET /tickets', () => {
     it('should return all tickets for admin', async () => {
-      ticketsService.findAll.mockResolvedValue(mockTicketsList);
+      ticketsService.findAll.mockResolvedValue(mockTicketsList as any);
 
       const result = await controller.findAll(mockAdminUser, undefined, undefined);
 
@@ -107,7 +107,7 @@ describe('TicketsController', () => {
     });
 
     it('should return only own tickets for client', async () => {
-      ticketsService.findAll.mockResolvedValue(mockTicketsList);
+      ticketsService.findAll.mockResolvedValue(mockTicketsList as any);
 
       const result = await controller.findAll(mockClientUser, undefined, undefined);
 
@@ -116,7 +116,7 @@ describe('TicketsController', () => {
     });
 
     it('should filter tickets by status', async () => {
-      ticketsService.findAll.mockResolvedValue(mockTicketsList);
+      ticketsService.findAll.mockResolvedValue(mockTicketsList as any);
 
       const result = await controller.findAll(mockAdminUser, 'open', undefined);
 
@@ -125,7 +125,7 @@ describe('TicketsController', () => {
     });
 
     it('should allow admin to filter by user_id', async () => {
-      ticketsService.findAll.mockResolvedValue(mockTicketsList);
+      ticketsService.findAll.mockResolvedValue(mockTicketsList as any);
 
       const result = await controller.findAll(mockAdminUser, undefined, 'client-456');
 
@@ -139,7 +139,7 @@ describe('TicketsController', () => {
     });
 
     it('should accept valid status values', async () => {
-      ticketsService.findAll.mockResolvedValue([]);
+      ticketsService.findAll.mockResolvedValue([] as any);
 
       for (const status of ['open', 'in_progress', 'closed']) {
         await expect(
@@ -151,7 +151,7 @@ describe('TicketsController', () => {
 
   describe('GET /tickets/:id', () => {
     it('should return ticket by id', async () => {
-      ticketsService.findOne.mockResolvedValue(mockTicket);
+      ticketsService.findOne.mockResolvedValue(mockTicket as any);
 
       const result = await controller.findOne(mockClientUser, 'ticket-123');
 
@@ -165,9 +165,9 @@ describe('TicketsController', () => {
   });
 
   describe('POST /tickets/:id/messages', () => {
-    const createMessageDto: CreateMessageDto = {
+    const createMessageDto = {
       content: 'Thanks for your help!',
-    };
+    } as unknown as CreateMessageDto;
 
     it('should add message to ticket', async () => {
       const updatedTicket = {
@@ -182,7 +182,7 @@ describe('TicketsController', () => {
           },
         ],
       };
-      ticketsService.addMessage.mockResolvedValue(updatedTicket);
+      ticketsService.addMessage.mockResolvedValue(updatedTicket as any);
 
       const result = await controller.addMessage(mockClientUser, 'ticket-123', createMessageDto);
 
@@ -197,13 +197,13 @@ describe('TicketsController', () => {
   });
 
   describe('PATCH /tickets/:id/status', () => {
-    const updateStatusDto: UpdateStatusDto = {
+    const updateStatusDto = {
       status: 'in_progress',
-    };
+    } as unknown as UpdateStatusDto;
 
     it('should update ticket status (admin only)', async () => {
       const updatedTicket = { ...mockTicket, status: 'in_progress' };
-      ticketsService.updateStatus.mockResolvedValue(updatedTicket);
+      ticketsService.updateStatus.mockResolvedValue(updatedTicket as any);
 
       const result = await controller.updateStatus('ticket-123', updateStatusDto);
 
@@ -248,7 +248,7 @@ describe('TicketsController', () => {
   describe('PATCH /tickets/:id/messages/read', () => {
     it('should mark messages as read', async () => {
       const response = { markedCount: 3 };
-      ticketsService.markMessagesAsRead.mockResolvedValue(response);
+      ticketsService.markMessagesAsRead.mockResolvedValue(response as any);
 
       const result = await controller.markMessagesAsRead(mockClientUser, 'ticket-123');
 

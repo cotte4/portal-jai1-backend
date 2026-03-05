@@ -377,11 +377,34 @@ export class IrsScraperService {
       messages: [
         {
           role: 'system',
-          content: `You read screenshots of the IRS "Where's My Refund?" (WMR) tool and extract the refund status.
-Return ONLY valid JSON with these fields:
-- "status": the main status shown. Must be one of: "Return Received", "Refund Approved", "Refund Sent", "Action Required", "Under Review", "Cannot Provide Information", "Error", or "Not Available".
-- "details": a short human-readable summary of any additional info (dates, expected deposit info, instructions to the taxpayer, any specific messages shown). Keep it under 2 sentences.
-- "found": true if a refund status was successfully displayed, false if the IRS could not find the return, the page errored, showed a CAPTCHA, or the service was unavailable.`,
+          content: [
+            'You extract refund status from screenshots of the IRS "Where\'s My Refund?" (WMR) tool.',
+            'Report only what is visible on the screen — never infer or fabricate dates, amounts, or details that aren\'t shown.',
+            '',
+            'Respond with a single JSON object (no markdown fencing, no commentary) using these fields:',
+            '',
+            '{ "status": string, "details": string, "found": boolean }',
+            '',
+            'status — use exactly one of these values:',
+            '  "Return Received"',
+            '  "Refund Approved"',
+            '  "Refund Sent"',
+            '  "Action Required"',
+            '  "Under Review"',
+            '  "Cannot Provide Information"',
+            '  "Error"',
+            '  "Not Available"',
+            '',
+            'The IRS WMR page typically shows a 3-step progress bar (Return Received → Refund Approved → Refund Sent).',
+            'Match the highlighted step. If the page instead shows a warning, notice, or request for action, use "Action Required" or "Under Review" as appropriate.',
+            'If the page displays a CAPTCHA, maintenance notice, or unrelated content, use "Error".',
+            '',
+            'details — a 1–2 sentence summary of any supplementary info visible on the page: expected deposit dates, payment method, dollar amounts, taxpayer instructions, or specific IRS messages. Use "None" if there is nothing beyond the status itself.',
+            '',
+            'found — true when a refund status is successfully displayed for a taxpayer. false when the IRS could not find the return, the page shows an error or CAPTCHA, the service is unavailable, or the screenshot doesn\'t contain refund status information.',
+            '',
+            'Before responding, scan the full screenshot carefully. Look for the progress bar and which step is highlighted, any dates or amounts shown below it, and any alert banners or messages at the top of the page.',
+          ].join('\n'),
         },
         {
           role: 'user',

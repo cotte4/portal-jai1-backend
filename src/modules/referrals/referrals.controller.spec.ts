@@ -89,7 +89,7 @@ describe('ReferralsController', () => {
 
   describe('GET /referrals/validate/:code', () => {
     it('should validate a valid referral code', async () => {
-      referralsService.validateCode.mockResolvedValue(mockCodeValidation);
+      referralsService.validateCode.mockResolvedValue(mockCodeValidation as any);
 
       const result = await controller.validateCode('REF123');
 
@@ -98,7 +98,7 @@ describe('ReferralsController', () => {
     });
 
     it('should return invalid for non-existent code', async () => {
-      referralsService.validateCode.mockResolvedValue({ valid: false });
+      referralsService.validateCode.mockResolvedValue({ valid: false } as any);
 
       const result = await controller.validateCode('INVALID');
 
@@ -114,7 +114,7 @@ describe('ReferralsController', () => {
     };
 
     it('should apply referral code to current user', async () => {
-      referralsService.applyReferralCode.mockResolvedValue(mockReferral);
+      referralsService.applyReferralCode.mockResolvedValue(mockReferral as any);
 
       const result = await controller.applyCode(mockClientUser, applyCodeDto);
 
@@ -132,7 +132,7 @@ describe('ReferralsController', () => {
         referrer: { id: 'referrer-123', name: 'John Doe' },
         referralCode: 'REF123',
       };
-      referralsService.getMyReferrer.mockResolvedValue(referrerInfo);
+      referralsService.getMyReferrer.mockResolvedValue(referrerInfo as any);
 
       const result = await controller.getMyReferrer(mockClientUser);
 
@@ -141,7 +141,7 @@ describe('ReferralsController', () => {
     });
 
     it('should return null if user was not referred', async () => {
-      referralsService.getMyReferrer.mockResolvedValue(null);
+      referralsService.getMyReferrer.mockResolvedValue(null as any);
 
       const result = await controller.getMyReferrer(mockClientUser);
 
@@ -152,7 +152,7 @@ describe('ReferralsController', () => {
   describe('GET /referrals/my-code', () => {
     it('should return user referral code', async () => {
       const codeInfo = { code: 'ABC123', createdAt: new Date() };
-      referralsService.getMyCode.mockResolvedValue(codeInfo);
+      referralsService.getMyCode.mockResolvedValue(codeInfo as any);
 
       const result = await controller.getMyCode(mockClientUser);
 
@@ -164,7 +164,7 @@ describe('ReferralsController', () => {
   describe('GET /referrals/my-referrals', () => {
     it('should return referrals made by user', async () => {
       const referrals = [mockReferral];
-      referralsService.getMyReferrals.mockResolvedValue(referrals);
+      referralsService.getMyReferrals.mockResolvedValue(referrals as any);
 
       const result = await controller.getMyReferrals(mockClientUser);
 
@@ -176,7 +176,7 @@ describe('ReferralsController', () => {
   describe('GET /referrals/my-discount', () => {
     it('should return discount info', async () => {
       const discountInfo = { hasDiscount: true, discountAmount: 50 };
-      referralsService.getMyDiscount.mockResolvedValue(discountInfo);
+      referralsService.getMyDiscount.mockResolvedValue(discountInfo as any);
 
       const result = await controller.getMyDiscount(mockClientUser);
 
@@ -187,7 +187,7 @@ describe('ReferralsController', () => {
 
   describe('GET /referrals/leaderboard', () => {
     it('should return leaderboard with default limit', async () => {
-      referralsService.getLeaderboard.mockResolvedValue(mockLeaderboard);
+      referralsService.getLeaderboard.mockResolvedValue(mockLeaderboard as any);
 
       const result = await controller.getLeaderboard(undefined);
 
@@ -196,7 +196,7 @@ describe('ReferralsController', () => {
     });
 
     it('should respect custom limit', async () => {
-      referralsService.getLeaderboard.mockResolvedValue(mockLeaderboard);
+      referralsService.getLeaderboard.mockResolvedValue(mockLeaderboard as any);
 
       await controller.getLeaderboard('20');
 
@@ -204,7 +204,7 @@ describe('ReferralsController', () => {
     });
 
     it('should cap limit at maximum', async () => {
-      referralsService.getLeaderboard.mockResolvedValue(mockLeaderboard);
+      referralsService.getLeaderboard.mockResolvedValue(mockLeaderboard as any);
 
       await controller.getLeaderboard('500');
 
@@ -212,7 +212,7 @@ describe('ReferralsController', () => {
     });
 
     it('should use default for invalid limit', async () => {
-      referralsService.getLeaderboard.mockResolvedValue(mockLeaderboard);
+      referralsService.getLeaderboard.mockResolvedValue(mockLeaderboard as any);
 
       await controller.getLeaderboard('invalid');
 
@@ -225,7 +225,7 @@ describe('ReferralsController', () => {
   describe('GET /referrals/admin', () => {
     it('should return all referrals', async () => {
       const allReferrals = { referrals: [mockReferral], total: 1 };
-      referralsService.getAllReferrals.mockResolvedValue(allReferrals);
+      referralsService.getAllReferrals.mockResolvedValue(allReferrals as any);
 
       const result = await controller.getAllReferrals(undefined, undefined, undefined, undefined);
 
@@ -239,7 +239,7 @@ describe('ReferralsController', () => {
     });
 
     it('should filter by status and search', async () => {
-      referralsService.getAllReferrals.mockResolvedValue({ referrals: [], total: 0 });
+      referralsService.getAllReferrals.mockResolvedValue({ referrals: [], total: 0 } as any);
 
       await controller.getAllReferrals('completed', 'john', '25', '10');
 
@@ -252,7 +252,7 @@ describe('ReferralsController', () => {
     });
 
     it('should cap limit at maximum', async () => {
-      referralsService.getAllReferrals.mockResolvedValue({ referrals: [], total: 0 });
+      referralsService.getAllReferrals.mockResolvedValue({ referrals: [], total: 0 } as any);
 
       await controller.getAllReferrals(undefined, undefined, '5000', undefined);
 
@@ -268,7 +268,7 @@ describe('ReferralsController', () => {
         data: [{ referrerId: 'user-1', count: 5 }],
         nextCursor: null,
       };
-      referralsService.getReferralSummary.mockResolvedValue(summary);
+      referralsService.getReferralSummary.mockResolvedValue(summary as any);
 
       const result = await controller.getReferralSummary(undefined, undefined);
 
@@ -280,7 +280,7 @@ describe('ReferralsController', () => {
     });
 
     it('should support cursor pagination', async () => {
-      referralsService.getReferralSummary.mockResolvedValue({ data: [], nextCursor: null });
+      referralsService.getReferralSummary.mockResolvedValue({ data: [], nextCursor: null } as any);
 
       await controller.getReferralSummary('cursor-123', '25');
 
@@ -299,7 +299,7 @@ describe('ReferralsController', () => {
         pendingReferrals: 30,
         totalDiscountsApplied: 5000,
       };
-      referralsService.getStats.mockResolvedValue(stats);
+      referralsService.getStats.mockResolvedValue(stats as any);
 
       const result = await controller.getStats();
 
@@ -309,30 +309,30 @@ describe('ReferralsController', () => {
   });
 
   describe('PATCH /referrals/admin/:id/status', () => {
-    const updateStatusDto: UpdateReferralStatusDto = {
+    const updateStatusDto = {
       status: 'completed',
-    };
+    } as unknown as UpdateReferralStatusDto;
 
     it('should update referral status', async () => {
       const updatedReferral = { ...mockReferral, status: 'completed' };
-      referralsService.updateStatus.mockResolvedValue(updatedReferral);
+      referralsService.updateStatus.mockResolvedValue(updatedReferral as any);
 
       const result = await controller.updateStatus('ref-123', updateStatusDto);
 
       expect(referralsService.updateStatus).toHaveBeenCalledWith('ref-123', updateStatusDto);
-      expect(result.status).toBe('completed');
+      expect((result as any).status).toBe('completed');
     });
   });
 
   describe('POST /referrals/admin/clients/:id/apply-discount', () => {
-    const applyDiscountDto: ApplyDiscountDto = {
+    const applyDiscountDto = {
       amount: 50,
       reason: 'Referral bonus',
-    };
+    } as unknown as ApplyDiscountDto;
 
     it('should apply discount to client', async () => {
       const response = { message: 'Discount applied successfully', discountAmount: 50 };
-      referralsService.applyDiscount.mockResolvedValue(response);
+      referralsService.applyDiscount.mockResolvedValue(response as any);
 
       const result = await controller.applyDiscount('client-123', applyDiscountDto, mockAdminUser);
 

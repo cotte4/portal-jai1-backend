@@ -428,7 +428,6 @@ export class ClientStatusService {
     if (statusData.federalStatusNew && statusData.federalStatusNew !== previousFederalStatusNew) {
       await this.notifyFederalStatusChangeV2(
         client.user.id,
-        client.user.email,
         client.user.firstName,
         statusData.federalStatusNew,
         statusData.federalActualRefund,
@@ -439,7 +438,6 @@ export class ClientStatusService {
     if (statusData.stateStatusNew && statusData.stateStatusNew !== previousStateStatusNew) {
       await this.notifyStateStatusChangeV2(
         client.user.id,
-        client.user.email,
         client.user.firstName,
         statusData.stateStatusNew,
         statusData.stateActualRefund,
@@ -525,7 +523,6 @@ export class ClientStatusService {
    */
   private async notifyFederalStatusChangeV2(
     userId: string,
-    email: string,
     firstName: string,
     status: string,
     refundAmount?: number,
@@ -565,7 +562,6 @@ export class ClientStatusService {
    */
   private async notifyStateStatusChangeV2(
     userId: string,
-    email: string,
     firstName: string,
     status: string,
     refundAmount?: number,

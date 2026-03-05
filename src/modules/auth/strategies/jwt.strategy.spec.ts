@@ -26,6 +26,7 @@ describe('JwtStrategy', () => {
     googleId: null,
     profilePicturePath: null,
     tokenVersion: 0,
+    referralOnboardingCompleted: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

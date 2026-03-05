@@ -161,7 +161,7 @@ describe('DocumentsService', () => {
     });
 
     it('should upload a valid PDF document', async () => {
-      const result = await service.upload('user-1', mockFile, { type: 'w2' });
+      const result = await service.upload('user-1', mockFile, { type: 'w2' } as any);
 
       expect(supabase.uploadFile).toHaveBeenCalled();
       expect(prisma.document.create).toHaveBeenCalled();
@@ -171,7 +171,7 @@ describe('DocumentsService', () => {
     it('should upload a valid JPEG document', async () => {
       const jpgFile = { ...mockFile, mimetype: 'image/jpeg', originalname: 'w2.jpg' };
 
-      await service.upload('user-1', jpgFile, { type: 'w2' });
+      await service.upload('user-1', jpgFile, { type: 'w2' } as any);
 
       expect(supabase.uploadFile).toHaveBeenCalled();
     });
@@ -179,7 +179,7 @@ describe('DocumentsService', () => {
     it('should upload a valid PNG document', async () => {
       const pngFile = { ...mockFile, mimetype: 'image/png', originalname: 'w2.png' };
 
-      await service.upload('user-1', pngFile, { type: 'w2' });
+      await service.upload('user-1', pngFile, { type: 'w2' } as any);
 
       expect(supabase.uploadFile).toHaveBeenCalled();
     });
@@ -188,7 +188,7 @@ describe('DocumentsService', () => {
       const invalidFile = { ...mockFile, mimetype: 'text/plain' };
 
       await expect(
-        service.upload('user-1', invalidFile, { type: 'w2' }),
+        service.upload('user-1', invalidFile, { type: 'w2' } as any),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -208,7 +208,7 @@ describe('DocumentsService', () => {
         clientProfileId: 'new-profile-1',
       });
 
-      const result = await service.upload('user-1', mockFile, { type: 'w2' });
+      const result = await service.upload('user-1', mockFile, { type: 'w2' } as any);
 
       expect(prisma.clientProfile.create).toHaveBeenCalledWith({
         data: {
@@ -233,13 +233,13 @@ describe('DocumentsService', () => {
         taxYear: 2024,
       });
 
-      await service.upload('user-1', mockFile, { type: 'w2' });
+      await service.upload('user-1', mockFile, { type: 'w2' } as any);
 
       expect(prisma.taxCase.create).toHaveBeenCalled();
     });
 
     it('should emit W2_UPLOADED event for W2 documents', async () => {
-      await service.upload('user-1', mockFile, { type: 'w2' });
+      await service.upload('user-1', mockFile, { type: 'w2' } as any);
 
       expect(progressAutomation.processEvent).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -249,7 +249,7 @@ describe('DocumentsService', () => {
     });
 
     it('should emit PAYMENT_PROOF_UPLOADED event for payment proofs', async () => {
-      await service.upload('user-1', mockFile, { type: 'payment_proof' });
+      await service.upload('user-1', mockFile, { type: 'payment_proof' } as any);
 
       expect(progressAutomation.processEvent).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -259,7 +259,7 @@ describe('DocumentsService', () => {
     });
 
     it('should emit DOCUMENT_UPLOADED event for other documents', async () => {
-      await service.upload('user-1', mockFile, { type: 'id' });
+      await service.upload('user-1', mockFile, { type: 'id' } as any);
 
       expect(progressAutomation.processEvent).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -269,7 +269,7 @@ describe('DocumentsService', () => {
     });
 
     it('should check if all docs are complete after upload', async () => {
-      await service.upload('user-1', mockFile, { type: 'w2' });
+      await service.upload('user-1', mockFile, { type: 'w2' } as any);
 
       expect(progressAutomation.checkAllDocsComplete).toHaveBeenCalled();
     });
@@ -503,7 +503,7 @@ describe('DocumentsService', () => {
         const file = { ...mockFile, mimetype: mimeType };
 
         await expect(
-          service.upload('user-1', file, { type: 'w2' }),
+          service.upload('user-1', file, { type: 'w2' } as any),
         ).resolves.not.toThrow();
       });
     });
@@ -513,7 +513,7 @@ describe('DocumentsService', () => {
         const file = { ...mockFile, mimetype: mimeType };
 
         await expect(
-          service.upload('user-1', file, { type: 'w2' }),
+          service.upload('user-1', file, { type: 'w2' } as any),
         ).rejects.toThrow(BadRequestException);
       });
     });

@@ -293,11 +293,33 @@ export class ColoradoScraperService {
       messages: [
         {
           role: 'system',
-          content: `You read screenshots of the Colorado Department of Revenue "Where's My Refund" page and extract the refund status.
-Return ONLY valid JSON with these fields:
-- "status": the main status shown (e.g. "Return Not Received", "Return Received & Being Processed", "Refund Reviewed", "Refund Issued", "Direct Deposit Redeemed", "Paper Check Redeemed", "Request Unavailable", or "Error")
-- "details": a short human-readable summary of any additional info shown on the page (dates, amounts, instructions). If the page shows an error or is unavailable, describe that briefly.
-- "found": true if a refund status was found, false if the return was not found, the page errored, or the service was unavailable.`,
+          content: [
+            'You extract refund status from screenshots of the Colorado Department of Revenue "Where\'s My Refund" page.',
+            'Report only what is visible on the screen — never infer or fabricate dates, amounts, or details that aren\'t shown.',
+            '',
+            'Respond with a single JSON object (no markdown fencing, no commentary) using these fields:',
+            '',
+            '{ "status": string, "details": string, "found": boolean }',
+            '',
+            'status — use exactly one of these values:',
+            '  "Return Not Received"',
+            '  "Return Received & Being Processed"',
+            '  "Refund Reviewed"',
+            '  "Refund Issued"',
+            '  "Direct Deposit Redeemed"',
+            '  "Paper Check Redeemed"',
+            '  "Request Unavailable"',
+            '  "Error"',
+            '',
+            'If the page text doesn\'t clearly match one of those, use the closest match.',
+            'If you genuinely cannot determine a status (blank page, login wall, unrelated page), use "Error".',
+            '',
+            'details — a 1–2 sentence summary of any supplementary info visible on the page: dates, dollar amounts, taxpayer instructions, or error messages. Use "None" if there is nothing beyond the status itself.',
+            '',
+            'found — true when a refund status is successfully displayed for a taxpayer. false when the return was not found, the page shows an error, the service is unavailable, or the screenshot doesn\'t contain refund status information.',
+            '',
+            'Before responding, scan the full screenshot carefully. Look for the status indicator (often a progress bar or highlighted step), any dates or dollar amounts nearby, and any alert banners or messages.',
+          ].join('\n'),
         },
         {
           role: 'user',

@@ -73,7 +73,7 @@ describe('NotificationsController', () => {
 
   describe('GET /notifications', () => {
     it('should return all notifications for user', async () => {
-      notificationsService.findAll.mockResolvedValue(mockNotificationsList);
+      notificationsService.findAll.mockResolvedValue(mockNotificationsList as any);
 
       const result = await controller.findAll(mockUser, undefined, undefined);
 
@@ -82,7 +82,7 @@ describe('NotificationsController', () => {
     });
 
     it('should return only unread notifications when unreadOnly is true', async () => {
-      notificationsService.findAll.mockResolvedValue(mockNotificationsList);
+      notificationsService.findAll.mockResolvedValue(mockNotificationsList as any);
 
       const result = await controller.findAll(mockUser, 'true', undefined);
 
@@ -91,7 +91,7 @@ describe('NotificationsController', () => {
     });
 
     it('should include archived when includeArchived is true', async () => {
-      notificationsService.findAll.mockResolvedValue(mockNotificationsList);
+      notificationsService.findAll.mockResolvedValue(mockNotificationsList as any);
 
       const result = await controller.findAll(mockUser, undefined, 'true');
 
@@ -100,7 +100,7 @@ describe('NotificationsController', () => {
     });
 
     it('should combine filters correctly', async () => {
-      notificationsService.findAll.mockResolvedValue([]);
+      notificationsService.findAll.mockResolvedValue([] as any);
 
       await controller.findAll(mockUser, 'true', 'true');
 
@@ -108,7 +108,7 @@ describe('NotificationsController', () => {
     });
 
     it('should return empty array when no notifications', async () => {
-      notificationsService.findAll.mockResolvedValue([]);
+      notificationsService.findAll.mockResolvedValue([] as any);
 
       const result = await controller.findAll(mockUser, undefined, undefined);
 
@@ -140,7 +140,7 @@ describe('NotificationsController', () => {
   describe('PATCH /notifications/read-all', () => {
     it('should mark all notifications as read', async () => {
       const response = { updatedCount: 5 };
-      notificationsService.markAllAsRead.mockResolvedValue(response);
+      notificationsService.markAllAsRead.mockResolvedValue(response as any);
 
       const result = await controller.markAllAsRead(mockUser);
 
@@ -152,7 +152,7 @@ describe('NotificationsController', () => {
   describe('PATCH /notifications/archive-all-read', () => {
     it('should archive all read notifications', async () => {
       const response = { archivedCount: 3 };
-      notificationsService.archiveAllRead.mockResolvedValue(response);
+      notificationsService.archiveAllRead.mockResolvedValue(response as any);
 
       const result = await controller.archiveAllRead(mockUser);
 
@@ -164,7 +164,7 @@ describe('NotificationsController', () => {
   describe('DELETE /notifications/read', () => {
     it('should delete all read notifications', async () => {
       const response = { deletedCount: 3 };
-      notificationsService.deleteAllRead.mockResolvedValue(response);
+      notificationsService.deleteAllRead.mockResolvedValue(response as any);
 
       const result = await controller.deleteAllRead(mockUser);
 
@@ -176,24 +176,24 @@ describe('NotificationsController', () => {
   describe('PATCH /notifications/:id/read', () => {
     it('should mark single notification as read', async () => {
       const readNotification = { ...mockNotification, isRead: true };
-      notificationsService.markAsRead.mockResolvedValue(readNotification);
+      notificationsService.markAsRead.mockResolvedValue(readNotification as any);
 
       const result = await controller.markAsRead(mockUser, 'notif-123');
 
       expect(notificationsService.markAsRead).toHaveBeenCalledWith('notif-123', mockUser.id);
-      expect(result.isRead).toBe(true);
+      expect((result as any).isRead).toBe(true);
     });
   });
 
   describe('PATCH /notifications/:id/archive', () => {
     it('should archive single notification', async () => {
       const archivedNotification = { ...mockNotification, isArchived: true };
-      notificationsService.archive.mockResolvedValue(archivedNotification);
+      notificationsService.archive.mockResolvedValue(archivedNotification as any);
 
       const result = await controller.archive(mockUser, 'notif-123');
 
       expect(notificationsService.archive).toHaveBeenCalledWith('notif-123', mockUser.id);
-      expect(result.isArchived).toBe(true);
+      expect((result as any).isArchived).toBe(true);
     });
   });
 

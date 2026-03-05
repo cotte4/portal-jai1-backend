@@ -211,8 +211,6 @@ export class UpdateStatusDto {
   overrideReason?: string;
 }
 
-// DEPRECATED: UpdateAdminStepDto removed - use internalStatus changes instead
-
 export class SetProblemDto {
   @ApiProperty({ description: 'Whether client has a problem' })
   @IsBoolean()

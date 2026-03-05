@@ -24,6 +24,7 @@ describe('UsersController', () => {
     googleId: null,
     profilePicturePath: null,
     tokenVersion: 0,
+    referralOnboardingCompleted: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -71,7 +72,7 @@ describe('UsersController', () => {
 
       const result = await controller.getMe({ id: 'admin-user-123' });
 
-      expect(result.role).toBe('admin');
+      expect(result!.role).toBe('admin');
     });
 
     it('should pass user id from JWT token correctly', async () => {

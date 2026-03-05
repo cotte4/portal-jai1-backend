@@ -471,15 +471,6 @@ describe('ReferralsService', () => {
     });
   });
 
-  describe('updateReferralOnTaxFormSubmit', () => {
-    it('should be a no-op (deprecated method)', async () => {
-      await service.updateReferralOnTaxFormSubmit('user-1');
-
-      expect(prisma.referral.findUnique).not.toHaveBeenCalled();
-      expect(prisma.referral.update).not.toHaveBeenCalled();
-    });
-  });
-
   describe('markReferralSuccessful', () => {
     it('should do nothing if no referral exists', async () => {
       prisma.referral.findUnique.mockResolvedValue(null);

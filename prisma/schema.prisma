@@ -9,57 +9,57 @@ datasource db {
 }
 
 model User {
-  id                    String          @id @default(uuid()) @db.Uuid
-  email                 String          @unique
-  passwordHash          String?         @map("password_hash")
-  role                  UserRole        @default(client)
-  firstName             String          @map("first_name")
-  lastName              String          @map("last_name")
-  phone                 String?
-  profilePicturePath    String?         @map("profile_picture_path")
-  googleId              String?         @unique @map("google_id")
-  isActive              Boolean         @default(true) @map("is_active")
-  lastLoginAt           DateTime?       @map("last_login_at") @db.Timestamptz
-  createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz
-  resetToken            String?         @map("reset_token")
-  resetTokenExpiresAt   DateTime?       @map("reset_token_expires_at") @db.Timestamptz
-  tokenVersion          Int             @default(1) @map("token_version")
+  id                          String                @id @default(uuid()) @db.Uuid
+  email                       String                @unique
+  passwordHash                String?               @map("password_hash")
+  role                        UserRole              @default(client)
+  firstName                   String                @map("first_name")
+  lastName                    String                @map("last_name")
+  phone                       String?
+  profilePicturePath          String?               @map("profile_picture_path")
+  googleId                    String?               @unique @map("google_id")
+  isActive                    Boolean               @default(true) @map("is_active")
+  lastLoginAt                 DateTime?             @map("last_login_at") @db.Timestamptz
+  createdAt                   DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                   DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  resetToken                  String?               @map("reset_token")
+  resetTokenExpiresAt         DateTime?             @map("reset_token_expires_at") @db.Timestamptz
+  tokenVersion                Int                   @default(1) @map("token_version")
   // Email verification
-  emailVerified              Boolean   @default(false) @map("email_verified")
-  verificationToken          String?   @map("verification_token")
-  verificationTokenExpiresAt DateTime? @map("verification_token_expires_at") @db.Timestamptz
+  emailVerified               Boolean               @default(false) @map("email_verified")
+  verificationToken           String?               @map("verification_token")
+  verificationTokenExpiresAt  DateTime?             @map("verification_token_expires_at") @db.Timestamptz
   // Language preference
-  preferredLanguage     String          @default("es") @map("preferred_language") @db.VarChar(5)
+  preferredLanguage           String                @default("es") @map("preferred_language") @db.VarChar(5)
   // Referral program fields
-  referralCode          String?         @unique @map("referral_code")
-  referredByCode        String?         @map("referred_by_code")
-  referralCodeCreatedAt DateTime?       @map("referral_code_created_at") @db.Timestamptz
+  referralCode                String?               @unique @map("referral_code")
+  referredByCode              String?               @map("referred_by_code")
+  referralCodeCreatedAt       DateTime?             @map("referral_code_created_at") @db.Timestamptz
   // Referral onboarding flag
-  referralOnboardingCompleted Boolean   @default(false) @map("referral_onboarding_completed")
+  referralOnboardingCompleted Boolean               @default(false) @map("referral_onboarding_completed")
   // Relations
-  clientProfile         ClientProfile?
-  notifications         Notification[]
-  statusChanges         StatusHistory[] @relation("ChangedBy")
-  ticketMessages        TicketMessage[]
-  tickets               Ticket[]
-  w2Estimates           W2Estimate[]
-  documentsUploaded     Document[]      @relation("DocumentUploader")
-  referralsMade         Referral[]      @relation("ReferrerUser")
-  referralReceived      Referral?       @relation("ReferredUser")
-  discountsReceived     DiscountApplication[] @relation("DiscountUser")
-  discountsApplied      DiscountApplication[] @relation("DiscountAppliedBy")
-  alarmsResolved        AlarmHistory[]        @relation("AlarmResolver")
-  alarmThresholdsCreated AlarmThreshold[]     @relation("AlarmThresholdCreator")
-  refreshTokens         RefreshToken[]
-  systemSettingsUpdated SystemSetting[]       @relation("SystemSettingUpdater")
-  auditLogsAsActor      AuditLog[]            @relation("AuditLogActor")
-  auditLogsAsTarget     AuditLog[]            @relation("AuditLogTarget")
+  clientProfile               ClientProfile?
+  notifications               Notification[]
+  statusChanges               StatusHistory[]       @relation("ChangedBy")
+  ticketMessages              TicketMessage[]
+  tickets                     Ticket[]
+  w2Estimates                 W2Estimate[]
+  documentsUploaded           Document[]            @relation("DocumentUploader")
+  referralsMade               Referral[]            @relation("ReferrerUser")
+  referralReceived            Referral?             @relation("ReferredUser")
+  discountsReceived           DiscountApplication[] @relation("DiscountUser")
+  discountsApplied            DiscountApplication[] @relation("DiscountAppliedBy")
+  alarmsResolved              AlarmHistory[]        @relation("AlarmResolver")
+  alarmThresholdsCreated      AlarmThreshold[]      @relation("AlarmThresholdCreator")
+  refreshTokens               RefreshToken[]
+  systemSettingsUpdated       SystemSetting[]       @relation("SystemSettingUpdater")
+  auditLogsAsActor            AuditLog[]            @relation("AuditLogActor")
+  auditLogsAsTarget           AuditLog[]            @relation("AuditLogTarget")
   // JAI1GENT relations
-  jai1gentProfile              Jai1gentProfile?
-  jai1gentInviteCodesCreated   Jai1gentInviteCode[]  @relation("Jai1gentInviteCodeCreator")
-  jai1gentInviteCodeUsed       Jai1gentInviteCode?   @relation("Jai1gentInviteCodeUser")
-  jai1gentReferralReceived     Jai1gentReferral?     @relation("Jai1gentReferredUser")
+  jai1gentProfile             Jai1gentProfile?
+  jai1gentInviteCodesCreated  Jai1gentInviteCode[]  @relation("Jai1gentInviteCodeCreator")
+  jai1gentInviteCodeUsed      Jai1gentInviteCode?   @relation("Jai1gentInviteCodeUser")
+  jai1gentReferralReceived    Jai1gentReferral?     @relation("Jai1gentReferredUser")
 
   @@index([role])
   @@index([isActive])
@@ -68,20 +68,20 @@ model User {
 
 // Refresh token storage for secure token rotation
 model RefreshToken {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  tokenHash   String    @unique @map("token_hash") // SHA-256 hash of the token
-  deviceInfo  String?   @map("device_info") // User agent
-  ipAddress   String?   @map("ip_address")
-  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  isRevoked   Boolean   @default(false) @map("is_revoked")
-  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  tokenHash         String    @unique @map("token_hash") // SHA-256 hash of the token
+  deviceInfo        String?   @map("device_info") // User agent
+  ipAddress         String?   @map("ip_address")
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  isRevoked         Boolean   @default(false) @map("is_revoked")
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz
   // Optional: track which token replaced this one (for audit trail)
-  replacedByTokenId String? @map("replaced_by_token_id") @db.Uuid
+  replacedByTokenId String?   @map("replaced_by_token_id") @db.Uuid
 
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  replacedByToken RefreshToken? @relation("TokenReplacement", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedByToken RefreshToken?  @relation("TokenReplacement", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
   replacedTokens  RefreshToken[] @relation("TokenReplacement")
 
   @@index([userId])
@@ -93,32 +93,32 @@ model RefreshToken {
 }
 
 model ClientProfile {
-  id                String    @id @default(uuid()) @db.Uuid
-  userId            String    @unique @map("user_id") @db.Uuid
-  ssn               String?
-  dateOfBirth       DateTime? @map("date_of_birth") @db.Date
-  addressStreet     String?   @map("address_street")
-  addressCity       String?   @map("address_city")
-  addressState      String?   @map("address_state")
-  addressZip        String?   @map("address_zip")
-  addressCountry    String?   @map("address_country") @default("USA")
-  turbotaxEmail     String?   @map("turbotax_email")
-  turbotaxPassword  String?   @map("turbotax_password")
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @unique @map("user_id") @db.Uuid
+  ssn              String?
+  dateOfBirth      DateTime? @map("date_of_birth") @db.Date
+  addressStreet    String?   @map("address_street")
+  addressCity      String?   @map("address_city")
+  addressState     String?   @map("address_state")
+  addressZip       String?   @map("address_zip")
+  addressCountry   String?   @default("USA") @map("address_country")
+  turbotaxEmail    String?   @map("turbotax_email")
+  turbotaxPassword String?   @map("turbotax_password")
   // IRS account credentials (encrypted)
-  irsUsername       String?   @map("irs_username")
-  irsPassword       String?   @map("irs_password")
+  irsUsername      String?   @map("irs_username")
+  irsPassword      String?   @map("irs_password")
   // State account credentials (encrypted)
-  stateUsername     String?   @map("state_username")
-  statePassword     String?   @map("state_password")
-  profileComplete   Boolean   @default(false) @map("profile_complete")
-  isDraft           Boolean   @default(true) @map("is_draft")
+  stateUsername    String?   @map("state_username")
+  statePassword    String?   @map("state_password")
+  profileComplete  Boolean   @default(false) @map("profile_complete")
+  isDraft          Boolean   @default(true) @map("is_draft")
   // Computed status fields for efficient querying (eliminates post-query filtering)
-  isReadyToPresent  Boolean   @default(false) @map("is_ready_to_present")
-  isIncomplete      Boolean   @default(true) @map("is_incomplete")
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  taxCases          TaxCase[]
+  isReadyToPresent Boolean   @default(false) @map("is_ready_to_present")
+  isIncomplete     Boolean   @default(true) @map("is_incomplete")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taxCases         TaxCase[]
 
   @@index([profileComplete])
   @@index([isDraft])
@@ -129,112 +129,112 @@ model ClientProfile {
 }
 
 model TaxCase {
-  id                 String          @id @default(uuid()) @db.Uuid
-  clientProfileId    String          @map("client_profile_id") @db.Uuid
-  taxYear            Int             @map("tax_year") // CHECK constraint: 2020-2100 (see migration)
+  id              String @id @default(uuid()) @db.Uuid
+  clientProfileId String @map("client_profile_id") @db.Uuid
+  taxYear         Int    @map("tax_year") // CHECK constraint: 2020-2100 (see migration)
 
   // Flags for referral code generation (kept for backward compatibility)
-  taxesFiled         Boolean         @default(false) @map("taxes_filed")
-  taxesFiledAt       DateTime?       @map("taxes_filed_at") @db.Timestamptz
+  taxesFiled   Boolean   @default(false) @map("taxes_filed")
+  taxesFiledAt DateTime? @map("taxes_filed_at") @db.Timestamptz
 
   // Estimated refund
-  estimatedRefund    Decimal?        @map("estimated_refund") @db.Decimal(10, 2)
+  estimatedRefund      Decimal?     @map("estimated_refund") @db.Decimal(10, 2)
   // Separate federal/state tracking (SOURCE OF TRUTH)
-  federalEstimatedDate  DateTime?    @map("federal_estimated_date") @db.Timestamptz
-  stateEstimatedDate    DateTime?    @map("state_estimated_date") @db.Timestamptz
-  federalActualRefund   Decimal?     @map("federal_actual_refund") @db.Decimal(10, 2)
-  stateActualRefund     Decimal?     @map("state_actual_refund") @db.Decimal(10, 2)
-  filingStatus          FilingStatus @default(single) @map("filing_status")
-  federalDepositDate    DateTime?    @map("federal_deposit_date") @db.Timestamptz
-  stateDepositDate      DateTime?    @map("state_deposit_date") @db.Timestamptz
+  federalEstimatedDate DateTime?    @map("federal_estimated_date") @db.Timestamptz
+  stateEstimatedDate   DateTime?    @map("state_estimated_date") @db.Timestamptz
+  federalActualRefund  Decimal?     @map("federal_actual_refund") @db.Decimal(10, 2)
+  stateActualRefund    Decimal?     @map("state_actual_refund") @db.Decimal(10, 2)
+  filingStatus         FilingStatus @default(single) @map("filing_status")
+  federalDepositDate   DateTime?    @map("federal_deposit_date") @db.Timestamptz
+  stateDepositDate     DateTime?    @map("state_deposit_date") @db.Timestamptz
 
   // Federal status tracking (comments and dates)
-  federalLastComment      String?    @map("federal_last_comment")
-  federalStatusChangedAt  DateTime?  @map("federal_status_changed_at") @db.Timestamptz
-  federalLastReviewedAt   DateTime?  @map("federal_last_reviewed_at") @db.Timestamptz
+  federalLastComment     String?   @map("federal_last_comment")
+  federalStatusChangedAt DateTime? @map("federal_status_changed_at") @db.Timestamptz
+  federalLastReviewedAt  DateTime? @map("federal_last_reviewed_at") @db.Timestamptz
 
   // State status tracking (comments and dates)
-  stateLastComment        String?    @map("state_last_comment")
-  stateStatusChangedAt    DateTime?  @map("state_status_changed_at") @db.Timestamptz
-  stateLastReviewedAt     DateTime?  @map("state_last_reviewed_at") @db.Timestamptz
+  stateLastComment     String?   @map("state_last_comment")
+  stateStatusChangedAt DateTime? @map("state_status_changed_at") @db.Timestamptz
+  stateLastReviewedAt  DateTime? @map("state_last_reviewed_at") @db.Timestamptz
 
   // Internal comments (admin-only, never shown to clients)
-  federalInternalComment  String?    @map("federal_internal_comment")
-  stateInternalComment    String?    @map("state_internal_comment")
+  federalInternalComment String? @map("federal_internal_comment")
+  stateInternalComment   String? @map("state_internal_comment")
 
   // ============= STATUS FIELDS =============
   // Case status (pre-filing workflow)
-  caseStatus            CaseStatus?       @map("case_status")
-  caseStatusChangedAt   DateTime?         @map("case_status_changed_at") @db.Timestamptz
+  caseStatus          CaseStatus? @map("case_status")
+  caseStatusChangedAt DateTime?   @map("case_status_changed_at") @db.Timestamptz
 
   // Federal status (post-filing tracking)
-  federalStatusNew          FederalStatusNew?  @map("federal_status_new")
-  federalStatusNewChangedAt DateTime?          @map("federal_status_new_changed_at") @db.Timestamptz
+  federalStatusNew          FederalStatusNew? @map("federal_status_new")
+  federalStatusNewChangedAt DateTime?         @map("federal_status_new_changed_at") @db.Timestamptz
 
   // State status (post-filing tracking)
-  stateStatusNew            StateStatusNew?    @map("state_status_new")
-  stateStatusNewChangedAt   DateTime?          @map("state_status_new_changed_at") @db.Timestamptz
+  stateStatusNew          StateStatusNew? @map("state_status_new")
+  stateStatusNewChangedAt DateTime?       @map("state_status_new_changed_at") @db.Timestamptz
 
-  paymentReceived    Boolean         @default(false) @map("payment_received")
-  commissionPaid     Boolean         @default(false) @map("commission_paid")
+  paymentReceived                   Boolean               @default(false) @map("payment_received")
+  commissionPaid                    Boolean               @default(false) @map("commission_paid")
   // Separate refund receipt confirmation (client confirms they received money)
-  federalRefundReceived     Boolean    @default(false) @map("federal_refund_received")
-  stateRefundReceived       Boolean    @default(false) @map("state_refund_received")
-  federalRefundReceivedAt   DateTime?  @map("federal_refund_received_at") @db.Timestamptz
-  stateRefundReceivedAt     DateTime?  @map("state_refund_received_at") @db.Timestamptz
+  federalRefundReceived             Boolean               @default(false) @map("federal_refund_received")
+  stateRefundReceived               Boolean               @default(false) @map("state_refund_received")
+  federalRefundReceivedAt           DateTime?             @map("federal_refund_received_at") @db.Timestamptz
+  stateRefundReceivedAt             DateTime?             @map("state_refund_received_at") @db.Timestamptz
   // Separate commission paid tracking (admin marks when fee is received)
-  federalCommissionPaid     Boolean    @default(false) @map("federal_commission_paid")
-  stateCommissionPaid       Boolean    @default(false) @map("state_commission_paid")
-  federalCommissionPaidAt   DateTime?  @map("federal_commission_paid_at") @db.Timestamptz
-  stateCommissionPaidAt     DateTime?  @map("state_commission_paid_at") @db.Timestamptz
+  federalCommissionPaid             Boolean               @default(false) @map("federal_commission_paid")
+  stateCommissionPaid               Boolean               @default(false) @map("state_commission_paid")
+  federalCommissionPaidAt           DateTime?             @map("federal_commission_paid_at") @db.Timestamptz
+  stateCommissionPaidAt             DateTime?             @map("state_commission_paid_at") @db.Timestamptz
   // Commission proof submission tracking (client uploads payment receipt)
-  federalCommissionProofSubmitted    Boolean?  @default(false) @map("federal_commission_proof_submitted")
-  federalCommissionProofSubmittedAt  DateTime? @map("federal_commission_proof_submitted_at") @db.Timestamptz
-  stateCommissionProofSubmitted      Boolean?  @default(false) @map("state_commission_proof_submitted")
-  stateCommissionProofSubmittedAt    DateTime? @map("state_commission_proof_submitted_at") @db.Timestamptz
+  federalCommissionProofSubmitted   Boolean?              @default(false) @map("federal_commission_proof_submitted")
+  federalCommissionProofSubmittedAt DateTime?             @map("federal_commission_proof_submitted_at") @db.Timestamptz
+  stateCommissionProofSubmitted     Boolean?              @default(false) @map("state_commission_proof_submitted")
+  stateCommissionProofSubmittedAt   DateTime?             @map("state_commission_proof_submitted_at") @db.Timestamptz
   // Commission proof review tracking (admin reviews and approves payment)
-  federalCommissionProofReviewedBy   String?   @map("federal_commission_proof_reviewed_by") @db.Uuid
-  federalCommissionProofReviewedAt   DateTime? @map("federal_commission_proof_reviewed_at") @db.Timestamptz
-  federalCommissionProofReviewNote   String?   @map("federal_commission_proof_review_note")
-  stateCommissionProofReviewedBy     String?   @map("state_commission_proof_reviewed_by") @db.Uuid
-  stateCommissionProofReviewedAt     DateTime? @map("state_commission_proof_reviewed_at") @db.Timestamptz
-  stateCommissionProofReviewNote     String?   @map("state_commission_proof_review_note")
+  federalCommissionProofReviewedBy  String?               @map("federal_commission_proof_reviewed_by") @db.Uuid
+  federalCommissionProofReviewedAt  DateTime?             @map("federal_commission_proof_reviewed_at") @db.Timestamptz
+  federalCommissionProofReviewNote  String?               @map("federal_commission_proof_review_note")
+  stateCommissionProofReviewedBy    String?               @map("state_commission_proof_reviewed_by") @db.Uuid
+  stateCommissionProofReviewedAt    DateTime?             @map("state_commission_proof_reviewed_at") @db.Timestamptz
+  stateCommissionProofReviewNote    String?               @map("state_commission_proof_review_note")
   // Per-track commission rates (11% normal, 22% verification)
-  federalCommissionRate     Decimal    @default(0.11) @map("federal_commission_rate") @db.Decimal(3, 2)
-  stateCommissionRate       Decimal    @default(0.11) @map("state_commission_rate") @db.Decimal(3, 2)
+  federalCommissionRate             Decimal               @default(0.11) @map("federal_commission_rate") @db.Decimal(3, 2)
+  stateCommissionRate               Decimal               @default(0.11) @map("state_commission_rate") @db.Decimal(3, 2)
   // Year-specific employment and banking info (SOURCE OF TRUTH - not ClientProfile)
-  workState          String?         @map("work_state")
-  employerName       String?         @map("employer_name")
-  bankName           String?         @map("bank_name")
-  bankRoutingNumber  String?         @map("bank_routing_number")
-  bankAccountNumber  String?         @map("bank_account_number")
+  workState                         String?               @map("work_state")
+  employerName                      String?               @map("employer_name")
+  bankName                          String?               @map("bank_name")
+  bankRoutingNumber                 String?               @map("bank_routing_number")
+  bankAccountNumber                 String?               @map("bank_account_number")
   // Payment method: how user wants to receive refund (bank_deposit or check)
-  paymentMethod      PaymentMethod   @default(bank_deposit) @map("payment_method")
-  statusUpdatedAt    DateTime        @default(now()) @map("status_updated_at") @db.Timestamptz
+  paymentMethod                     PaymentMethod         @default(bank_deposit) @map("payment_method")
+  statusUpdatedAt                   DateTime              @default(now()) @map("status_updated_at") @db.Timestamptz
   // Consent form tracking
-  consentFormStatus       ConsentFormStatus  @default(pending) @map("consent_form_status")
-  consentFormSignedAt     DateTime?          @map("consent_form_signed_at") @db.Timestamptz
-  consentFormStoragePath  String?            @map("consent_form_storage_path")
+  consentFormStatus                 ConsentFormStatus     @default(pending) @map("consent_form_status")
+  consentFormSignedAt               DateTime?             @map("consent_form_signed_at") @db.Timestamptz
+  consentFormStoragePath            String?               @map("consent_form_storage_path")
   // Admin step control: 1=Registration, 2=W2 Uploaded, 3=Tax Form Complete, 4=IRS Review, 5=Finalized
-  adminStep          Int?            @map("admin_step")
+  adminStep                         Int?                  @map("admin_step")
   // Problem tracking (hidden from client) - CHECK: if !hasProblem, problem_* must be NULL
-  hasProblem         Boolean         @default(false) @map("has_problem")
-  problemStep        Int?            @map("problem_step") // Step where problem occurred (relates to adminStep)
-  problemType        ProblemType?    @map("problem_type")
-  problemDescription String?         @map("problem_description")
-  problemResolvedAt  DateTime?       @map("problem_resolved_at") @db.Timestamptz
-  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz
-  documents          Document[]
-  statusHistory      StatusHistory[]
-  discounts          DiscountApplication[]
-  w2Estimates        W2Estimate[]
-  referrals          Referral[]
-  alarmThreshold     AlarmThreshold?
-  alarmHistory       AlarmHistory[]
-  irsChecks          IrsCheck[]
-  coloradoChecks     ColoradoCheck[]
-  clientProfile      ClientProfile   @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  hasProblem                        Boolean               @default(false) @map("has_problem")
+  problemStep                       Int?                  @map("problem_step") // Step where problem occurred (relates to adminStep)
+  problemType                       ProblemType?          @map("problem_type")
+  problemDescription                String?               @map("problem_description")
+  problemResolvedAt                 DateTime?             @map("problem_resolved_at") @db.Timestamptz
+  createdAt                         DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                         DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  documents                         Document[]
+  statusHistory                     StatusHistory[]
+  discounts                         DiscountApplication[]
+  w2Estimates                       W2Estimate[]
+  referrals                         Referral[]
+  alarmThreshold                    AlarmThreshold?
+  alarmHistory                      AlarmHistory[]
+  irsChecks                         IrsCheck[]
+  coloradoChecks                    ColoradoCheck[]
+  clientProfile                     ClientProfile         @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
 
   @@unique([clientProfileId, taxYear])
   @@index([clientProfileId])
@@ -319,16 +319,16 @@ model TicketMessage {
 }
 
 model StatusHistory {
-  id             String   @id @default(uuid()) @db.Uuid
-  taxCaseId      String   @map("tax_case_id") @db.Uuid
-  previousStatus String?  @map("previous_status")
-  newStatus      String   @map("new_status")
-  changedById    String?  @map("changed_by_id") @db.Uuid
+  id              String   @id @default(uuid()) @db.Uuid
+  taxCaseId       String   @map("tax_case_id") @db.Uuid
+  previousStatus  String?  @map("previous_status")
+  newStatus       String   @map("new_status")
+  changedById     String?  @map("changed_by_id") @db.Uuid
   comment         String?
   internalComment String?  @map("internal_comment")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
-  changedBy      User?    @relation("ChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
-  taxCase        TaxCase  @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+  changedBy       User?    @relation("ChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+  taxCase         TaxCase  @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
 
   @@index([taxCaseId])
   @@index([changedById])
@@ -434,24 +434,24 @@ enum AlarmResolution {
 
 // Custom alarm thresholds per tax case (overrides global defaults)
 model AlarmThreshold {
-  id                    String   @id @default(uuid()) @db.Uuid
-  taxCaseId             String   @map("tax_case_id") @db.Uuid
+  id                      String   @id @default(uuid()) @db.Uuid
+  taxCaseId               String   @map("tax_case_id") @db.Uuid
   // Custom thresholds (null = use global default)
-  federalInProcessDays      Int?  @map("federal_in_process_days")      // Default: 25
-  stateInProcessDays        Int?  @map("state_in_process_days")        // Default: 50
-  verificationTimeoutDays   Int?  @map("verification_timeout_days")    // Default: 63
-  letterSentTimeoutDays     Int?  @map("letter_sent_timeout_days")     // Default: 63
+  federalInProcessDays    Int?     @map("federal_in_process_days") // Default: 25
+  stateInProcessDays      Int?     @map("state_in_process_days") // Default: 50
+  verificationTimeoutDays Int?     @map("verification_timeout_days") // Default: 63
+  letterSentTimeoutDays   Int?     @map("letter_sent_timeout_days") // Default: 63
   // Disable specific alarms
-  disableFederalAlarms  Boolean  @default(false) @map("disable_federal_alarms")
-  disableStateAlarms    Boolean  @default(false) @map("disable_state_alarms")
+  disableFederalAlarms    Boolean  @default(false) @map("disable_federal_alarms")
+  disableStateAlarms      Boolean  @default(false) @map("disable_state_alarms")
   // Metadata
-  reason                String?  // Why custom thresholds were set
-  createdById           String?  @map("created_by_id") @db.Uuid
-  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  reason                  String? // Why custom thresholds were set
+  createdById             String?  @map("created_by_id") @db.Uuid
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  taxCase               TaxCase  @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
-  createdBy             User?    @relation("AlarmThresholdCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  taxCase   TaxCase @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("AlarmThresholdCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([taxCaseId])
   @@index([createdById])
@@ -464,12 +464,12 @@ model AlarmHistory {
   taxCaseId         String          @map("tax_case_id") @db.Uuid
   alarmType         AlarmType       @map("alarm_type")
   alarmLevel        AlarmLevel      @map("alarm_level")
-  track             String          // 'federal' or 'state'
+  track             String // 'federal' or 'state'
   message           String
   thresholdDays     Int             @map("threshold_days")
   actualDays        Int             @map("actual_days")
-  statusAtTrigger   String          @map("status_at_trigger")  // The status that triggered the alarm
-  statusChangedAt   DateTime        @map("status_changed_at") @db.Timestamptz  // When the status was set
+  statusAtTrigger   String          @map("status_at_trigger") // The status that triggered the alarm
+  statusChangedAt   DateTime        @map("status_changed_at") @db.Timestamptz // When the status was set
   // Resolution tracking
   resolution        AlarmResolution @default(active)
   resolvedAt        DateTime?       @map("resolved_at") @db.Timestamptz
@@ -481,8 +481,8 @@ model AlarmHistory {
   triggeredAt       DateTime        @default(now()) @map("triggered_at") @db.Timestamptz
   updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz
 
-  taxCase           TaxCase         @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
-  resolvedBy        User?           @relation("AlarmResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  taxCase    TaxCase @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+  resolvedBy User?   @relation("AlarmResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   @@index([taxCaseId])
   @@index([alarmType])
@@ -534,19 +534,19 @@ enum ProblemType {
 }
 
 model W2Estimate {
-  id              String         @id @default(uuid()) @db.Uuid
-  userId          String         @map("user_id") @db.Uuid
-  taxCaseId       String?        @map("tax_case_id") @db.Uuid
-  box2Federal     Decimal        @map("box_2_federal") @db.Decimal(10, 2)
-  box17State      Decimal        @map("box_17_state") @db.Decimal(10, 2)
-  estimatedRefund Decimal        @map("estimated_refund") @db.Decimal(10, 2)
-  w2FileName      String         @map("w2_file_name")
-  w2StoragePath   String?        @unique @map("w2_storage_path")
-  ocrConfidence   OcrConfidence  @map("ocr_confidence")
-  ocrRawResponse  Json?          @map("ocr_raw_response")
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  taxCase         TaxCase?       @relation(fields: [taxCaseId], references: [id], onDelete: SetNull)
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  taxCaseId       String?       @map("tax_case_id") @db.Uuid
+  box2Federal     Decimal       @map("box_2_federal") @db.Decimal(10, 2)
+  box17State      Decimal       @map("box_17_state") @db.Decimal(10, 2)
+  estimatedRefund Decimal       @map("estimated_refund") @db.Decimal(10, 2)
+  w2FileName      String        @map("w2_file_name")
+  w2StoragePath   String?       @unique @map("w2_storage_path")
+  ocrConfidence   OcrConfidence @map("ocr_confidence")
+  ocrRawResponse  Json?         @map("ocr_raw_response")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taxCase         TaxCase?      @relation(fields: [taxCaseId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([taxCaseId])
@@ -567,9 +567,9 @@ model Referral {
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
-  referrer     User     @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
-  referredUser User     @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
-  taxCase      TaxCase? @relation(fields: [taxCaseId], references: [id], onDelete: SetNull)
+  referrer     User                  @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUser User                  @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  taxCase      TaxCase?              @relation(fields: [taxCaseId], references: [id], onDelete: SetNull)
   discounts    DiscountApplication[]
 
   @@index([referrerId])
@@ -595,10 +595,10 @@ model DiscountApplication {
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  user          User      @relation("DiscountUser", fields: [userId], references: [id], onDelete: Cascade)
-  taxCase       TaxCase?  @relation(fields: [taxCaseId], references: [id], onDelete: SetNull)
-  referral      Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
-  appliedByAdmin User?    @relation("DiscountAppliedBy", fields: [appliedByAdminId], references: [id], onDelete: SetNull)
+  user           User      @relation("DiscountUser", fields: [userId], references: [id], onDelete: Cascade)
+  taxCase        TaxCase?  @relation(fields: [taxCaseId], references: [id], onDelete: SetNull)
+  referral       Referral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  appliedByAdmin User?     @relation("DiscountAppliedBy", fields: [appliedByAdminId], references: [id], onDelete: SetNull)
 
   @@unique([referralId, discountType]) // Prevent duplicate discounts per referral
   @@index([userId])
@@ -646,8 +646,8 @@ model AuditLog {
   userAgent    String?     @map("user_agent")
   createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
-  user         User?       @relation("AuditLogActor", fields: [userId], references: [id], onDelete: SetNull)
-  targetUser   User?       @relation("AuditLogTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  user       User? @relation("AuditLogActor", fields: [userId], references: [id], onDelete: SetNull)
+  targetUser User? @relation("AuditLogTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([targetUserId])
@@ -678,13 +678,13 @@ enum AuditAction {
 // ============= SYSTEM SETTINGS =============
 
 model SystemSetting {
-  key         String    @id
+  key         String   @id
   value       String
   description String?
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  updatedBy   String?   @map("updated_by") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  updatedBy   String?  @map("updated_by") @db.Uuid
 
-  updatedByUser User?   @relation("SystemSettingUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  updatedByUser User? @relation("SystemSettingUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@index([updatedBy])
   @@map("system_settings")
@@ -701,8 +701,8 @@ model Jai1gentInviteCode {
   usedAt      DateTime? @map("used_at") @db.Timestamptz
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  createdBy   User      @relation("Jai1gentInviteCodeCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  usedBy      User?     @relation("Jai1gentInviteCodeUser", fields: [usedById], references: [id], onDelete: SetNull)
+  createdBy User  @relation("Jai1gentInviteCodeCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  usedBy    User? @relation("Jai1gentInviteCodeUser", fields: [usedById], references: [id], onDelete: SetNull)
 
   @@index([createdById])
   @@index([code])
@@ -717,27 +717,27 @@ enum Jai1gentPaymentMethod {
 
 // JAI1GENT profile with referral and payment info
 model Jai1gentProfile {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  userId              String                  @unique @map("user_id") @db.Uuid
-  referralCode        String                  @unique @map("referral_code") @db.VarChar(10) // JAI + 3 name + 4 random
+  id                 String                 @id @default(uuid()) @db.Uuid
+  userId             String                 @unique @map("user_id") @db.Uuid
+  referralCode       String                 @unique @map("referral_code") @db.VarChar(10) // JAI + 3 name + 4 random
   // Payment info
-  paymentMethod       Jai1gentPaymentMethod?  @map("payment_method")
-  bankName            String?                 @map("bank_name")
-  bankRoutingNumber   String?                 @map("bank_routing_number")
-  bankAccountNumber   String?                 @map("bank_account_number")
-  zelleEmail          String?                 @map("zelle_email")
-  zellePhone          String?                 @map("zelle_phone")
+  paymentMethod      Jai1gentPaymentMethod? @map("payment_method")
+  bankName           String?                @map("bank_name")
+  bankRoutingNumber  String?                @map("bank_routing_number")
+  bankAccountNumber  String?                @map("bank_account_number")
+  zelleEmail         String?                @map("zelle_email")
+  zellePhone         String?                @map("zelle_phone")
   // Stats (denormalized for fast reads)
-  totalReferrals      Int                     @default(0) @map("total_referrals")
-  completedReferrals  Int                     @default(0) @map("completed_referrals")
-  totalEarnings       Decimal                 @default(0) @map("total_earnings") @db.Decimal(10, 2)
-  paidEarnings        Decimal                 @default(0) @map("paid_earnings") @db.Decimal(10, 2)
+  totalReferrals     Int                    @default(0) @map("total_referrals")
+  completedReferrals Int                    @default(0) @map("completed_referrals")
+  totalEarnings      Decimal                @default(0) @map("total_earnings") @db.Decimal(10, 2)
+  paidEarnings       Decimal                @default(0) @map("paid_earnings") @db.Decimal(10, 2)
   // Timestamps
-  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz
 
-  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  referrals           Jai1gentReferral[]
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referrals Jai1gentReferral[]
 
   @@index([referralCode])
   @@map("jai1gent_profiles")
@@ -745,10 +745,10 @@ model Jai1gentProfile {
 
 // Status of a JAI1GENT referral
 enum Jai1gentReferralStatus {
-  pending           // Client registered but not filed
-  taxes_filed       // Client has filed taxes
-  completed         // Commission earned (payment received)
-  expired           // No activity after timeout
+  pending // Client registered but not filed
+  taxes_filed // Client has filed taxes
+  completed // Commission earned (payment received)
+  expired // No activity after timeout
 }
 
 // ============= KNOWLEDGE BASE (RAG) =============
@@ -770,22 +770,22 @@ model KnowledgeChunk {
 
 // Individual referral tracking for JAI1GENTS
 model Jai1gentReferral {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  jai1gentProfileId   String                  @map("jai1gent_profile_id") @db.Uuid
-  referredUserId      String                  @unique @map("referred_user_id") @db.Uuid
-  referralCode        String                  @map("referral_code")
-  status              Jai1gentReferralStatus  @default(pending)
+  id                String                 @id @default(uuid()) @db.Uuid
+  jai1gentProfileId String                 @map("jai1gent_profile_id") @db.Uuid
+  referredUserId    String                 @unique @map("referred_user_id") @db.Uuid
+  referralCode      String                 @map("referral_code")
+  status            Jai1gentReferralStatus @default(pending)
   // Commission calculation
-  jai1Fee             Decimal?                @map("jai1_fee") @db.Decimal(10, 2)
-  commissionPercent   Decimal?                @map("commission_percent") @db.Decimal(5, 2)
-  commissionAmount    Decimal?                @map("commission_amount") @db.Decimal(10, 2)
-  completedAt         DateTime?               @map("completed_at") @db.Timestamptz
+  jai1Fee           Decimal?               @map("jai1_fee") @db.Decimal(10, 2)
+  commissionPercent Decimal?               @map("commission_percent") @db.Decimal(5, 2)
+  commissionAmount  Decimal?               @map("commission_amount") @db.Decimal(10, 2)
+  completedAt       DateTime?              @map("completed_at") @db.Timestamptz
   // Timestamps
-  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz
 
-  jai1gentProfile     Jai1gentProfile         @relation(fields: [jai1gentProfileId], references: [id], onDelete: Cascade)
-  referredUser        User                    @relation("Jai1gentReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  jai1gentProfile Jai1gentProfile @relation(fields: [jai1gentProfileId], references: [id], onDelete: Cascade)
+  referredUser    User            @relation("Jai1gentReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
 
   @@index([jai1gentProfileId])
   @@index([status])
@@ -796,30 +796,30 @@ model Jai1gentReferral {
 // ============= IRS MONITOR =============
 
 model IrsCheck {
-  id                String           @id @default(uuid()) @db.Uuid
-  taxCaseId         String           @map("tax_case_id") @db.Uuid
+  id        String @id @default(uuid()) @db.Uuid
+  taxCaseId String @map("tax_case_id") @db.Uuid
 
   // What the IRS page returned
-  irsRawStatus      String           @map("irs_raw_status")
-  irsDetails        String?          @map("irs_details")
-  screenshotPath    String?          @map("screenshot_path")
+  irsRawStatus   String  @map("irs_raw_status")
+  irsDetails     String? @map("irs_details")
+  screenshotPath String? @map("screenshot_path")
 
   // What we did with the result
-  mappedStatus      FederalStatusNew? @map("mapped_status")
-  statusChanged     Boolean           @default(false) @map("status_changed")
-  previousStatus    FederalStatusNew? @map("previous_status")
+  mappedStatus   FederalStatusNew? @map("mapped_status")
+  statusChanged  Boolean           @default(false) @map("status_changed")
+  previousStatus FederalStatusNew? @map("previous_status")
 
   // How it was triggered
-  triggeredBy       IrsCheckTrigger  @map("triggered_by")
-  triggeredByUserId String?          @map("triggered_by_user_id") @db.Uuid
+  triggeredBy       IrsCheckTrigger @map("triggered_by")
+  triggeredByUserId String?         @map("triggered_by_user_id") @db.Uuid
 
   // Outcome
-  checkResult       IrsCheckResult   @map("check_result")
-  errorMessage      String?          @map("error_message")
+  checkResult  IrsCheckResult @map("check_result")
+  errorMessage String?        @map("error_message")
 
-  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  taxCase           TaxCase          @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+  taxCase TaxCase @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
 
   @@index([taxCaseId])
   @@index([createdAt])
@@ -831,30 +831,30 @@ model IrsCheck {
 // ============= COLORADO STATE MONITOR =============
 
 model ColoradoCheck {
-  id                String           @id @default(uuid()) @db.Uuid
-  taxCaseId         String           @map("tax_case_id") @db.Uuid
+  id        String @id @default(uuid()) @db.Uuid
+  taxCaseId String @map("tax_case_id") @db.Uuid
 
   // What the Colorado portal returned
-  coRawStatus       String           @map("co_raw_status")
-  coDetails         String?          @map("co_details")
-  screenshotPath    String?          @map("screenshot_path")
+  coRawStatus    String  @map("co_raw_status")
+  coDetails      String? @map("co_details")
+  screenshotPath String? @map("screenshot_path")
 
   // What we did with the result
-  mappedStatus      StateStatusNew?  @map("mapped_status")
-  statusChanged     Boolean          @default(false) @map("status_changed")
-  previousStatus    StateStatusNew?  @map("previous_status")
+  mappedStatus   StateStatusNew? @map("mapped_status")
+  statusChanged  Boolean         @default(false) @map("status_changed")
+  previousStatus StateStatusNew? @map("previous_status")
 
   // How it was triggered (reuse IRS enums — they're not IRS-specific)
-  triggeredBy       IrsCheckTrigger  @map("triggered_by")
-  triggeredByUserId String?          @map("triggered_by_user_id") @db.Uuid
+  triggeredBy       IrsCheckTrigger @map("triggered_by")
+  triggeredByUserId String?         @map("triggered_by_user_id") @db.Uuid
 
   // Outcome
-  checkResult       IrsCheckResult   @map("check_result")
-  errorMessage      String?          @map("error_message")
+  checkResult  IrsCheckResult @map("check_result")
+  errorMessage String?        @map("error_message")
 
-  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  taxCase           TaxCase          @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
+  taxCase TaxCase @relation(fields: [taxCaseId], references: [id], onDelete: Cascade)
 
   @@index([taxCaseId])
   @@index([createdAt])

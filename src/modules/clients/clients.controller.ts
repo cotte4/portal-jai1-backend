@@ -396,8 +396,6 @@ export class ClientsController {
     return this.adminService.getUnpaidCommissions({ cursor, limit: validatedLimit });
   }
 
-  // DEPRECATED: adminStep endpoint removed - use internalStatus instead
-
   @Patch('admin/clients/:id/problem')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)

@@ -70,9 +70,9 @@ describe('DocumentsController', () => {
   });
 
   describe('POST /documents/upload', () => {
-    const uploadDto: UploadDocumentDto = {
+    const uploadDto = {
       type: 'w2',
-    };
+    } as UploadDocumentDto;
 
     const mockFile = {
       originalname: 'w2-2025.pdf',
@@ -82,7 +82,7 @@ describe('DocumentsController', () => {
     } as Express.Multer.File;
 
     it('should upload a document successfully', async () => {
-      documentsService.upload.mockResolvedValue(mockDocument);
+      documentsService.upload.mockResolvedValue(mockDocument as any);
 
       const result = await controller.upload(mockClientUser, mockFile, uploadDto);
 
@@ -95,9 +95,9 @@ describe('DocumentsController', () => {
     });
 
     it('should upload document with different type', async () => {
-      const taxReturnDto: UploadDocumentDto = { type: 'tax_return' };
+      const taxReturnDto = { type: 'tax_return' } as unknown as UploadDocumentDto;
       const taxReturnDoc = { ...mockDocument, type: 'tax_return' };
-      documentsService.upload.mockResolvedValue(taxReturnDoc);
+      documentsService.upload.mockResolvedValue(taxReturnDoc as any);
 
       const result = await controller.upload(mockClientUser, mockFile, taxReturnDto);
 
@@ -106,13 +106,13 @@ describe('DocumentsController', () => {
         mockFile,
         taxReturnDto,
       );
-      expect(result.type).toBe('tax_return');
+      expect((result as any).type).toBe('tax_return');
     });
   });
 
   describe('GET /documents', () => {
     it('should return documents for client user', async () => {
-      documentsService.findByUserId.mockResolvedValue(mockDocumentsList);
+      documentsService.findByUserId.mockResolvedValue(mockDocumentsList as any);
 
       const result = await controller.findAll(mockClientUser, undefined);
 
@@ -121,7 +121,7 @@ describe('DocumentsController', () => {
     });
 
     it('should return documents for specific client when admin queries', async () => {
-      documentsService.findByClientId.mockResolvedValue(mockDocumentsList);
+      documentsService.findByClientId.mockResolvedValue(mockDocumentsList as any);
 
       const result = await controller.findAll(mockAdminUser, 'client-456');
 
@@ -130,7 +130,7 @@ describe('DocumentsController', () => {
     });
 
     it('should return own documents when admin does not specify client_id', async () => {
-      documentsService.findByUserId.mockResolvedValue(mockDocumentsList);
+      documentsService.findByUserId.mockResolvedValue(mockDocumentsList as any);
 
       const result = await controller.findAll(mockAdminUser, undefined);
 
@@ -154,7 +154,7 @@ describe('DocumentsController', () => {
     };
 
     it('should return download URL for document owner', async () => {
-      documentsService.getDownloadUrl.mockResolvedValue(mockDownloadResponse);
+      documentsService.getDownloadUrl.mockResolvedValue(mockDownloadResponse as any);
 
       const result = await controller.download(mockClientUser, 'doc-123');
 
@@ -167,7 +167,7 @@ describe('DocumentsController', () => {
     });
 
     it('should allow admin to download any document', async () => {
-      documentsService.getDownloadUrl.mockResolvedValue(mockDownloadResponse);
+      documentsService.getDownloadUrl.mockResolvedValue(mockDownloadResponse as any);
 
       const result = await controller.download(mockAdminUser, 'doc-456');
 
