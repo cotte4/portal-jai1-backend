@@ -93,11 +93,20 @@ export const SPANISH_MONTHS = [
 
 /**
  * Format date to Spanish format: "a los [day] del mes de [month] de [year]"
+ *
+ * IMPORTANT — TIMEZONE:
+ * The server runs in UTC (Railway). Argentina is UTC-3 (America/Argentina/Buenos_Aires),
+ * with NO daylight saving time, so the offset is always fixed at -3h.
+ * Using `date.getDate()` directly would return the UTC day, which can be
+ * one day behind Argentina time (e.g., 22:30 ARG = 01:30 UTC next day).
+ * We convert to Argentina local time before extracting day/month/year.
  */
 export function formatSpanishDate(date: Date): { day: number; month: string; year: number } {
+  // Convert to Argentina timezone (UTC-3, no DST)
+  const argDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
   return {
-    day: date.getDate(),
-    month: SPANISH_MONTHS[date.getMonth()],
-    year: date.getFullYear(),
+    day: argDate.getDate(),
+    month: SPANISH_MONTHS[argDate.getMonth()],
+    year: argDate.getFullYear(),
   };
 }
