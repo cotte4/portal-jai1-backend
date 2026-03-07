@@ -19,7 +19,7 @@ import { PrismaService } from '../../config/prisma.service';
     }),
   ],
   controllers: [NotificationsController],
-  providers: [NotificationsService, NotificationsGateway, PrismaService],
+  providers: [NotificationsService, NotificationsGateway],
   exports: [NotificationsService, NotificationsGateway],
 })
 export class NotificationsModule {

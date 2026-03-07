@@ -35,7 +35,6 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
     ClientAdminService,
     ClientExportService,
     ClientReportingService,
-    PrismaService,
     SupabaseService,
     EncryptionService,
     EmailService,

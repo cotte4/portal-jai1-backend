@@ -8,7 +8,7 @@ import { ValidationPipe } from '@nestjs/common';
 import * as Joi from 'joi';
 
 // Config
-import { PrismaService } from './config/prisma.service';
+import { PrismaModule } from './config/prisma.module';
 import { SupabaseService } from './config/supabase.service';
 
 // Common
@@ -68,6 +68,7 @@ import { ColoradoMonitorModule } from './modules/colorado-monitor/colorado-monit
       ttl: 60000, // 1 minute
       limit: 100, // 100 requests per minute globally
     }]),
+    PrismaModule,
     I18nModule,
     AuthModule,
     UsersModule,
@@ -90,7 +91,6 @@ import { ColoradoMonitorModule } from './modules/colorado-monitor/colorado-monit
   ],
   controllers: [],
   providers: [
-    PrismaService,
     SupabaseService,
     EncryptionService,
     EmailService,

@@ -6,7 +6,7 @@ import { PrismaService } from '../../config/prisma.service';
 @Global() // Make it globally available so other modules can inject AuditLogsService
 @Module({
   controllers: [AuditLogsController],
-  providers: [AuditLogsService, PrismaService],
+  providers: [AuditLogsService],
   exports: [AuditLogsService],
 })
 export class AuditLogsModule {}

@@ -9,7 +9,7 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 @Module({
   imports: [NotificationsModule, AuditLogsModule],
   controllers: [ReferralsController],
-  providers: [ReferralsService, PrismaService, SupabaseService],
+  providers: [ReferralsService, SupabaseService],
   exports: [ReferralsService],
 })
 export class ReferralsModule {}

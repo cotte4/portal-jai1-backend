@@ -9,7 +9,7 @@ import { ProgressModule } from '../progress/progress.module';
 @Module({
   imports: [forwardRef(() => ProgressModule)],
   controllers: [CalculatorController],
-  providers: [CalculatorService, PrismaService, SupabaseService, StoragePathService],
+  providers: [CalculatorService, SupabaseService, StoragePathService],
   exports: [CalculatorService],
 })
 export class CalculatorModule {}

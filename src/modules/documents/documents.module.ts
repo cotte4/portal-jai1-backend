@@ -11,7 +11,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 @Module({
   imports: [ProgressModule, AuditLogsModule, NotificationsModule],
   controllers: [DocumentsController],
-  providers: [DocumentsService, PrismaService, SupabaseService, StoragePathService],
+  providers: [DocumentsService, SupabaseService, StoragePathService],
   exports: [DocumentsService],
 })
 export class DocumentsModule {}

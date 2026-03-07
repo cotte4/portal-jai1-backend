@@ -4,7 +4,7 @@ import { EmbeddingsService } from './embeddings.service';
 import { PrismaService } from '../../config/prisma.service';
 
 @Module({
-  providers: [KnowledgeService, EmbeddingsService, PrismaService],
+  providers: [KnowledgeService, EmbeddingsService],
   exports: [KnowledgeService],
 })
 export class KnowledgeModule {}

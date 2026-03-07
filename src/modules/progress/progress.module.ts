@@ -14,7 +14,6 @@ import { EmailService } from '../../common/services';
   controllers: [ProgressController],
   providers: [
     ProgressAutomationService,
-    PrismaService,
     EmailService,
   ],
   exports: [ProgressAutomationService],

@@ -9,7 +9,6 @@ import { StoragePathService } from '../../common/services';
   controllers: [StorageCleanupController],
   providers: [
     StorageCleanupService,
-    PrismaService,
     SupabaseService,
     StoragePathService,
   ],

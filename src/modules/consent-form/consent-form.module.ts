@@ -11,7 +11,6 @@ import { ProgressModule } from '../progress/progress.module';
   controllers: [ConsentFormController],
   providers: [
     ConsentFormService,
-    PrismaService,
     SupabaseService,
     StoragePathService,
   ],

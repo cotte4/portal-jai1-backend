@@ -21,7 +21,7 @@ import { UsersModule } from '../users/users.module';
     }),
   ],
   controllers: [Jai1gentsController],
-  providers: [Jai1gentsService, PrismaService],
+  providers: [Jai1gentsService],
   exports: [Jai1gentsService],
 })
 export class Jai1gentsModule {}

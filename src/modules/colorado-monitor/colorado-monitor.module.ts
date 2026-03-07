@@ -17,7 +17,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ColoradoScraperService,
     ColoradoStatusMapperService,
     ColoradoMonitorSchedulerService,
-    PrismaService,
     EncryptionService,
     SupabaseService,
   ],

@@ -115,12 +115,28 @@ export class ColoradoMonitorService {
     }
   }
 
-  async getStats(): Promise<{ changesLast24h: number }> {
+  async getStats(): Promise<{ changesLast24h: number; coloradoFiledCount: number; totalFiledCount: number }> {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const changesLast24h = await this.prisma.coloradoCheck.count({
-      where: { statusChanged: true, createdAt: { gte: since } },
-    });
-    return { changesLast24h };
+
+    const [changesLast24h, coloradoFiledCount, totalFiledCount] = await Promise.all([
+      this.prisma.coloradoCheck.count({
+        where: { statusChanged: true, createdAt: { gte: since } },
+      }),
+      this.prisma.taxCase.count({
+        where: {
+          caseStatus: { in: ['taxes_filed', 'case_issues'] },
+          OR: [
+            { workState: { equals: 'Colorado', mode: 'insensitive' } },
+            { workState: { equals: 'CO', mode: 'insensitive' } },
+          ],
+        },
+      }),
+      this.prisma.taxCase.count({
+        where: { caseStatus: { in: ['taxes_filed', 'case_issues'] } },
+      }),
+    ]);
+
+    return { changesLast24h, coloradoFiledCount, totalFiledCount };
   }
 
   async runCheck(taxCaseId: string, adminId: string | null = null, trigger: IrsCheckTrigger = IrsCheckTrigger.manual) {

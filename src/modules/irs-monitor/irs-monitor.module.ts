@@ -17,7 +17,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
     IrsScraperService,
     IrsStatusMapperService,
     IrsMonitorSchedulerService,
-    PrismaService,
     EncryptionService,
     SupabaseService,
   ],
