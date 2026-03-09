@@ -170,6 +170,15 @@ export class ClientsController {
     return this.reportingService.getSeasonStats();
   }
 
+  @Get('admin/stats/dashboard')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get comprehensive dashboard stats (group counts, status breakdowns, financials)' })
+  async getDashboardStats() {
+    return this.reportingService.getDashboardStats();
+  }
+
   @Get('admin/accounts')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)

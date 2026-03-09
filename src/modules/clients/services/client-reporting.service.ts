@@ -24,6 +24,150 @@ export class ClientReportingService {
   ) {}
 
   /**
+   * Get comprehensive dashboard stats for admin statistics page
+   * Returns group counts, status breakdowns, and financial summary — all from DB aggregates
+   */
+  async getDashboardStats() {
+    const [
+      totalCases,
+      pending,
+      completed,
+      needsAttention,
+      caseStatusGroups,
+      federalStatusGroups,
+      stateStatusGroups,
+      refundData,
+    ] = await Promise.all([
+      // Total tax cases
+      this.prisma.taxCase.count(),
+
+      // Pending: not yet taxes_filed
+      this.prisma.taxCase.count({
+        where: { caseStatus: { not: 'taxes_filed' as any } },
+      }),
+
+      // Completed: taxes_filed + either track completed
+      this.prisma.taxCase.count({
+        where: {
+          caseStatus: 'taxes_filed' as any,
+          OR: [
+            { federalStatusNew: 'taxes_completados' as any },
+            { stateStatusNew: 'taxes_completados' as any },
+          ],
+        },
+      }),
+
+      // Needs attention: taxes_filed + not completed + either track has problems
+      this.prisma.taxCase.count({
+        where: {
+          caseStatus: 'taxes_filed' as any,
+          AND: [
+            {
+              NOT: {
+                OR: [
+                  { federalStatusNew: 'taxes_completados' as any },
+                  { stateStatusNew: 'taxes_completados' as any },
+                ],
+              },
+            },
+            {
+              OR: [
+                { federalStatusNew: 'problemas' as any },
+                { stateStatusNew: 'problemas' as any },
+              ],
+            },
+          ],
+        },
+      }),
+
+      // Case status breakdown
+      this.prisma.taxCase.groupBy({
+        by: ['caseStatus'],
+        _count: { _all: true },
+      }),
+
+      // Federal status breakdown (filed cases only)
+      this.prisma.taxCase.groupBy({
+        by: ['federalStatusNew'],
+        where: { caseStatus: 'taxes_filed' as any, federalStatusNew: { not: null } },
+        _count: { _all: true },
+      }),
+
+      // State status breakdown (filed cases only)
+      this.prisma.taxCase.groupBy({
+        by: ['stateStatusNew'],
+        where: { caseStatus: 'taxes_filed' as any, stateStatusNew: { not: null } },
+        _count: { _all: true },
+      }),
+
+      // Refund totals
+      this.prisma.$queryRaw<[{
+        total_federal: number | null;
+        total_state: number | null;
+        count_federal: bigint | null;
+        count_state: bigint | null;
+      }]>`
+        SELECT
+          SUM("federal_actual_refund") as total_federal,
+          SUM("state_actual_refund") as total_state,
+          COUNT(CASE WHEN "federal_actual_refund" IS NOT NULL THEN 1 END) as count_federal,
+          COUNT(CASE WHEN "state_actual_refund" IS NOT NULL THEN 1 END) as count_state
+        FROM "tax_cases"
+      `,
+    ]);
+
+    // inReview = filed cases that are neither completed nor need attention
+    const inReview = Math.max(0, (totalCases - pending) - completed - needsAttention);
+
+    const caseStatusBreakdown: Record<string, number> = {};
+    for (const g of caseStatusGroups) {
+      caseStatusBreakdown[g.caseStatus || 'none'] = g._count._all;
+    }
+
+    const federalStatusBreakdown: Record<string, number> = {};
+    for (const g of federalStatusGroups) {
+      if (g.federalStatusNew) {
+        federalStatusBreakdown[g.federalStatusNew] = g._count._all;
+      }
+    }
+
+    const stateStatusBreakdown: Record<string, number> = {};
+    for (const g of stateStatusGroups) {
+      if (g.stateStatusNew) {
+        stateStatusBreakdown[g.stateStatusNew] = g._count._all;
+      }
+    }
+
+    const refund = refundData[0];
+    const totalFederal = Number(refund?.total_federal || 0);
+    const totalState = Number(refund?.total_state || 0);
+    const countFederal = Number(refund?.count_federal || 0);
+    const countState = Number(refund?.count_state || 0);
+
+    return {
+      groupStats: {
+        total: totalCases,
+        pending,
+        inReview,
+        completed,
+        needsAttention,
+      },
+      caseStatusBreakdown,
+      federalStatusBreakdown,
+      stateStatusBreakdown,
+      financials: {
+        totalFederalRefunds: Math.round(totalFederal * 100) / 100,
+        totalStateRefunds: Math.round(totalState * 100) / 100,
+        totalRefunds: Math.round((totalFederal + totalState) * 100) / 100,
+        clientsWithFederalRefund: countFederal,
+        clientsWithStateRefund: countState,
+        avgFederalRefund: countFederal > 0 ? Math.round(totalFederal / countFederal) : 0,
+        avgStateRefund: countState > 0 ? Math.round(totalState / countState) : 0,
+      },
+    };
+  }
+
+  /**
    * Get payments summary for admin bank payments view
    * Returns clients with their federal/state refunds and calculated commissions
    * OPTIMIZED: Uses cursor pagination to prevent memory issues with large datasets
@@ -323,11 +467,18 @@ export class ClientReportingService {
         },
       }),
 
-      // Earnings to date: uses per-case stored commission rates
+      // Earnings to date: only count each track when that track's deposit date is set
+      // This prevents counting state commission when only federal has deposited (and vice versa)
       this.prisma.$queryRaw<[{ earnings: number | null }]>`
         SELECT SUM(
-          COALESCE("federal_actual_refund", 0) * COALESCE("federal_commission_rate", 0.11) +
-          COALESCE("state_actual_refund", 0) * COALESCE("state_commission_rate", 0.11)
+          CASE WHEN "federal_deposit_date" IS NOT NULL
+            THEN COALESCE("federal_actual_refund", 0) * COALESCE("federal_commission_rate", 0.11)
+            ELSE 0
+          END +
+          CASE WHEN "state_deposit_date" IS NOT NULL
+            THEN COALESCE("state_actual_refund", 0) * COALESCE("state_commission_rate", 0.11)
+            ELSE 0
+          END
         ) as "earnings"
         FROM "tax_cases"
         WHERE "federal_deposit_date" IS NOT NULL OR "state_deposit_date" IS NOT NULL
