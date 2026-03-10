@@ -24,6 +24,75 @@ export class ClientReportingService {
   ) {}
 
   /**
+   * Get earnings breakdown: per-client detail of commissions already paid to JAI1
+   * Only includes tracks where commission has been marked as paid
+   */
+  async getEarningsBreakdown() {
+    const cases = await this.prisma.taxCase.findMany({
+      where: {
+        OR: [
+          { federalCommissionPaid: true },
+          { stateCommissionPaid: true },
+        ],
+      },
+      select: {
+        federalActualRefund: true,
+        federalCommissionRate: true,
+        federalCommissionPaid: true,
+        federalCommissionPaidAt: true,
+        stateActualRefund: true,
+        stateCommissionRate: true,
+        stateCommissionPaid: true,
+        stateCommissionPaidAt: true,
+        clientProfile: {
+          select: {
+            id: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+      orderBy: { federalCommissionPaidAt: 'desc' },
+    });
+
+    let totalFederalCommission = 0;
+    let totalStateCommission = 0;
+
+    const clients = cases.map((tc) => {
+      const fedRefund = Number(tc.federalCommissionPaid ? tc.federalActualRefund || 0 : 0);
+      const fedRate = Number(tc.federalCommissionRate || 0.11);
+      const fedCommission = tc.federalCommissionPaid ? Math.round(fedRefund * fedRate * 100) / 100 : 0;
+
+      const stateRefund = Number(tc.stateCommissionPaid ? tc.stateActualRefund || 0 : 0);
+      const stateRate = Number(tc.stateCommissionRate || 0.11);
+      const stateCommission = tc.stateCommissionPaid ? Math.round(stateRefund * stateRate * 100) / 100 : 0;
+
+      totalFederalCommission += fedCommission;
+      totalStateCommission += stateCommission;
+
+      return {
+        clientId: tc.clientProfile?.id,
+        name: `${tc.clientProfile?.user?.firstName || ''} ${tc.clientProfile?.user?.lastName || ''}`.trim() || 'Sin Nombre',
+        federalRefund: tc.federalCommissionPaid ? fedRefund : null,
+        federalCommissionRate: tc.federalCommissionPaid ? fedRate : null,
+        federalCommission: tc.federalCommissionPaid ? fedCommission : null,
+        federalCommissionPaidAt: tc.federalCommissionPaidAt,
+        stateRefund: tc.stateCommissionPaid ? stateRefund : null,
+        stateCommissionRate: tc.stateCommissionPaid ? stateRate : null,
+        stateCommission: tc.stateCommissionPaid ? stateCommission : null,
+        stateCommissionPaidAt: tc.stateCommissionPaidAt,
+        totalCommission: Math.round((fedCommission + stateCommission) * 100) / 100,
+      };
+    });
+
+    return {
+      clients,
+      totalFederalCommission: Math.round(totalFederalCommission * 100) / 100,
+      totalStateCommission: Math.round(totalStateCommission * 100) / 100,
+      totalEarnings: Math.round((totalFederalCommission + totalStateCommission) * 100) / 100,
+    };
+  }
+
+  /**
    * Get comprehensive dashboard stats for admin statistics page
    * Returns group counts, status breakdowns, and financial summary — all from DB aggregates
    */
@@ -467,21 +536,22 @@ export class ClientReportingService {
         },
       }),
 
-      // Earnings to date: only count each track when that track's deposit date is set
-      // This prevents counting state commission when only federal has deposited (and vice versa)
+      // Earnings to date: only count commissions that have been marked as paid per track
+      // federal_commission_paid = true means JAI1 has received the federal commission
+      // state_commission_paid = true means JAI1 has received the state commission
       this.prisma.$queryRaw<[{ earnings: number | null }]>`
         SELECT SUM(
-          CASE WHEN "federal_deposit_date" IS NOT NULL
+          CASE WHEN "federal_commission_paid" = true
             THEN COALESCE("federal_actual_refund", 0) * COALESCE("federal_commission_rate", 0.11)
             ELSE 0
           END +
-          CASE WHEN "state_deposit_date" IS NOT NULL
+          CASE WHEN "state_commission_paid" = true
             THEN COALESCE("state_actual_refund", 0) * COALESCE("state_commission_rate", 0.11)
             ELSE 0
           END
         ) as "earnings"
         FROM "tax_cases"
-        WHERE "federal_deposit_date" IS NOT NULL OR "state_deposit_date" IS NOT NULL
+        WHERE "federal_commission_paid" = true OR "state_commission_paid" = true
       `,
 
       // Sum of projected refunds for all cases

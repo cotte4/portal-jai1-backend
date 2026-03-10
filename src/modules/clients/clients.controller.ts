@@ -170,6 +170,14 @@ export class ClientsController {
     return this.reportingService.getSeasonStats();
   }
 
+  @Get('admin/stats/earnings-breakdown')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  async getEarningsBreakdown() {
+    return this.reportingService.getEarningsBreakdown();
+  }
+
   @Get('admin/stats/dashboard')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.admin)

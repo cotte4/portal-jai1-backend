@@ -1655,6 +1655,35 @@
         ]
       }
     },
+    "/v1/admin/stats/earnings-breakdown": {
+      "get": {
+        "operationId": "ClientsController_getEarningsBreakdown",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/v1/admin/stats/dashboard": {
+      "get": {
+        "operationId": "ClientsController_getDashboardStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get comprehensive dashboard stats (group counts, status breakdowns, financials)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
     "/v1/admin/accounts": {
       "get": {
         "operationId": "ClientsController_getAllClientAccounts",
