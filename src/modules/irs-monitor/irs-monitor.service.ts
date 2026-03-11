@@ -61,6 +61,7 @@ export class IrsMonitorService {
         clientEmail: tc.clientProfile.user.email,
         userId: tc.clientProfile.user.id,
         ssnMasked: tc.clientProfile.ssn ? this.encryption.maskSSN(tc.clientProfile.ssn) : null,
+        ssnFull: tc.clientProfile.ssn ? (this.encryption.safeDecrypt(tc.clientProfile.ssn, 'ssn') ?? null) : null,
         lastCheck: tc.irsChecks[0] ?? null,
       };
     });
@@ -348,7 +349,7 @@ export class IrsMonitorService {
     return [headers.join(','), ...rows].join('\n');
   }
 
-  async approveCheck(checkId: string, adminId: string) {
+  async approveCheck(checkId: string, adminId: string, clientComment?: string, internalComment?: string) {
     const check = await this.prisma.irsCheck.findUnique({
       where: { id: checkId },
       include: {
@@ -384,7 +385,7 @@ export class IrsMonitorService {
           federalStatusNew: mappedStatus,
           federalStatusNewChangedAt: now,
           federalLastReviewedAt: now,
-          federalLastComment: `IRS Monitor (aprobado): ${check.irsRawStatus}`,
+          federalLastComment: clientComment || `IRS Monitor (aprobado): ${check.irsRawStatus}`,
         },
       });
 
@@ -394,8 +395,8 @@ export class IrsMonitorService {
           previousStatus: previousStatus ?? undefined,
           newStatus: mappedStatus,
           changedById: adminId,
-          comment: `IRS Monitor (aprobado por admin): ${check.irsRawStatus}`,
-          internalComment: `Admin ${adminId} approved IRS check ${checkId}`,
+          comment: clientComment || `IRS Monitor (aprobado por admin): ${check.irsRawStatus}`,
+          internalComment: internalComment || `Admin ${adminId} approved IRS check ${checkId}`,
         },
       });
     });

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Query, UseGuards, Logger, Res, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Post, Get, Param, Query, Body, UseGuards, Logger, Res, ParseUUIDPipe } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
@@ -81,8 +81,9 @@ export class IrsMonitorController {
   async approveCheck(
     @Param('checkId', new ParseUUIDPipe()) checkId: string,
     @CurrentUser() user: any,
+    @Body() body: { clientComment?: string; internalComment?: string } = {},
   ) {
-    return this.irsMonitorService.approveCheck(checkId, user.id);
+    return this.irsMonitorService.approveCheck(checkId, user.id, body.clientComment, body.internalComment);
   }
 
   @Post('checks/:checkId/dismiss')
