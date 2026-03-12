@@ -37,6 +37,8 @@ export class ClientQueryService {
     caseStatus?: string;
     dateFrom?: string;
     dateTo?: string;
+    // Track filter: 'federal' | 'state' | 'both' (default both)
+    track?: string;
     // Sorting
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
@@ -115,6 +117,16 @@ export class ClientQueryService {
     // Handle different filter types using new status fields
     if (options.status && options.status !== 'all') {
       const existingTaxCaseFilters = where.taxCases?.some || {};
+      const track = options.track || 'both';
+
+      const IN_REVIEW_STATUSES = [
+        'taxes_en_proceso',
+        'en_verificacion',
+        'verificacion_en_progreso',
+        'cheque_en_camino',
+        'deposito_directo',
+        'comision_pendiente',
+      ];
 
       if (options.status === 'group_pending') {
         if (Object.keys(existingTaxCaseFilters).length > 0) {
@@ -137,33 +149,37 @@ export class ClientQueryService {
           ];
         }
       } else if (options.status === 'group_in_review') {
+        const inReviewCondition =
+          track === 'federal'
+            ? { federalStatusNew: { in: IN_REVIEW_STATUSES } }
+            : track === 'state'
+            ? { stateStatusNew: { in: IN_REVIEW_STATUSES } }
+            : { OR: [{ federalStatusNew: { in: IN_REVIEW_STATUSES } }, { stateStatusNew: { in: IN_REVIEW_STATUSES } }] };
+
         where.taxCases = {
-          some: {
-            ...existingTaxCaseFilters,
-            caseStatus: 'taxes_filed',
-            federalStatusNew: { in: ['taxes_en_proceso', 'cheque_en_camino', 'deposito_directo'] },
-          },
+          some: { ...existingTaxCaseFilters, caseStatus: 'taxes_filed', ...inReviewCondition },
         };
       } else if (options.status === 'group_completed') {
+        const completedCondition =
+          track === 'federal'
+            ? { federalStatusNew: 'taxes_completados' }
+            : track === 'state'
+            ? { stateStatusNew: 'taxes_completados' }
+            : { OR: [{ federalStatusNew: 'taxes_completados' }, { stateStatusNew: 'taxes_completados' }] };
+
         where.taxCases = {
-          some: {
-            ...existingTaxCaseFilters,
-            OR: [
-              { federalStatusNew: 'taxes_completados' },
-              { stateStatusNew: 'taxes_completados' },
-            ],
-          },
+          some: { ...existingTaxCaseFilters, ...completedCondition },
         };
       } else if (options.status === 'group_needs_attention') {
+        const attentionCondition =
+          track === 'federal'
+            ? { OR: [{ federalStatusNew: 'problemas' }, { hasProblem: true }] }
+            : track === 'state'
+            ? { OR: [{ stateStatusNew: 'problemas' }, { hasProblem: true }] }
+            : { OR: [{ federalStatusNew: 'problemas' }, { stateStatusNew: 'problemas' }, { hasProblem: true }] };
+
         where.taxCases = {
-          some: {
-            ...existingTaxCaseFilters,
-            OR: [
-              { federalStatusNew: 'problemas' },
-              { stateStatusNew: 'problemas' },
-              { hasProblem: true },
-            ],
-          },
+          some: { ...existingTaxCaseFilters, ...attentionCondition },
         };
       } else if (options.status === 'ready_to_present') {
         where.isReadyToPresent = true;

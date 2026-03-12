@@ -269,6 +269,7 @@ export class ClientsController {
     // Sorting
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
+    @Query('track') track?: string,
   ) {
     const validatedLimit = validateLimit(limit, PAGINATION_LIMITS.CLIENTS);
 
@@ -290,6 +291,7 @@ export class ClientsController {
       caseStatus,
       dateFrom,
       dateTo,
+      track,
       // Sorting
       sortBy,
       sortOrder: validSortOrder,

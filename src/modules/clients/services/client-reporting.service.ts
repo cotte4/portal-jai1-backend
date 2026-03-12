@@ -515,14 +515,8 @@ export class ClientReportingService {
       projectedResult,
       realizedResult,
     ] = await Promise.all([
-      // Total clients: only those whose taxes have been filed (caseStatus = taxes_filed)
-      this.prisma.clientProfile.count({
-        where: {
-          taxCases: {
-            some: { caseStatus: 'taxes_filed' },
-          },
-        },
-      }),
+      // Total clients: all registered clients (regardless of filing status)
+      this.prisma.clientProfile.count(),
 
       // Total tax cases that have been filed
       this.prisma.taxCase.count({
