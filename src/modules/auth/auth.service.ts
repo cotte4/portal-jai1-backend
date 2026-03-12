@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  NotFoundException,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -831,5 +832,69 @@ export class AuthService {
       .catch((err) => this.logger.error('Failed to resend verification email', err));
 
     return { message: 'If the email exists and is not verified, a verification link has been sent.' };
+  }
+
+  /**
+   * Start a demo session — logs in as the pre-seeded demo@jai1.com account.
+   * No credentials required. Used by the admin login page to showcase the client portal.
+   */
+  async demoLogin() {
+    const DEMO_EMAIL = 'demo@jai1.com';
+    const user = await this.usersService.findByEmail(DEMO_EMAIL);
+
+    if (!user) {
+      throw new NotFoundException('Demo account not configured. Please contact an administrator.');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Demo account is not available at this time.');
+    }
+
+    await this.usersService.updateLastLogin(user.id);
+    const tokens = await this.generateTokens(
+      user.id,
+      user.email,
+      user.role,
+      false, // rememberMe = false — demo sessions should not persist long
+      user.tokenVersion,
+    );
+
+    const profilePictureUrl = await this.getProfilePictureUrl(user.profilePicturePath);
+    const hasProfile = await this.usersService.hasCompletedProfile(user.id);
+
+    this.logger.log(`Demo session started`);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        first_name: user.firstName,
+        last_name: user.lastName,
+        phone: user.phone,
+        role: user.role,
+        created_at: user.createdAt,
+        profilePictureUrl,
+      },
+      hasProfile,
+      ...tokens,
+    };
+  }
+
+  /**
+   * Reset the demo account — wipe all data and revoke all sessions.
+   * The User record itself is preserved so the account remains usable.
+   */
+  async demoReset() {
+    const DEMO_EMAIL = 'demo@jai1.com';
+    const user = await this.usersService.findByEmail(DEMO_EMAIL);
+
+    if (!user) {
+      throw new NotFoundException('Demo account not configured.');
+    }
+
+    await this.usersService.demoResetData(user.id);
+
+    this.logger.log('Demo account reset by admin');
+    return { message: 'Demo account reset successfully.' };
   }
 }

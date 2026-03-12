@@ -23,8 +23,9 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuthResponseDto, RegisterResponseDto, PasswordResponseDto, LogoutResponseDto } from './dto/auth-response.dto';
-import { JwtAuthGuard } from '../../common/guards';
-import { CurrentUser } from '../../common/decorators';
+import { JwtAuthGuard, RolesGuard } from '../../common/guards';
+import { CurrentUser, Roles } from '../../common/decorators';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -188,5 +189,28 @@ export class AuthController {
       throw new Error('Email is required');
     }
     return this.authService.resendVerification(email);
+  }
+
+  @Post('demo-session')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Start a demo session (no auth required)' })
+  @ApiResponse({ status: 200, description: 'Demo session started', type: AuthResponseDto })
+  @ApiResponse({ status: 404, description: 'Demo account not configured' })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async demoSession() {
+    return this.authService.demoLogin();
+  }
+
+  @Post('demo/reset')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reset demo account data (admin only)' })
+  @ApiResponse({ status: 200, description: 'Demo account reset' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async demoReset() {
+    return this.authService.demoReset();
   }
 }

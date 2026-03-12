@@ -302,4 +302,29 @@ export class UsersService {
     });
     return user?.referralOnboardingCompleted ?? false;
   }
+
+  /**
+   * Wipe all data tied to the demo account, keeping the User record intact.
+   * Order matters — children before parents to respect FK constraints.
+   */
+  async demoResetData(userId: string): Promise<void> {
+    await this.prisma.$transaction([
+      // Ticket messages before tickets
+      this.prisma.ticketMessage.deleteMany({ where: { ticket: { userId } } }),
+      this.prisma.ticket.deleteMany({ where: { userId } }),
+      // Documents and status history before tax cases
+      this.prisma.document.deleteMany({
+        where: { taxCase: { clientProfile: { userId } } },
+      }),
+      this.prisma.statusHistory.deleteMany({
+        where: { taxCase: { clientProfile: { userId } } },
+      }),
+      this.prisma.taxCase.deleteMany({ where: { clientProfile: { userId } } }),
+      this.prisma.clientProfile.deleteMany({ where: { userId } }),
+      // Standalone user data
+      this.prisma.w2Estimate.deleteMany({ where: { userId } }),
+      this.prisma.notification.deleteMany({ where: { userId } }),
+      this.prisma.refreshToken.deleteMany({ where: { userId } }),
+    ]);
+  }
 }

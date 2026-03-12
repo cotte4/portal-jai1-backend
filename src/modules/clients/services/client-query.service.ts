@@ -202,6 +202,14 @@ export class ClientQueryService {
       orderBy = sortFieldMap[options.sortBy] || { createdAt: sortOrder };
     }
 
+    // Always exclude the demo account from the admin client list
+    const excludeDemo = { user: { email: { not: 'demo@jai1.com' } } };
+    if (Array.isArray(where.AND)) {
+      where.AND.push(excludeDemo);
+    } else {
+      where.AND = [excludeDemo];
+    }
+
     const clients = await this.prisma.clientProfile.findMany({
       where,
       take: options.limit + 1,
@@ -588,6 +596,7 @@ export class ClientQueryService {
    */
   async getAllClientAccounts(options: { cursor?: string; limit: number }) {
     const clients = await this.prisma.clientProfile.findMany({
+      where: { user: { email: { not: 'demo@jai1.com' } } },
       take: options.limit + 1,
       cursor: options.cursor ? { id: options.cursor } : undefined,
       include: {
