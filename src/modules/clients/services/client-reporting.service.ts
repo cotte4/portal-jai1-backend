@@ -545,42 +545,42 @@ export class ClientReportingService {
       // for early-stage cases where no actuals have been recorded yet.
       this.prisma.$queryRaw<[{ projected: number | null }]>`
         SELECT SUM(
-          CASE WHEN "federal_status_new" = ANY(${QUALIFYING_STATUSES}::text[])
+          CASE WHEN "federal_status_new"::text = ANY(${QUALIFYING_STATUSES}::text[])
             THEN COALESCE("federal_actual_refund", 0) * COALESCE("federal_commission_rate", 0.11)
             ELSE 0
           END +
-          CASE WHEN "state_status_new" = ANY(${QUALIFYING_STATUSES}::text[])
+          CASE WHEN "state_status_new"::text = ANY(${QUALIFYING_STATUSES}::text[])
             THEN COALESCE("state_actual_refund", 0) * COALESCE("state_commission_rate", 0.11)
             ELSE 0
           END +
           -- Fallback: when status qualifies but no actual amounts recorded yet, use estimated_refund
           CASE WHEN (
-            "federal_status_new" = ANY(${QUALIFYING_STATUSES}::text[]) OR
-            "state_status_new" = ANY(${QUALIFYING_STATUSES}::text[])
+            "federal_status_new"::text = ANY(${QUALIFYING_STATUSES}::text[]) OR
+            "state_status_new"::text = ANY(${QUALIFYING_STATUSES}::text[])
           ) AND "federal_actual_refund" IS NULL AND "state_actual_refund" IS NULL
             THEN COALESCE("estimated_refund", 0) * COALESCE("federal_commission_rate", 0.11)
             ELSE 0
           END
         ) as "projected"
         FROM "tax_cases"
-        WHERE "case_status" = 'taxes_filed'
+        WHERE "case_status"::text = 'taxes_filed'
       `,
 
       // Realized earnings: commissions from tracks that reached taxes_completados
       this.prisma.$queryRaw<[{ realized: number | null }]>`
         SELECT SUM(
-          CASE WHEN "federal_status_new" = 'taxes_completados'
+          CASE WHEN "federal_status_new"::text = 'taxes_completados'
             THEN COALESCE("federal_actual_refund", 0) * COALESCE("federal_commission_rate", 0.11)
             ELSE 0
           END +
-          CASE WHEN "state_status_new" = 'taxes_completados'
+          CASE WHEN "state_status_new"::text = 'taxes_completados'
             THEN COALESCE("state_actual_refund", 0) * COALESCE("state_commission_rate", 0.11)
             ELSE 0
           END
         ) as "realized"
         FROM "tax_cases"
-        WHERE "case_status" = 'taxes_filed'
-          AND ("federal_status_new" = 'taxes_completados' OR "state_status_new" = 'taxes_completados')
+        WHERE "case_status"::text = 'taxes_filed'
+          AND ("federal_status_new"::text = 'taxes_completados' OR "state_status_new"::text = 'taxes_completados')
       `,
     ]);
 
