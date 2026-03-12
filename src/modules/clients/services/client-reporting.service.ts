@@ -499,26 +499,40 @@ export class ClientReportingService {
    * OPTIMIZED: Uses database aggregations instead of full-table scans
    */
   async getSeasonStats() {
-    const DEFAULT_COMMISSION_RATE = 0.11; // 11% default for projections
+    // Qualifying statuses for projected earnings (taxes are actively being processed or completed)
+    const QUALIFYING_STATUSES = [
+      'taxes_en_proceso',
+      'deposito_directo',
+      'cheque_en_camino',
+      'comision_pendiente',
+      'taxes_completados',
+    ] as const;
 
-    // Use parallel aggregate queries for maximum performance
     const [
       totalClients,
       totalTaxCases,
       completedCases,
-      depositedCases,
-      earningsResult,
-      projectedRefundResult,
+      projectedResult,
+      realizedResult,
     ] = await Promise.all([
-      // Total clients count
-      this.prisma.clientProfile.count(),
+      // Total clients: only those whose taxes have been filed (caseStatus = taxes_filed)
+      this.prisma.clientProfile.count({
+        where: {
+          taxCases: {
+            some: { caseStatus: 'taxes_filed' },
+          },
+        },
+      }),
 
-      // Total tax cases count
-      this.prisma.taxCase.count(),
+      // Total tax cases that have been filed
+      this.prisma.taxCase.count({
+        where: { caseStatus: 'taxes_filed' },
+      }),
 
-      // Count completed cases (v2 status = taxes_completados)
+      // Count cases with at least one track at taxes_completados
       this.prisma.taxCase.count({
         where: {
+          caseStatus: 'taxes_filed',
           OR: [
             { federalStatusNew: 'taxes_completados' },
             { stateStatusNew: 'taxes_completados' },
@@ -526,61 +540,58 @@ export class ClientReportingService {
         },
       }),
 
-      // Count cases with deposit dates
-      this.prisma.taxCase.count({
-        where: {
-          OR: [
-            { federalDepositDate: { not: null } },
-            { stateDepositDate: { not: null } },
-          ],
-        },
-      }),
-
-      // Earnings to date: only count commissions that have been marked as paid per track
-      // federal_commission_paid = true means JAI1 has received the federal commission
-      // state_commission_paid = true means JAI1 has received the state commission
-      this.prisma.$queryRaw<[{ earnings: number | null }]>`
+      // Projected earnings: federal + state commissions for qualifying statuses.
+      // Uses actual refund amounts when available; falls back to estimated_refund
+      // for early-stage cases where no actuals have been recorded yet.
+      this.prisma.$queryRaw<[{ projected: number | null }]>`
         SELECT SUM(
-          CASE WHEN "federal_commission_paid" = true
+          CASE WHEN "federal_status_new" = ANY(${QUALIFYING_STATUSES}::text[])
             THEN COALESCE("federal_actual_refund", 0) * COALESCE("federal_commission_rate", 0.11)
             ELSE 0
           END +
-          CASE WHEN "state_commission_paid" = true
+          CASE WHEN "state_status_new" = ANY(${QUALIFYING_STATUSES}::text[])
+            THEN COALESCE("state_actual_refund", 0) * COALESCE("state_commission_rate", 0.11)
+            ELSE 0
+          END +
+          -- Fallback: when status qualifies but no actual amounts recorded yet, use estimated_refund
+          CASE WHEN (
+            "federal_status_new" = ANY(${QUALIFYING_STATUSES}::text[]) OR
+            "state_status_new" = ANY(${QUALIFYING_STATUSES}::text[])
+          ) AND "federal_actual_refund" IS NULL AND "state_actual_refund" IS NULL
+            THEN COALESCE("estimated_refund", 0) * COALESCE("federal_commission_rate", 0.11)
+            ELSE 0
+          END
+        ) as "projected"
+        FROM "tax_cases"
+        WHERE "case_status" = 'taxes_filed'
+      `,
+
+      // Realized earnings: commissions from tracks that reached taxes_completados
+      this.prisma.$queryRaw<[{ realized: number | null }]>`
+        SELECT SUM(
+          CASE WHEN "federal_status_new" = 'taxes_completados'
+            THEN COALESCE("federal_actual_refund", 0) * COALESCE("federal_commission_rate", 0.11)
+            ELSE 0
+          END +
+          CASE WHEN "state_status_new" = 'taxes_completados'
             THEN COALESCE("state_actual_refund", 0) * COALESCE("state_commission_rate", 0.11)
             ELSE 0
           END
-        ) as "earnings"
+        ) as "realized"
         FROM "tax_cases"
-        WHERE "federal_commission_paid" = true OR "state_commission_paid" = true
-      `,
-
-      // Sum of projected refunds for all cases
-      this.prisma.$queryRaw<[{ projectedBase: number | null }]>`
-        SELECT SUM(
-          COALESCE(
-            "estimated_refund",
-            COALESCE("federal_actual_refund", 0) + COALESCE("state_actual_refund", 0)
-          )
-        ) as "projectedBase"
-        FROM "tax_cases"
+        WHERE "case_status" = 'taxes_filed'
+          AND ("federal_status_new" = 'taxes_completados' OR "state_status_new" = 'taxes_completados')
       `,
     ]);
 
-    // Calculate completed count (max of status-based or date-based)
-    const taxesCompletedCount = Math.max(completedCases, depositedCases);
-
-    // Earnings to date from raw SQL (already uses per-case rates)
-    const earningsToDate = Number(earningsResult[0]?.earnings || 0);
-
-    // Projected earnings uses default rate (most cases won't have custom rates yet)
-    const projectedBase = Number(projectedRefundResult[0]?.projectedBase || 0);
-    const projectedEarnings = projectedBase * DEFAULT_COMMISSION_RATE;
+    const projectedEarnings = Number(projectedResult[0]?.projected || 0);
+    const earningsToDate = Number(realizedResult[0]?.realized || 0);
 
     return {
       totalClients,
       taxesCompletedPercent:
         totalTaxCases > 0
-          ? Math.round((taxesCompletedCount / totalTaxCases) * 100)
+          ? Math.round((completedCases / totalTaxCases) * 100)
           : 0,
       projectedEarnings: Math.round(projectedEarnings * 100) / 100,
       earningsToDate: Math.round(earningsToDate * 100) / 100,
