@@ -325,6 +325,57 @@
         ]
       }
     },
+    "/v1/auth/demo-session": {
+      "post": {
+        "operationId": "AuthController_demoSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Demo session started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Demo account not configured"
+          }
+        },
+        "summary": "Start a demo session (no auth required)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/demo/reset": {
+      "post": {
+        "operationId": "AuthController_demoReset",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Demo account reset"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reset demo account data (admin only)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v1/users/me": {
       "get": {
         "operationId": "UsersController_getMe",
@@ -3400,6 +3451,34 @@
         },
         "tags": [
           "Chatbot"
+        ]
+      }
+    },
+    "/v1/admin/knowledge/status": {
+      "get": {
+        "operationId": "KnowledgeController_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Knowledge"
+        ]
+      }
+    },
+    "/v1/admin/knowledge/ingest": {
+      "post": {
+        "operationId": "KnowledgeController_ingest",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Knowledge"
         ]
       }
     },

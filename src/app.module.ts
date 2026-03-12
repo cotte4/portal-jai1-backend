@@ -33,6 +33,7 @@ import { HealthModule } from './modules/health/health.module';
 import { StorageCleanupModule } from './modules/storage-cleanup/storage-cleanup.module';
 import { AlarmsModule } from './modules/alarms/alarms.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { Jai1gentsModule } from './modules/jai1gents/jai1gents.module';
 import { ConsentFormModule } from './modules/consent-form/consent-form.module';
 import { IrsMonitorModule } from './modules/irs-monitor/irs-monitor.module';
@@ -84,6 +85,7 @@ import { ColoradoMonitorModule } from './modules/colorado-monitor/colorado-monit
     StorageCleanupModule,
     AlarmsModule,
     ChatbotModule,
+    KnowledgeModule,
     Jai1gentsModule,
     ConsentFormModule,
     IrsMonitorModule,
