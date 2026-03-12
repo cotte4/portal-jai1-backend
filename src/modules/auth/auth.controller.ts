@@ -201,6 +201,15 @@ export class AuthController {
     return this.authService.demoLogin();
   }
 
+  @Get('demo/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.admin)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get demo account status (admin only)' })
+  async demoStatus() {
+    return this.authService.getDemoStatus();
+  }
+
   @Post('demo/reset')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, RolesGuard)

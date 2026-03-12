@@ -305,26 +305,73 @@ export class UsersService {
 
   /**
    * Wipe all data tied to the demo account, keeping the User record intact.
-   * Order matters — children before parents to respect FK constraints.
+   * Uses explicit ID fetching to avoid nested relation filters in transactions,
+   * which can deadlock or silently fail in Prisma's array-mode transactions.
    */
   async demoResetData(userId: string): Promise<void> {
-    await this.prisma.$transaction([
-      // Ticket messages before tickets
-      this.prisma.ticketMessage.deleteMany({ where: { ticket: { userId } } }),
-      this.prisma.ticket.deleteMany({ where: { userId } }),
-      // Documents and status history before tax cases
-      this.prisma.document.deleteMany({
-        where: { taxCase: { clientProfile: { userId } } },
-      }),
-      this.prisma.statusHistory.deleteMany({
-        where: { taxCase: { clientProfile: { userId } } },
-      }),
-      this.prisma.taxCase.deleteMany({ where: { clientProfile: { userId } } }),
-      this.prisma.clientProfile.deleteMany({ where: { userId } }),
-      // Standalone user data
-      this.prisma.w2Estimate.deleteMany({ where: { userId } }),
-      this.prisma.notification.deleteMany({ where: { userId } }),
-      this.prisma.refreshToken.deleteMany({ where: { userId } }),
+    // 1. Fetch IDs upfront to avoid nested relation filters
+    const [clientProfile, tickets] = await Promise.all([
+      this.prisma.clientProfile.findFirst({ where: { userId }, select: { id: true } }),
+      this.prisma.ticket.findMany({ where: { userId }, select: { id: true } }),
     ]);
+
+    const ticketIds = tickets.map((t) => t.id);
+
+    const taxCaseIds = clientProfile
+      ? (await this.prisma.taxCase.findMany({
+          where: { clientProfileId: clientProfile.id },
+          select: { id: true },
+        })).map((tc) => tc.id)
+      : [];
+
+    // 2. Delete children before parents (FK order)
+    if (ticketIds.length > 0) {
+      await this.prisma.ticketMessage.deleteMany({ where: { ticketId: { in: ticketIds } } });
+      await this.prisma.ticket.deleteMany({ where: { id: { in: ticketIds } } });
+    }
+
+    if (taxCaseIds.length > 0) {
+      await this.prisma.document.deleteMany({ where: { taxCaseId: { in: taxCaseIds } } });
+      await this.prisma.statusHistory.deleteMany({ where: { taxCaseId: { in: taxCaseIds } } });
+      await this.prisma.taxCase.deleteMany({ where: { id: { in: taxCaseIds } } });
+    }
+
+    if (clientProfile) {
+      await this.prisma.clientProfile.delete({ where: { id: clientProfile.id } });
+    }
+
+    // 3. Standalone user data
+    await this.prisma.w2Estimate.deleteMany({ where: { userId } });
+    await this.prisma.notification.deleteMany({ where: { userId } });
+    await this.prisma.refreshToken.deleteMany({ where: { userId } });
+  }
+
+  /**
+   * Get the demo account's client profile and tax case info for the admin demo panel.
+   */
+  async getDemoClientInfo(userId: string) {
+    const clientProfile = await this.prisma.clientProfile.findFirst({
+      where: { userId },
+      select: {
+        id: true,
+        taxCases: {
+          select: {
+            id: true,
+            caseStatus: true,
+            federalStatusNew: true,
+            stateStatusNew: true,
+            estimatedRefund: true,
+            federalActualRefund: true,
+            stateActualRefund: true,
+          },
+          take: 1,
+        },
+      },
+    });
+
+    return {
+      clientProfileId: clientProfile?.id ?? null,
+      taxCase: clientProfile?.taxCases?.[0] ?? null,
+    };
   }
 }

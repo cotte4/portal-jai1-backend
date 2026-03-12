@@ -897,4 +897,24 @@ export class AuthService {
     this.logger.log('Demo account reset by admin');
     return { message: 'Demo account reset successfully.' };
   }
+
+  async getDemoStatus() {
+    const DEMO_EMAIL = 'demo@jai1.com';
+    const user = await this.usersService.findByEmail(DEMO_EMAIL);
+
+    if (!user) {
+      throw new NotFoundException('Demo account not configured.');
+    }
+
+    const clientInfo = await this.usersService.getDemoClientInfo(user.id);
+
+    return {
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      isActive: user.isActive,
+      ...clientInfo,
+    };
+  }
 }
