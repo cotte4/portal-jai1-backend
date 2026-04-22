@@ -1,30 +1,93 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
-import { IrsCheckTrigger } from '@prisma/client';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { CronJob } from 'cron';
+import { PrismaService } from '../../config/prisma.service';
 import { IrsMonitorService } from './irs-monitor.service';
 
+const CRON_JOB_NAME = 'irs-scheduler';
+const SETTING_KEY = 'irs_scheduler_active';
+
 @Injectable()
-export class IrsMonitorSchedulerService {
+export class IrsMonitorSchedulerService implements OnModuleInit {
   private readonly logger = new Logger(IrsMonitorSchedulerService.name);
 
-  constructor(private readonly irsMonitorService: IrsMonitorService) {}
+  constructor(
+    private readonly irsMonitorService: IrsMonitorService,
+    private readonly schedulerRegistry: SchedulerRegistry,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  /**
-   * Runs daily at 08:00 AM Eastern Time.
-   * Checks all clients with caseStatus = taxes_filed against IRS WMR.
-   * IRS WMR is most reliable during morning hours; results are cached ~24h on their end.
-   * TEMPORARILY DISABLED — remove the comment on @Cron to re-enable.
-   */
-  // @Cron('0 8 * * *', { timeZone: 'America/New_York' })
-  async runDailyCheck() {
-    this.logger.log('Daily IRS check triggered by scheduler');
+  async onModuleInit() {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: SETTING_KEY },
+    });
+    if (setting?.value === 'true') {
+      this.registerCron();
+      this.logger.log('IRS scheduler restored from DB (active)');
+    } else {
+      this.logger.log('IRS scheduler not started (inactive in DB)');
+    }
+  }
+
+  async startScheduler(): Promise<void> {
+    if (!this.schedulerRegistry.doesExist('cron', CRON_JOB_NAME)) {
+      this.registerCron();
+    }
+    await this.persistState(true);
+    this.logger.log('IRS scheduler started');
+  }
+
+  async stopScheduler(): Promise<void> {
+    if (this.schedulerRegistry.doesExist('cron', CRON_JOB_NAME)) {
+      this.schedulerRegistry.deleteCronJob(CRON_JOB_NAME);
+    }
+    await this.persistState(false);
+    this.logger.log('IRS scheduler stopped');
+  }
+
+  async getSchedulerStatus(): Promise<{ active: boolean }> {
+    const active = this.schedulerRegistry.doesExist('cron', CRON_JOB_NAME);
+    return { active };
+  }
+
+  private registerCron() {
+    const job = new CronJob(
+      '0,30 * * * *',
+      () => void this.runScheduledCheck(),
+      null,
+      true,
+      'America/New_York',
+    );
+    this.schedulerRegistry.addCronJob(CRON_JOB_NAME, job);
+  }
+
+  private async persistState(active: boolean) {
+    await this.prisma.systemSetting.upsert({
+      where: { key: SETTING_KEY },
+      update: { value: String(active) },
+      create: {
+        key: SETTING_KEY,
+        value: String(active),
+        description: 'IRS auto-monitor scheduler state',
+      },
+    });
+  }
+
+  private async runScheduledCheck() {
+    this.logger.log('Scheduled IRS check triggered');
     try {
-      const result = await this.irsMonitorService.runAllChecks(IrsCheckTrigger.schedule);
-      this.logger.log(
-        `Daily IRS check complete — ${result.succeeded}/${result.total} succeeded, ${result.failed} failed`,
-      );
+      const result = await this.irsMonitorService.runNextScheduledCheck();
+      if (result.skipped) {
+        this.logger.log('Scheduled IRS check: no monitored clients — skipped');
+      } else {
+        this.logger.log(
+          `Scheduled IRS check complete for taxCase ${result.taxCaseId}`,
+        );
+      }
     } catch (err) {
-      this.logger.error(`Daily IRS check failed: ${(err as Error).message}`);
+      this.logger.error(
+        `Scheduled IRS check failed: ${(err as Error).message}`,
+      );
     }
   }
 }
