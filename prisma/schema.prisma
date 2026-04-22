@@ -223,6 +223,8 @@ model TaxCase {
   problemType                       ProblemType?          @map("problem_type")
   problemDescription                String?               @map("problem_description")
   problemResolvedAt                 DateTime?             @map("problem_resolved_at") @db.Timestamptz
+  irsMonitorEnabled                 Boolean               @default(false) @map("irs_monitor_enabled")
+  irsMonitorIntervalHours           Int                   @default(24) @map("irs_monitor_interval_hours")
   createdAt                         DateTime              @default(now()) @map("created_at") @db.Timestamptz
   updatedAt                         DateTime              @updatedAt @map("updated_at") @db.Timestamptz
   documents                         Document[]

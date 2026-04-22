@@ -1,5 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { FederalStatusNew, IrsCheckTrigger, IrsCheckResult } from '@prisma/client';
+import {
+  FederalStatusNew,
+  IrsCheckTrigger,
+  IrsCheckResult,
+} from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 import { EncryptionService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -30,7 +34,12 @@ export class IrsMonitorService {
         clientProfile: {
           include: {
             user: {
-              select: { id: true, firstName: true, lastName: true, email: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
             },
           },
         },
@@ -52,7 +61,7 @@ export class IrsMonitorService {
         taxYear: new Date().getFullYear() - 1,
         estimatedRefund: tc.estimatedRefund,
         federalActualRefund: tc.federalActualRefund,
-        irsRefundAmount,           // the amount that will actually be submitted to IRS WMR
+        irsRefundAmount,
         paymentMethod: tc.paymentMethod,
         filingStatus: tc.filingStatus,
         federalStatusNew: tc.federalStatusNew,
@@ -60,11 +69,90 @@ export class IrsMonitorService {
         clientName: `${tc.clientProfile.user.firstName} ${tc.clientProfile.user.lastName}`,
         clientEmail: tc.clientProfile.user.email,
         userId: tc.clientProfile.user.id,
-        ssnMasked: tc.clientProfile.ssn ? this.encryption.maskSSN(tc.clientProfile.ssn) : null,
-        ssnFull: tc.clientProfile.ssn ? (this.encryption.safeDecrypt(tc.clientProfile.ssn, 'ssn') ?? null) : null,
+        ssnMasked: tc.clientProfile.ssn
+          ? this.encryption.maskSSN(tc.clientProfile.ssn)
+          : null,
+        ssnFull: tc.clientProfile.ssn
+          ? (this.encryption.safeDecrypt(tc.clientProfile.ssn, 'ssn') ?? null)
+          : null,
         lastCheck: tc.irsChecks[0] ?? null,
+        irsMonitorEnabled: tc.irsMonitorEnabled,
+        irsMonitorIntervalHours: tc.irsMonitorIntervalHours,
       };
     });
+  }
+
+  async toggleMonitor(
+    taxCaseId: string,
+    enabled: boolean,
+    intervalHours?: number,
+  ) {
+    const data: any = { irsMonitorEnabled: enabled };
+    if (intervalHours !== undefined && intervalHours > 0) {
+      data.irsMonitorIntervalHours = intervalHours;
+    }
+    await this.prisma.taxCase.update({ where: { id: taxCaseId }, data });
+    const tc = await this.prisma.taxCase.findUnique({
+      where: { id: taxCaseId },
+      select: { irsMonitorEnabled: true, irsMonitorIntervalHours: true },
+    });
+    return {
+      taxCaseId,
+      irsMonitorEnabled: tc!.irsMonitorEnabled,
+      irsMonitorIntervalHours: tc!.irsMonitorIntervalHours,
+    };
+  }
+
+  async runNextScheduledCheck(): Promise<{
+    skipped: boolean;
+    taxCaseId?: string;
+  }> {
+    const candidates = await this.prisma.taxCase.findMany({
+      where: { caseStatus: 'taxes_filed', irsMonitorEnabled: true },
+      select: {
+        id: true,
+        irsMonitorIntervalHours: true,
+        irsChecks: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true },
+        },
+      },
+    });
+
+    if (candidates.length === 0) {
+      this.logger.log('Scheduled IRS check: no monitored clients');
+      return { skipped: true };
+    }
+
+    const now = Date.now();
+
+    // Filter out clients checked more recently than their interval
+    const due = candidates.filter((c: any) => {
+      const lastChecked = c.irsChecks[0]?.createdAt?.getTime() ?? 0;
+      const intervalMs = c.irsMonitorIntervalHours * 60 * 60 * 1000;
+      return now - lastChecked >= intervalMs;
+    });
+
+    if (due.length === 0) {
+      this.logger.log(
+        'Scheduled IRS check: all clients checked within their interval — skipping',
+      );
+      return { skipped: true };
+    }
+
+    // Among due clients, pick the one checked least recently (round-robin)
+    const next = due.sort((a: any, b: any) => {
+      const aTime = a.irsChecks[0]?.createdAt?.getTime() ?? 0;
+      const bTime = b.irsChecks[0]?.createdAt?.getTime() ?? 0;
+      return aTime - bTime;
+    })[0];
+
+    this.logger.log(
+      `Scheduled IRS check: running for taxCase ${next.id} (interval: ${next.irsMonitorIntervalHours}h)`,
+    );
+    await this.runCheck(next.id, null, 'schedule' as any);
+    return { skipped: false, taxCaseId: next.id };
   }
 
   async runAllChecks(
@@ -72,7 +160,9 @@ export class IrsMonitorService {
     adminId: string | null = null,
   ): Promise<{ total: number; succeeded: number; failed: number }> {
     if (this.isRunningCheckAll) {
-      this.logger.warn('runAllChecks already in progress — skipping duplicate run');
+      this.logger.warn(
+        'runAllChecks already in progress — skipping duplicate run',
+      );
       return { total: 0, succeeded: 0, failed: 0 };
     }
 
@@ -88,7 +178,9 @@ export class IrsMonitorService {
       let succeeded = 0;
       let failed = 0;
 
-      this.logger.log(`runAllChecks started: ${total} clients (trigger: ${trigger})`);
+      this.logger.log(
+        `runAllChecks started: ${total} clients (trigger: ${trigger})`,
+      );
 
       for (const { id } of taxCases) {
         try {
@@ -96,12 +188,16 @@ export class IrsMonitorService {
           if (result.success || result.statusChanged) succeeded++;
           else failed++;
         } catch (err) {
-          this.logger.warn(`runAllChecks: check failed for ${id}: ${(err as Error).message}`);
+          this.logger.warn(
+            `runAllChecks: check failed for ${id}: ${(err as Error).message}`,
+          );
           failed++;
         }
       }
 
-      this.logger.log(`runAllChecks complete: ${succeeded}/${total} succeeded, ${failed} failed`);
+      this.logger.log(
+        `runAllChecks complete: ${succeeded}/${total} succeeded, ${failed} failed`,
+      );
       return { total, succeeded, failed };
     } finally {
       this.isRunningCheckAll = false;
@@ -116,14 +212,23 @@ export class IrsMonitorService {
     return { changesLast24h };
   }
 
-  async runCheck(taxCaseId: string, adminId: string | null = null, trigger: IrsCheckTrigger = IrsCheckTrigger.manual) {
+  async runCheck(
+    taxCaseId: string,
+    adminId: string | null = null,
+    trigger: IrsCheckTrigger = IrsCheckTrigger.manual,
+  ) {
     const taxCase = await this.prisma.taxCase.findUnique({
       where: { id: taxCaseId },
       include: {
         clientProfile: {
           include: {
             user: {
-              select: { id: true, firstName: true, lastName: true, preferredLanguage: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                preferredLanguage: true,
+              },
             },
           },
         },
@@ -168,15 +273,24 @@ export class IrsMonitorService {
           triggeredBy: trigger,
           triggeredByUserId: adminId ?? undefined,
           statusChanged: false,
-          errorMessage: 'Set the federal actual refund amount before running IRS checks',
+          errorMessage:
+            'Set the federal actual refund amount before running IRS checks',
         },
       });
-      return { success: false, error: 'No federal actual refund amount on file', check };
+      return {
+        success: false,
+        error: 'No federal actual refund amount on file',
+        check,
+      };
     }
 
     // Run scraper — always save a DB record so the frontend poll never times out
-    this.logger.log(`IRS check for ${user.firstName} ${user.lastName} (taxCase: ${taxCaseId})`);
-    let scrapeResult: Awaited<ReturnType<typeof this.scraper.checkRefundStatus>>;
+    this.logger.log(
+      `IRS check for ${user.firstName} ${user.lastName} (taxCase: ${taxCaseId})`,
+    );
+    let scrapeResult: Awaited<
+      ReturnType<typeof this.scraper.checkRefundStatus>
+    >;
     try {
       // IRS WMR asks for the tax year of the return, NOT the current year.
       // Tax season 2026 files returns for tax year 2025. The DB taxYear
@@ -195,11 +309,18 @@ export class IrsMonitorService {
 
       scrapeResult = await this.scraper.checkRefundStatus(scraperParams);
 
-      if (scrapeResult.result === 'error' || scrapeResult.result === 'timeout') {
-        this.logger.warn(`Check ${scrapeResult.result} for ${taxCaseId}, retrying in 5s...`);
-        await new Promise(r => setTimeout(r, 5000));
+      if (
+        scrapeResult.result === 'error' ||
+        scrapeResult.result === 'timeout'
+      ) {
+        this.logger.warn(
+          `Check ${scrapeResult.result} for ${taxCaseId}, retrying in 5s...`,
+        );
+        await new Promise((r) => setTimeout(r, 5000));
         scrapeResult = await this.scraper.checkRefundStatus(scraperParams);
-        this.logger.log(`Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`);
+        this.logger.log(
+          `Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`,
+        );
       }
     } catch (err) {
       // Unexpected crash (Playwright install missing, OOM, etc.) — save error record
@@ -221,9 +342,13 @@ export class IrsMonitorService {
     }
 
     // Map result to JAI1 status
-    const mappedStatus = this.mapper.map(scrapeResult.rawStatus, taxCase.paymentMethod);
-    const previousStatus = taxCase.federalStatusNew as FederalStatusNew | null;
-    const statusChanged = mappedStatus !== null && mappedStatus !== previousStatus;
+    const mappedStatus = this.mapper.map(
+      scrapeResult.rawStatus,
+      taxCase.paymentMethod,
+    );
+    const previousStatus = taxCase.federalStatusNew;
+    const statusChanged =
+      mappedStatus !== null && mappedStatus !== previousStatus;
 
     // Save check record
     const check = await this.prisma.irsCheck.create({
@@ -308,7 +433,11 @@ export class IrsMonitorService {
         taxCase: {
           include: {
             clientProfile: {
-              include: { user: { select: { firstName: true, lastName: true, email: true } } },
+              include: {
+                user: {
+                  select: { firstName: true, lastName: true, email: true },
+                },
+              },
             },
           },
         },
@@ -323,9 +452,18 @@ export class IrsMonitorService {
     };
 
     const headers = [
-      'Date', 'Client Name', 'Email', 'Tax Year', 'Filing Status',
-      'IRS Raw Status', 'Mapped Status', 'Status Changed', 'Previous Status',
-      'Check Result', 'Triggered By', 'Error Message',
+      'Date',
+      'Client Name',
+      'Email',
+      'Tax Year',
+      'Filing Status',
+      'IRS Raw Status',
+      'Mapped Status',
+      'Status Changed',
+      'Previous Status',
+      'Check Result',
+      'Triggered By',
+      'Error Message',
     ];
 
     const rows = checks.map((c: any) => {
@@ -343,20 +481,29 @@ export class IrsMonitorService {
         c.checkResult,
         c.triggeredBy,
         c.errorMessage ?? '',
-      ].map(escape).join(',');
+      ]
+        .map(escape)
+        .join(',');
     });
 
     return [headers.join(','), ...rows].join('\n');
   }
 
-  async approveCheck(checkId: string, adminId: string, clientComment?: string, internalComment?: string) {
+  async approveCheck(
+    checkId: string,
+    adminId: string,
+    clientComment?: string,
+    internalComment?: string,
+  ) {
     const check = await this.prisma.irsCheck.findUnique({
       where: { id: checkId },
       include: {
         taxCase: {
           include: {
             clientProfile: {
-              include: { user: { select: { id: true, firstName: true, lastName: true } } },
+              include: {
+                user: { select: { id: true, firstName: true, lastName: true } },
+              },
             },
           },
         },
@@ -370,11 +517,14 @@ export class IrsMonitorService {
 
     const taxCase = check.taxCase;
     const user = taxCase.clientProfile.user;
-    const mappedStatus = check.mappedStatus as FederalStatusNew;
-    const previousStatus = taxCase.federalStatusNew as FederalStatusNew | null;
+    const mappedStatus = check.mappedStatus;
+    const previousStatus = taxCase.federalStatusNew;
 
     if (mappedStatus === previousStatus) {
-      return { applied: false, reason: 'Status already matches recommendation' };
+      return {
+        applied: false,
+        reason: 'Status already matches recommendation',
+      };
     }
 
     const now = new Date();
@@ -385,7 +535,8 @@ export class IrsMonitorService {
           federalStatusNew: mappedStatus,
           federalStatusNewChangedAt: now,
           federalLastReviewedAt: now,
-          federalLastComment: clientComment || `IRS Monitor (aprobado): ${check.irsRawStatus}`,
+          federalLastComment:
+            clientComment || `IRS Monitor (aprobado): ${check.irsRawStatus}`,
         },
       });
 
@@ -395,8 +546,11 @@ export class IrsMonitorService {
           previousStatus: previousStatus ?? undefined,
           newStatus: mappedStatus,
           changedById: adminId,
-          comment: clientComment || `IRS Monitor (aprobado por admin): ${check.irsRawStatus}`,
-          internalComment: internalComment || `Admin ${adminId} approved IRS check ${checkId}`,
+          comment:
+            clientComment ||
+            `IRS Monitor (aprobado por admin): ${check.irsRawStatus}`,
+          internalComment:
+            internalComment || `Admin ${adminId} approved IRS check ${checkId}`,
         },
       });
     });
@@ -409,7 +563,9 @@ export class IrsMonitorService {
         `Tu estado federal fue actualizado a: ${mappedStatus.replace(/_/g, ' ')}`,
       )
       .catch((err: Error) => {
-        this.logger.warn(`Notification failed for user ${user.id}: ${err.message}`);
+        this.logger.warn(
+          `Notification failed for user ${user.id}: ${err.message}`,
+        );
       });
 
     this.logger.log(
@@ -420,7 +576,9 @@ export class IrsMonitorService {
   }
 
   async dismissCheck(checkId: string) {
-    const check = await this.prisma.irsCheck.findUnique({ where: { id: checkId } });
+    const check = await this.prisma.irsCheck.findUnique({
+      where: { id: checkId },
+    });
     if (!check) throw new NotFoundException('Check not found');
 
     await this.prisma.irsCheck.update({
@@ -436,8 +594,13 @@ export class IrsMonitorService {
       where: { id: checkId },
       select: { screenshotPath: true },
     });
-    if (!check?.screenshotPath) throw new NotFoundException('No screenshot for this check');
-    const url = await this.supabase.getSignedUrl(this.SCREENSHOT_BUCKET, check.screenshotPath, 86400);
+    if (!check?.screenshotPath)
+      throw new NotFoundException('No screenshot for this check');
+    const url = await this.supabase.getSignedUrl(
+      this.SCREENSHOT_BUCKET,
+      check.screenshotPath,
+      86400,
+    );
     return { url };
   }
 }
