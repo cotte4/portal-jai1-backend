@@ -17,4 +17,4 @@ ENV PLAYWRIGHT_HEADLESS=true
 
 # Railway injects PORT at runtime — don't hardcode EXPOSE 3000 or the healthcheck
 # will hit port 3000 while the app is actually listening on Railway's PORT (8080)
-CMD ["sh", "-c", "npx prisma migrate deploy 2>&1 && echo 'Migration OK' || echo 'Migration failed (check DIRECT_URL) — starting app anyway'; node dist/src/main"]
+CMD ["node", "dist/src/main"]
