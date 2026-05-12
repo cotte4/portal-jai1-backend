@@ -6,3 +6,11 @@ dist
 
 /generated/prisma
 tmpclaude-*
+
+# Browser profiles (Patchright + Python agent)
+.patchright-user-data/
+irs-agent/.browser-profile/
+irs-agent/irs-agent.log
+
+# IRS check summary log
+logs/
