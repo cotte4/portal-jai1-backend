@@ -1,5 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { StateStatusNew, IrsCheckTrigger, IrsCheckResult } from '@prisma/client';
+import {
+  StateStatusNew,
+  IrsCheckTrigger,
+  IrsCheckResult,
+} from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 import { EncryptionService } from '../../common/services';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -36,7 +40,12 @@ export class ColoradoMonitorService {
         clientProfile: {
           include: {
             user: {
-              select: { id: true, firstName: true, lastName: true, email: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
             },
           },
         },
@@ -62,8 +71,12 @@ export class ColoradoMonitorService {
         clientName: `${tc.clientProfile.user.firstName} ${tc.clientProfile.user.lastName}`,
         clientEmail: tc.clientProfile.user.email,
         userId: tc.clientProfile.user.id,
-        ssnMasked: tc.clientProfile.ssn ? this.encryption.maskSSN(tc.clientProfile.ssn) : null,
+        ssnMasked: tc.clientProfile.ssn
+          ? this.encryption.maskSSN(tc.clientProfile.ssn)
+          : null,
         lastCheck: tc.coloradoChecks[0] ?? null,
+        coloradoMonitoringEnabled: tc.coloradoMonitoringEnabled,
+        coloradoMonitoringIntervalHours: tc.coloradoMonitoringIntervalHours,
       };
     });
   }
@@ -73,7 +86,9 @@ export class ColoradoMonitorService {
     adminId: string | null = null,
   ): Promise<{ total: number; succeeded: number; failed: number }> {
     if (this.isRunningCheckAll) {
-      this.logger.warn('runAllChecks already in progress — skipping duplicate run');
+      this.logger.warn(
+        'runAllChecks already in progress — skipping duplicate run',
+      );
       return { total: 0, succeeded: 0, failed: 0 };
     }
 
@@ -95,7 +110,9 @@ export class ColoradoMonitorService {
       let succeeded = 0;
       let failed = 0;
 
-      this.logger.log(`runAllChecks started: ${total} CO clients (trigger: ${trigger})`);
+      this.logger.log(
+        `runAllChecks started: ${total} CO clients (trigger: ${trigger})`,
+      );
 
       for (const { id } of taxCases) {
         try {
@@ -103,24 +120,50 @@ export class ColoradoMonitorService {
           if (result.success || result.statusChanged) succeeded++;
           else failed++;
         } catch (err) {
-          this.logger.warn(`runAllChecks: check failed for ${id}: ${(err as Error).message}`);
+          this.logger.warn(
+            `runAllChecks: check failed for ${id}: ${(err as Error).message}`,
+          );
           failed++;
         }
       }
 
-      this.logger.log(`runAllChecks complete: ${succeeded}/${total} succeeded, ${failed} failed`);
+      this.logger.log(
+        `runAllChecks complete: ${succeeded}/${total} succeeded, ${failed} failed`,
+      );
       return { total, succeeded, failed };
     } finally {
       this.isRunningCheckAll = false;
     }
   }
 
-  async getStats(): Promise<{ changesLast24h: number; coloradoFiledCount: number; totalFiledCount: number }> {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  async getStats(): Promise<{
+    changesLast24h: number;
+    coloradoFiledCount: number;
+    totalFiledCount: number;
+    botStats: {
+      totalChecks: number;
+      successChecks: number;
+      failedChecks: number;
+      successRate: number;
+      totalChecks7d: number;
+      successChecks7d: number;
+      successRate7d: number;
+    };
+  }> {
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const [changesLast24h, coloradoFiledCount, totalFiledCount] = await Promise.all([
+    const [
+      changesLast24h,
+      coloradoFiledCount,
+      totalFiledCount,
+      totalChecks,
+      successChecks,
+      totalChecks7d,
+      successChecks7d,
+    ] = await Promise.all([
       this.prisma.coloradoCheck.count({
-        where: { statusChanged: true, createdAt: { gte: since } },
+        where: { statusChanged: true, createdAt: { gte: since24h } },
       }),
       this.prisma.taxCase.count({
         where: {
@@ -134,19 +177,256 @@ export class ColoradoMonitorService {
       this.prisma.taxCase.count({
         where: { caseStatus: { in: ['taxes_filed', 'case_issues'] } },
       }),
+      this.prisma.coloradoCheck.count({
+        where: { createdAt: { gte: since24h } },
+      }),
+      this.prisma.coloradoCheck.count({
+        where: {
+          createdAt: { gte: since24h },
+          checkResult: IrsCheckResult.success,
+        },
+      }),
+      this.prisma.coloradoCheck.count({
+        where: { createdAt: { gte: since7d } },
+      }),
+      this.prisma.coloradoCheck.count({
+        where: {
+          createdAt: { gte: since7d },
+          checkResult: IrsCheckResult.success,
+        },
+      }),
     ]);
 
-    return { changesLast24h, coloradoFiledCount, totalFiledCount };
+    const failedChecks = totalChecks - successChecks;
+    const successRate =
+      totalChecks > 0 ? Math.round((successChecks / totalChecks) * 100) : 0;
+    const successRate7d =
+      totalChecks7d > 0
+        ? Math.round((successChecks7d / totalChecks7d) * 100)
+        : 0;
+
+    return {
+      changesLast24h,
+      coloradoFiledCount,
+      totalFiledCount,
+      botStats: {
+        totalChecks,
+        successChecks,
+        failedChecks,
+        successRate,
+        totalChecks7d,
+        successChecks7d,
+        successRate7d,
+      },
+    };
   }
 
-  async runCheck(taxCaseId: string, adminId: string | null = null, trigger: IrsCheckTrigger = IrsCheckTrigger.manual) {
+  async toggleMonitor(
+    taxCaseId: string,
+    enabled: boolean,
+    intervalHours?: number,
+  ) {
+    const data: any = { coloradoMonitoringEnabled: enabled };
+    if (intervalHours !== undefined && intervalHours > 0) {
+      data.coloradoMonitoringIntervalHours = intervalHours;
+    }
+    await this.prisma.taxCase.update({ where: { id: taxCaseId }, data });
+    const tc = await this.prisma.taxCase.findUnique({
+      where: { id: taxCaseId },
+      select: {
+        coloradoMonitoringEnabled: true,
+        coloradoMonitoringIntervalHours: true,
+      },
+    });
+    return {
+      taxCaseId,
+      coloradoMonitoringEnabled: tc!.coloradoMonitoringEnabled,
+      coloradoMonitoringIntervalHours: tc!.coloradoMonitoringIntervalHours,
+    };
+  }
+
+  async runScheduledChecks(): Promise<{
+    total: number;
+    succeeded: number;
+    failed: number;
+  }> {
+    const taxCases = await this.prisma.taxCase.findMany({
+      where: {
+        caseStatus: { in: ['taxes_filed', 'case_issues'] },
+        coloradoMonitoringEnabled: true,
+        OR: [
+          { workState: { equals: 'Colorado', mode: 'insensitive' } },
+          { workState: { equals: 'CO', mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true,
+        coloradoMonitoringIntervalHours: true,
+        coloradoChecks: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true, checkResult: true },
+        },
+      },
+    });
+
+    const now = Date.now();
+    const FAIL_RETRY_MS = 6 * 60 * 60 * 1000;
+
+    const due = taxCases.filter((tc: any) => {
+      const last = tc.coloradoChecks[0];
+      const lastChecked = last?.createdAt?.getTime() ?? 0;
+      const failed =
+        last?.checkResult === 'error' || last?.checkResult === 'timeout';
+      const intervalMs = failed
+        ? FAIL_RETRY_MS
+        : tc.coloradoMonitoringIntervalHours * 60 * 60 * 1000;
+      return now - lastChecked >= intervalMs;
+    });
+
+    const total = due.length;
+    let succeeded = 0;
+    let failed = 0;
+
+    this.logger.log(`runScheduledChecks: ${total} Colorado clients due`);
+
+    for (const { id } of due) {
+      try {
+        const result = await this.runCheck(id, null, IrsCheckTrigger.schedule);
+        if (result.success || result.statusChanged) succeeded++;
+        else failed++;
+      } catch (err) {
+        this.logger.warn(
+          `runScheduledChecks: check failed for ${id}: ${(err as Error).message}`,
+        );
+        failed++;
+      }
+    }
+
+    return { total, succeeded, failed };
+  }
+
+  async getQueue() {
+    const taxCases = await this.prisma.taxCase.findMany({
+      where: {
+        caseStatus: { in: ['taxes_filed', 'case_issues'] },
+        coloradoMonitoringEnabled: true,
+        OR: [
+          { workState: { equals: 'Colorado', mode: 'insensitive' } },
+          { workState: { equals: 'CO', mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true,
+        coloradoMonitoringIntervalHours: true,
+        coloradoChecks: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true, checkResult: true },
+        },
+        clientProfile: {
+          include: { user: { select: { firstName: true, lastName: true } } },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const now = Date.now();
+    const FAIL_RETRY_H = 6;
+
+    return taxCases
+      .map((tc: any) => {
+        const last = tc.coloradoChecks[0];
+        const lastMs = last?.createdAt?.getTime() ?? 0;
+        const failed =
+          last?.checkResult === 'error' || last?.checkResult === 'timeout';
+        const effectiveIntervalH = failed
+          ? FAIL_RETRY_H
+          : tc.coloradoMonitoringIntervalHours;
+        const nextCheckAt =
+          lastMs > 0 ? lastMs + effectiveIntervalH * 3_600_000 : 0;
+        return {
+          taxCaseId: tc.id,
+          clientName: `${tc.clientProfile.user.firstName} ${tc.clientProfile.user.lastName}`,
+          coloradoMonitoringIntervalHours: tc.coloradoMonitoringIntervalHours,
+          effectiveIntervalH,
+          lastCheckedAt: last?.createdAt ?? null,
+          nextCheckAt:
+            nextCheckAt > 0 ? new Date(nextCheckAt).toISOString() : null,
+          isOverdue: nextCheckAt > 0 ? nextCheckAt < now : true,
+        };
+      })
+      .sort((a: any, b: any) => {
+        if (!a.nextCheckAt && !b.nextCheckAt) return 0;
+        if (!a.nextCheckAt) return -1;
+        if (!b.nextCheckAt) return 1;
+        return (
+          new Date(a.nextCheckAt).getTime() - new Date(b.nextCheckAt).getTime()
+        );
+      });
+  }
+
+  async purgeFailedChecks(): Promise<{
+    deleted: number;
+    screenshotsDeleted: number;
+  }> {
+    const failed = await this.prisma.coloradoCheck.findMany({
+      where: {
+        checkResult: { in: [IrsCheckResult.error, IrsCheckResult.timeout] },
+      },
+      select: { id: true, screenshotPath: true },
+    });
+
+    this.logger.log(
+      `purgeFailedChecks: found ${failed.length} failed Colorado checks to delete`,
+    );
+
+    let screenshotsDeleted = 0;
+    for (const check of failed) {
+      if (check.screenshotPath) {
+        try {
+          await this.supabase.deleteFile(
+            this.SCREENSHOT_BUCKET,
+            check.screenshotPath,
+          );
+          screenshotsDeleted++;
+        } catch (err) {
+          this.logger.warn(
+            `Failed to delete screenshot for check ${check.id}: ${(err as Error).message}`,
+          );
+        }
+      }
+    }
+
+    const { count: deleted } = await this.prisma.coloradoCheck.deleteMany({
+      where: {
+        checkResult: { in: [IrsCheckResult.error, IrsCheckResult.timeout] },
+      },
+    });
+
+    this.logger.log(
+      `purgeFailedChecks complete: deleted ${deleted} checks, ${screenshotsDeleted} screenshots removed`,
+    );
+    return { deleted, screenshotsDeleted };
+  }
+
+  async runCheck(
+    taxCaseId: string,
+    adminId: string | null = null,
+    trigger: IrsCheckTrigger = IrsCheckTrigger.manual,
+  ) {
     const taxCase = await this.prisma.taxCase.findUnique({
       where: { id: taxCaseId },
       include: {
         clientProfile: {
           include: {
             user: {
-              select: { id: true, firstName: true, lastName: true, preferredLanguage: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                preferredLanguage: true,
+              },
             },
           },
         },
@@ -188,15 +468,24 @@ export class ColoradoMonitorService {
           triggeredBy: trigger,
           triggeredByUserId: adminId ?? undefined,
           statusChanged: false,
-          errorMessage: 'Set the state actual refund amount before running Colorado checks',
+          errorMessage:
+            'Set the state actual refund amount before running Colorado checks',
         },
       });
-      return { success: false, error: 'No state actual refund amount on file', check };
+      return {
+        success: false,
+        error: 'No state actual refund amount on file',
+        check,
+      };
     }
 
     // Run scraper
-    this.logger.log(`Colorado check for ${user.firstName} ${user.lastName} (taxCase: ${taxCaseId})`);
-    let scrapeResult: Awaited<ReturnType<typeof this.scraper.checkRefundStatus>>;
+    this.logger.log(
+      `Colorado check for ${user.firstName} ${user.lastName} (taxCase: ${taxCaseId})`,
+    );
+    let scrapeResult: Awaited<
+      ReturnType<typeof this.scraper.checkRefundStatus>
+    >;
     try {
       const scraperParams = {
         ssn,
@@ -207,11 +496,18 @@ export class ColoradoMonitorService {
 
       scrapeResult = await this.scraper.checkRefundStatus(scraperParams);
 
-      if (scrapeResult.result === 'error' || scrapeResult.result === 'timeout') {
-        this.logger.warn(`Check ${scrapeResult.result} for ${taxCaseId}, retrying in 5s...`);
-        await new Promise(r => setTimeout(r, 5000));
+      if (
+        scrapeResult.result === 'error' ||
+        scrapeResult.result === 'timeout'
+      ) {
+        this.logger.warn(
+          `Check ${scrapeResult.result} for ${taxCaseId}, retrying in 5s...`,
+        );
+        await new Promise((r) => setTimeout(r, 5000));
         scrapeResult = await this.scraper.checkRefundStatus(scraperParams);
-        this.logger.log(`Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`);
+        this.logger.log(
+          `Retry result: ${scrapeResult.result} — ${scrapeResult.rawStatus}`,
+        );
       }
     } catch (err) {
       const message = (err as Error).message ?? 'Unexpected scraper error';
@@ -231,9 +527,13 @@ export class ColoradoMonitorService {
     }
 
     // Map result to JAI1 state status
-    const mappedStatus = this.mapper.map(scrapeResult.rawStatus, taxCase.paymentMethod);
+    const mappedStatus = this.mapper.map(
+      scrapeResult.rawStatus,
+      taxCase.paymentMethod,
+    );
     const previousStatus = taxCase.stateStatusNew as StateStatusNew | null;
-    const statusChanged = mappedStatus !== null && mappedStatus !== previousStatus;
+    const statusChanged =
+      mappedStatus !== null && mappedStatus !== previousStatus;
 
     // Save check record
     const check = await this.prisma.coloradoCheck.create({
@@ -316,7 +616,11 @@ export class ColoradoMonitorService {
         taxCase: {
           include: {
             clientProfile: {
-              include: { user: { select: { firstName: true, lastName: true, email: true } } },
+              include: {
+                user: {
+                  select: { firstName: true, lastName: true, email: true },
+                },
+              },
             },
           },
         },
@@ -331,9 +635,16 @@ export class ColoradoMonitorService {
     };
 
     const headers = [
-      'Date', 'Client Name', 'Email',
-      'CO Raw Status', 'Mapped Status', 'Status Changed', 'Previous Status',
-      'Check Result', 'Triggered By', 'Error Message',
+      'Date',
+      'Client Name',
+      'Email',
+      'CO Raw Status',
+      'Mapped Status',
+      'Status Changed',
+      'Previous Status',
+      'Check Result',
+      'Triggered By',
+      'Error Message',
     ];
 
     const rows = checks.map((c: any) => {
@@ -349,7 +660,9 @@ export class ColoradoMonitorService {
         c.checkResult,
         c.triggeredBy,
         c.errorMessage ?? '',
-      ].map(escape).join(',');
+      ]
+        .map(escape)
+        .join(',');
     });
 
     return [headers.join(','), ...rows].join('\n');
@@ -362,7 +675,9 @@ export class ColoradoMonitorService {
         taxCase: {
           include: {
             clientProfile: {
-              include: { user: { select: { id: true, firstName: true, lastName: true } } },
+              include: {
+                user: { select: { id: true, firstName: true, lastName: true } },
+              },
             },
           },
         },
@@ -380,7 +695,10 @@ export class ColoradoMonitorService {
     const previousStatus = taxCase.stateStatusNew as StateStatusNew | null;
 
     if (mappedStatus === previousStatus) {
-      return { applied: false, reason: 'Status already matches recommendation' };
+      return {
+        applied: false,
+        reason: 'Status already matches recommendation',
+      };
     }
 
     const now = new Date();
@@ -415,7 +733,9 @@ export class ColoradoMonitorService {
         `Tu estado estatal fue actualizado a: ${mappedStatus.replace(/_/g, ' ')}`,
       )
       .catch((err: Error) => {
-        this.logger.warn(`Notification failed for user ${user.id}: ${err.message}`);
+        this.logger.warn(
+          `Notification failed for user ${user.id}: ${err.message}`,
+        );
       });
 
     this.logger.log(
@@ -426,7 +746,9 @@ export class ColoradoMonitorService {
   }
 
   async dismissCheck(checkId: string) {
-    const check = await this.prisma.coloradoCheck.findUnique({ where: { id: checkId } });
+    const check = await this.prisma.coloradoCheck.findUnique({
+      where: { id: checkId },
+    });
     if (!check) throw new NotFoundException('Check not found');
 
     await this.prisma.coloradoCheck.update({
@@ -442,8 +764,13 @@ export class ColoradoMonitorService {
       where: { id: checkId },
       select: { screenshotPath: true },
     });
-    if (!check?.screenshotPath) throw new NotFoundException('No screenshot for this check');
-    const url = await this.supabase.getSignedUrl(this.SCREENSHOT_BUCKET, check.screenshotPath, 86400);
+    if (!check?.screenshotPath)
+      throw new NotFoundException('No screenshot for this check');
+    const url = await this.supabase.getSignedUrl(
+      this.SCREENSHOT_BUCKET,
+      check.screenshotPath,
+      86400,
+    );
     return { url };
   }
 }
