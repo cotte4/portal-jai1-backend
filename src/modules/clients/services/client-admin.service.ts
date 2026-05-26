@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../../config/prisma.service';
@@ -48,11 +49,18 @@ export class ClientAdminService {
   /**
    * Admin marks commission as paid for federal or state refund.
    */
-  async markCommissionPaid(clientProfileId: string, type: 'federal' | 'state', adminId: string, reviewNote?: string) {
+  async markCommissionPaid(
+    clientProfileId: string,
+    type: 'federal' | 'state',
+    adminId: string,
+    reviewNote?: string,
+  ) {
     const client = await this.prisma.clientProfile.findUnique({
       where: { id: clientProfileId },
       include: {
-        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        user: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
         taxCases: { orderBy: { taxYear: 'desc' }, take: 1 },
       },
     });
@@ -66,22 +74,36 @@ export class ClientAdminService {
     // Validate based on type
     if (type === 'federal') {
       if (!taxCase.federalRefundReceived) {
-        throw new BadRequestException('Client has not confirmed federal refund receipt');
+        throw new BadRequestException(
+          'Client has not confirmed federal refund receipt',
+        );
       }
       if (taxCase.federalCommissionPaid) {
-        throw new BadRequestException('Federal commission already marked as paid');
+        throw new BadRequestException(
+          'Federal commission already marked as paid',
+        );
       }
-      if (!taxCase.federalActualRefund || Number(taxCase.federalActualRefund) <= 0) {
+      if (
+        !taxCase.federalActualRefund ||
+        Number(taxCase.federalActualRefund) <= 0
+      ) {
         throw new BadRequestException('No federal refund amount recorded');
       }
     } else {
       if (!taxCase.stateRefundReceived) {
-        throw new BadRequestException('Client has not confirmed state refund receipt');
+        throw new BadRequestException(
+          'Client has not confirmed state refund receipt',
+        );
       }
       if (taxCase.stateCommissionPaid) {
-        throw new BadRequestException('State commission already marked as paid');
+        throw new BadRequestException(
+          'State commission already marked as paid',
+        );
       }
-      if (!taxCase.stateActualRefund || Number(taxCase.stateActualRefund) <= 0) {
+      if (
+        !taxCase.stateActualRefund ||
+        Number(taxCase.stateActualRefund) <= 0
+      ) {
         throw new BadRequestException('No state refund amount recorded');
       }
     }
@@ -120,8 +142,12 @@ export class ClientAdminService {
     const willBothBePaid =
       (type === 'federal' && taxCase.stateCommissionPaid) ||
       (type === 'state' && taxCase.federalCommissionPaid) ||
-      (type === 'federal' && (!taxCase.stateActualRefund || Number(taxCase.stateActualRefund) === 0)) ||
-      (type === 'state' && (!taxCase.federalActualRefund || Number(taxCase.federalActualRefund) === 0));
+      (type === 'federal' &&
+        (!taxCase.stateActualRefund ||
+          Number(taxCase.stateActualRefund) === 0)) ||
+      (type === 'state' &&
+        (!taxCase.federalActualRefund ||
+          Number(taxCase.federalActualRefund) === 0));
 
     if (willBothBePaid) {
       updateData.commissionPaid = true;
@@ -137,7 +163,10 @@ export class ClientAdminService {
       await tx.statusHistory.create({
         data: {
           taxCaseId: taxCase.id,
-          previousStatus: type === 'federal' ? taxCase.federalStatusNew : taxCase.stateStatusNew,
+          previousStatus:
+            type === 'federal'
+              ? taxCase.federalStatusNew
+              : taxCase.stateStatusNew,
           newStatus: 'taxes_completados',
           changedById: adminId,
           comment: `Comisión ${type} marcada como pagada y verificada${reviewNote ? ': ' + reviewNote : ''}`,
@@ -231,7 +260,9 @@ export class ClientAdminService {
 
     const hasMore = clients.length > limit;
     const clientsToReturn = hasMore ? clients.slice(0, limit) : clients;
-    const nextCursor = hasMore ? clientsToReturn[clientsToReturn.length - 1].id : null;
+    const nextCursor = hasMore
+      ? clientsToReturn[clientsToReturn.length - 1].id
+      : null;
 
     // Calculate totals
     let totalUnpaidFederal = 0;
@@ -246,8 +277,10 @@ export class ClientAdminService {
       const federalCommission = federalRefund * fedRate;
       const stateCommission = stateRefund * stateRate;
 
-      const federalUnpaid = taxCase?.federalRefundReceived && !taxCase?.federalCommissionPaid;
-      const stateUnpaid = taxCase?.stateRefundReceived && !taxCase?.stateCommissionPaid;
+      const federalUnpaid =
+        taxCase?.federalRefundReceived && !taxCase?.federalCommissionPaid;
+      const stateUnpaid =
+        taxCase?.stateRefundReceived && !taxCase?.stateCommissionPaid;
 
       if (federalUnpaid) totalUnpaidFederal += federalCommission;
       if (stateUnpaid) totalUnpaidState += stateCommission;
@@ -263,21 +296,28 @@ export class ClientAdminService {
           refundAmount: federalRefund,
           commission: Math.round(federalCommission * 100) / 100,
           refundReceived: taxCase?.federalRefundReceived || false,
-          refundReceivedAt: taxCase?.federalRefundReceivedAt?.toISOString() || null,
+          refundReceivedAt:
+            taxCase?.federalRefundReceivedAt?.toISOString() || null,
           commissionPaid: taxCase?.federalCommissionPaid || false,
-          commissionPaidAt: taxCase?.federalCommissionPaidAt?.toISOString() || null,
+          commissionPaidAt:
+            taxCase?.federalCommissionPaidAt?.toISOString() || null,
         },
         state: {
           refundAmount: stateRefund,
           commission: Math.round(stateCommission * 100) / 100,
           refundReceived: taxCase?.stateRefundReceived || false,
-          refundReceivedAt: taxCase?.stateRefundReceivedAt?.toISOString() || null,
+          refundReceivedAt:
+            taxCase?.stateRefundReceivedAt?.toISOString() || null,
           commissionPaid: taxCase?.stateCommissionPaid || false,
-          commissionPaidAt: taxCase?.stateCommissionPaidAt?.toISOString() || null,
+          commissionPaidAt:
+            taxCase?.stateCommissionPaidAt?.toISOString() || null,
         },
-        totalUnpaidCommission: Math.round(
-          ((federalUnpaid ? federalCommission : 0) + (stateUnpaid ? stateCommission : 0)) * 100
-        ) / 100,
+        totalUnpaidCommission:
+          Math.round(
+            ((federalUnpaid ? federalCommission : 0) +
+              (stateUnpaid ? stateCommission : 0)) *
+              100,
+          ) / 100,
       };
     });
 
@@ -288,7 +328,8 @@ export class ClientAdminService {
       totals: {
         unpaidFederalCommission: Math.round(totalUnpaidFederal * 100) / 100,
         unpaidStateCommission: Math.round(totalUnpaidState * 100) / 100,
-        totalUnpaidCommission: Math.round((totalUnpaidFederal + totalUnpaidState) * 100) / 100,
+        totalUnpaidCommission:
+          Math.round((totalUnpaidFederal + totalUnpaidState) * 100) / 100,
         clientCount: formattedClients.length,
       },
     };
@@ -391,7 +432,9 @@ export class ClientAdminService {
         'notifications.problem_set',
         {
           firstName: client.user.firstName,
-          description: problemData.problemDescription || 'Hay un inconveniente con tu trámite',
+          description:
+            problemData.problemDescription ||
+            'Hay un inconveniente con tu trámite',
         },
       );
       this.logger.log(`Problem notification sent to user ${client.user.id}`);
@@ -470,7 +513,9 @@ export class ClientAdminService {
           notifyData.message,
         );
         if (emailSent) {
-          this.logger.log(`Notification email sent to ${redactEmail(client.user.email)}`);
+          this.logger.log(
+            `Notification email sent to ${redactEmail(client.user.email)}`,
+          );
         } else {
           this.logger.warn(
             `Email not sent to ${redactEmail(client.user.email)} (service not configured or failed)`,
@@ -496,7 +541,7 @@ export class ClientAdminService {
       where: { id },
       include: {
         user: {
-          select: { id: true, profilePicturePath: true },
+          select: { id: true, role: true, profilePicturePath: true },
         },
         taxCases: {
           include: {
@@ -510,6 +555,15 @@ export class ClientAdminService {
 
     if (!client) {
       throw new NotFoundException('Client not found');
+    }
+
+    // Safety guard: never delete an admin through the client-removal flow.
+    // An admin was once deleted by mistake (treated as a buggy client); this
+    // prevents a cascade delete from ever wiping an admin account again.
+    if (client.user.role === 'admin') {
+      throw new ForbiddenException(
+        'No se puede eliminar un usuario administrador desde la gestión de clientes',
+      );
     }
 
     const userId = client.user.id;
@@ -531,7 +585,9 @@ export class ClientAdminService {
         await this.supabase.deleteFile(DOCUMENTS_BUCKET, storagePath);
         this.logger.log(`Deleted S3 document file: ${storagePath}`);
       } catch (err) {
-        this.logger.error(`Failed to delete S3 document file ${storagePath}: ${err}`);
+        this.logger.error(
+          `Failed to delete S3 document file ${storagePath}: ${err}`,
+        );
       }
     }
 
@@ -543,7 +599,9 @@ export class ClientAdminService {
           this.PROFILE_PICTURES_BUCKET,
           client.user.profilePicturePath,
         );
-        this.logger.log(`Deleted S3 profile picture: ${client.user.profilePicturePath}`);
+        this.logger.log(
+          `Deleted S3 profile picture: ${client.user.profilePicturePath}`,
+        );
         profilePictureDeleted = true;
       } catch (err) {
         this.logger.error(
